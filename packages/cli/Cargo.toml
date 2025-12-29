@@ -29,7 +29,7 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 
 clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
-clap_complete = "4.5.61"
+clap_complete = "4.5.62"
 ignore = "0.4.23"
 prettytable-rs = "0.10.0"
 
