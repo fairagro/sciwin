@@ -1,5 +1,5 @@
 use crate::reana::{auth::login_reana, workflow::analyze_workflow_logs};
-use reana::{
+use reana_ext::{
     api::{get_workflow_logs, get_workflow_specification, get_workflow_status, get_workflow_workspace},
     reana::Reana,
     rocrate::create_ro_crate,
@@ -8,7 +8,7 @@ use std::{error::Error, fs, path::PathBuf};
 
 pub fn export_rocrate(workflow_name: &str, ro_crate_dir: Option<&String>) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance.clone(), reana_token.clone());
 
     // Get workflow status, only export if finished?
     let status_response = get_workflow_logs(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;

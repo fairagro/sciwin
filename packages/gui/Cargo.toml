@@ -21,6 +21,13 @@ toml.workspace = true
 commonwl = { path = "../cwl" }
 repository = { path = "../repository" }
 s4n_core = { path = "../core" }
+remote_execution = { path = "../remote_execution" }
+reana = { path = "../reana" }
+keyring = { version = "3.6.3", features = [
+    "apple-native",
+    "linux-native",
+    "windows-native",
+] }
 
 dioxus = { version = "0.7.2", features = ["router"] }
 dioxus-free-icons = { version = "0.10.0", features = [

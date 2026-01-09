@@ -1,6 +1,6 @@
 use crate::reana::{auth::login_reana, compatibility::compatibility_adjustments, status::status_file_path};
-use reana::{
-    api::{create_workflow, ping_reana},
+use reana_ext::{
+    api::{create_workflow, ping_reana, upload_files, start_workflow},
     parser::generate_workflow_json_from_cwl,
     reana::Reana,
 };
@@ -18,7 +18,8 @@ pub fn execute_remote_start(file: &PathBuf, input_file: &Option<PathBuf>) -> Res
 
     // Get credentials
     let (reana_instance, reana_token) = login_reana()?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance.clone(), reana_token.clone());
+
 
     // Ping
     let ping_status = ping_reana(&reana)?;
@@ -36,8 +37,8 @@ pub fn execute_remote_start(file: &PathBuf, input_file: &Option<PathBuf>) -> Res
     let Some(workflow_name) = create_response["workflow_name"].as_str() else {
         return Err("Missing workflow_name in response".into());
     };
-    reana::api::upload_files(&reana, input_file, file, workflow_name, &workflow_json)?;
-    reana::api::start_workflow(&reana, workflow_name, None, None, false, &converted_yaml)?;
+    upload_files(&reana, input_file, file, workflow_name, &workflow_json)?;
+    start_workflow(&reana, workflow_name, None, None, false, &converted_yaml)?;
     eprintln!("✅ Started workflow execution");
 
     save_workflow_name(&reana_instance, workflow_name)?;

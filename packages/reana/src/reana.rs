@@ -6,14 +6,14 @@ use reqwest::{
 use serde_json::Value;
 use std::{collections::HashMap, fmt::Display};
 
-pub struct Reana<'a> {
-    server: &'a str,
-    token: &'a str,
+pub struct Reana {
+    server: String,
+    token: String,
 }
 
-impl<'a> Reana<'a> {
-    pub fn new(server: &'a str, token: &'a str) -> Self {
-        Reana { server, token }
+impl Reana {
+    pub fn new(server: String, token: String) -> Self {
+        Self { server, token }
     }
 
     fn url(&self, endpoint: &WorkflowEndpoint, params: Option<HashMap<String, String>>) -> String {

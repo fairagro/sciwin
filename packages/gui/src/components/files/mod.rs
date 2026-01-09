@@ -99,10 +99,11 @@ mod tests {
 
     #[test]
     fn test_read_node_type() {
-        let path = "../../testdata/hello_world/workflows/main/main.cwl";
+        let base = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let path = format!("{}/../../testdata/hello_world/workflows/main/main.cwl", base);
         assert_eq!(read_node_type(path), FileType::Workflow);
 
-        let path = "../../testdata/hello_world/workflows/calculation/calculation.cwl";
+        let path = format!("{}/../../testdata/hello_world/workflows/calculation/calculation.cwl", base);
         assert_eq!(read_node_type(path), FileType::CommandLineTool);
     }
 }

@@ -1,4 +1,6 @@
 use std::path::PathBuf;
+use reana_ext::parser::WorkflowJson;
+use anyhow::Result;
 mod reana;
 
 pub fn schedule_run(file: &PathBuf, input_file: &Option<PathBuf>) -> Result<String, Box<dyn std::error::Error>> {
@@ -23,4 +25,10 @@ pub fn logout() -> Result<(), Box<dyn std::error::Error>> {
 
 pub fn watch(workflow_name: &str, rocrate: bool) -> Result<(), Box<dyn std::error::Error>> {
     reana::watch(workflow_name, rocrate)
+}
+
+pub fn compatibility_adjustments(
+    workflow_json: &mut WorkflowJson,
+) -> Result<()> {
+    crate::reana::compatibility_adjustments(workflow_json)
 }

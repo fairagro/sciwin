@@ -1,7 +1,7 @@
 use colored::Colorize;
 use commonwl::{prelude::*, requirements::WorkDirItem};
 use log::{info, warn};
-use reana::parser::WorkflowJson;
+use reana_ext::parser::WorkflowJson;
 use std::collections::HashMap;
 use std::process::{Command as SystemCommand, Stdio};
 use std::{env, fs, path::Path};

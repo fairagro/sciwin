@@ -3,7 +3,7 @@ use crate::reana::{
     export_rocrate,
     workflow::{analyze_workflow_logs, get_saved_workflows},
 };
-use reana::{api::get_workflow_status, reana::Reana};
+use reana_ext::{api::get_workflow_status, reana::Reana};
 use std::{error::Error, path::PathBuf, thread, time::Duration};
 pub(super) fn status_file_path() -> PathBuf {
     std::env::temp_dir().join("workflow_status_list.json")
@@ -11,7 +11,7 @@ pub(super) fn status_file_path() -> PathBuf {
 
 pub fn check_remote_status(workflow_name: &Option<String>) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance.clone(), reana_token);
 
     if let Some(name) = workflow_name {
         evaluate_workflow_status(&reana, name, true)?;
@@ -51,13 +51,13 @@ fn evaluate_workflow_status(reana: &Reana, name: &str, analyze_logs: bool) -> Re
 
 pub fn watch(workflow_name: &str, rocrate: bool) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance, reana_token);
 
     const POLL_INTERVAL_SECS: u64 = 5;
     const TERMINAL_STATUSES: [&str; 3] = ["finished", "failed", "deleted"];
 
     loop {
-        let status_response = reana::api::get_workflow_status(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
+        let status_response = get_workflow_status(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
         let workflow_status = status_response["status"].as_str().unwrap_or("unknown");
         if TERMINAL_STATUSES.contains(&workflow_status) {
             match workflow_status {

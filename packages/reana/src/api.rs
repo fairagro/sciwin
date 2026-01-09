@@ -248,8 +248,49 @@ pub fn download_files(reana: &Reana, workflow_name: &str, files: &[String], fold
     Ok(())
 }
 
+
+pub fn upload_files_from_working_dir(reana: &Reana, working_dir: &Path, workflow_name: &str) -> Result<()> {
+    let mut files: HashSet<String> = HashSet::new();
+    collect_files_recursive(working_dir, &mut files).context("Failed to collect files")?;
+    if files.is_empty() {
+        eprintln!("No files to upload found in the working directory.");
+        return Ok(());
+    }
+    for file_name in files {
+        let mut file_path = PathBuf::from(&file_name);
+        if !file_path.exists() {
+            file_path = working_dir.join(&file_path);
+        }
+        if !file_path.exists() {
+            eprintln!("File does not exist: {:?}", file_path);
+            continue;
+        }
+        let mut file = File::open(&file_path).with_context(|| format!("Failed to open file '{}'", file_path.display()))?;
+        let mut file_content = Vec::new();
+        file.read_to_end(&mut file_content)
+            .with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
+        // Normalize the path relative to the working directory
+        let rel_path = file_path.strip_prefix(working_dir).unwrap_or(&file_path).to_path_buf();
+        let normalized_name = if rel_path.as_os_str().is_empty() {
+            file_path.file_name().map(PathBuf::from).unwrap_or_else(|| file_path.clone())
+        } else {
+            rel_path
+        };
+        let mut params = HashMap::new();
+        params.insert("file_name".to_string(), sanitize_path(&normalized_name.to_string_lossy()));
+        let response = reana.post(
+            &WorkflowEndpoint::Workspace(workflow_name, None),
+            Content::OctetStream(file_content),
+            Some(params),
+        )?;
+        let _ = response.text().context("Failed to read server response after upload")?;
+    }
+
+    Ok(())
+}
+
 pub fn get_workflow_workspace(reana_server: &str, reana_token: &str, workflow_id: &str) -> Result<Value> {
-    let response = Reana::new(reana_server, reana_token).get(&WorkflowEndpoint::Workspace(workflow_id, None))?;
+    let response = Reana::new(reana_server.to_string(), reana_token.to_string()).get(&WorkflowEndpoint::Workspace(workflow_id, None))?;
 
     let json_response: Value = response.json().context("❌ Failed to parse JSON response")?;
 
@@ -276,7 +317,7 @@ mod tests {
             .with_body(r#"{"status": "ok"}"#)
             .create();
         let url = &server.url();
-        let reana = Reana::new(url, "");
+        let reana = Reana::new(url.to_string(), "".to_string());
 
         let response: Value = ping_reana(&reana).unwrap();
         assert_eq!(response["status"], "ok");
@@ -344,7 +385,7 @@ mod tests {
 
         let yaml_equiv: serde_yaml::Value = serde_yaml::from_str(&expected_json.to_string()).expect("YAML conversion failed");
         let url = &server.base_url();
-        let reana = Reana::new(url, "test-token");
+        let reana = Reana::new(url.to_string(), "test-token".to_string());
         let result = start_workflow(&reana, workflow_id, None, None, false, &yaml_equiv);
 
         assert!(result.is_err(), "Expected error, but got Ok.");
@@ -420,7 +461,7 @@ mod tests {
             }));
         });
         let url = &server.base_url();
-        let reana = Reana::new(url, "test-token");
+        let reana = Reana::new(url.to_string(), "test-token".to_string());
         let result = create_workflow(&reana, &workflow_payload, None);
 
         assert!(result.is_ok());
@@ -449,7 +490,7 @@ mod tests {
         });
 
         let url = &server.base_url();
-        let reana = Reana::new(url, "invalid-token");
+        let reana = Reana::new(url.to_string(), "invalid-token".to_string());
         let result = create_workflow(&reana, &workflow_payload, None);
 
         assert!(result.is_err());
@@ -472,7 +513,7 @@ mod tests {
         });
 
         let url = &server.base_url();
-        let reana = Reana::new(url, access_token);
+        let reana = Reana::new(url.to_string(), access_token.to_string());
         let result = get_workflow_status(&reana, workflow_id);
 
         assert!(result.is_ok());
@@ -497,7 +538,7 @@ mod tests {
         });
 
         let url = &server.base_url();
-        let reana = Reana::new(url, access_token);
+        let reana = Reana::new(url.to_string(), access_token.to_string());
         let result = get_workflow_status(&reana, workflow_id);
 
         assert!(result.is_err());
@@ -561,7 +602,7 @@ mod tests {
         let dummy_cwl = NamedTempFile::new().unwrap();
         write(dummy_cwl.path(), "cwlVersion: v1.2").unwrap();
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
         let result = upload_files(&reana, &None, &dummy_cwl.path().to_path_buf(), workflow_name, &workflow_json);
 
         assert!(result.is_ok(), "upload_files failed: {:?}", result.err());
@@ -577,7 +618,7 @@ mod tests {
         let files = vec![];
 
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
         let result = download_files(&reana, workflow_name, &files, None);
 
         assert!(result.is_ok(), "download_files failed: {:?}", result.err());
@@ -609,7 +650,7 @@ mod tests {
         let files = vec!["results.svg".to_string()];
 
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
         let result = download_files(&reana, workflow_name, &files, None);
 
         env::set_current_dir(&original_dir).expect("Failed to restore original dir");
@@ -641,7 +682,7 @@ mod tests {
 
         let files = vec![test_filename.to_string()];
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
         let result = download_files(&reana, workflow_name, &files, None);
 
         assert!(result.is_ok(), "download_files failed: {:?}", result.err());

@@ -1,5 +1,5 @@
 use crate::reana::{auth::login_reana, workflow::analyze_workflow_logs};
-use reana::{
+use reana_ext::{
     api::{download_files, get_workflow_specification, get_workflow_status},
     reana::Reana,
 };
@@ -7,7 +7,7 @@ use std::error::Error;
 
 pub fn download_remote_results(workflow_name: &str, output_dir: Option<&String>) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance, reana_token);
 
     let status_response = get_workflow_status(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
     let workflow_status = status_response["status"].as_str().unwrap_or("unknown");
