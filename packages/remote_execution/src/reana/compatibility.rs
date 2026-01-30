@@ -4,25 +4,56 @@ use log::{info, warn};
 use reana_ext::parser::WorkflowJson;
 use std::collections::HashMap;
 use std::process::{Command as SystemCommand, Stdio};
-use std::{env, fs, path::Path};
+use std::{env, fs, path::Path, thread};
 use util::{handle_process, is_docker_installed};
+use std::time::Duration;
+use anyhow::anyhow;
 
 use s4n_core::parser::SCRIPT_EXECUTORS;
 
-/// Performs some compatibility adjustments on workflow json for the exeuction using REANA.
 pub fn compatibility_adjustments(workflow_json: &mut WorkflowJson) -> anyhow::Result<()> {
+    let mut docker_jobs: Vec<CommandLineTool> = Vec::new();
     for item in &mut workflow_json.workflow.specification.graph {
         if let CWLDocument::CommandLineTool(tool) = item {
             adjust_basecommand(tool)?;
-            // if tool has a docker pull not necessary to inject a docker pull?
             if !has_docker_pull(tool) {
-                publish_docker_ephemeral(tool)?;
-                if !has_docker_pull(tool) {
-                    inject_docker_pull(tool)?;
-                }
+                docker_jobs.push(tool.clone());
             }
         }
     }
+    if docker_jobs.is_empty() {
+        return Ok(());
+    }
+    let handles: Vec<_> = docker_jobs
+        .into_iter()
+        .map(|mut tool| {
+            thread::spawn(move || -> anyhow::Result<CommandLineTool> {
+                if !has_docker_pull(&tool) {
+                    publish_docker_ephemeral(&mut tool)?;
+                    if !has_docker_pull(&tool) {
+                        inject_docker_pull(&mut tool)?;
+                    }
+                }
+                Ok(tool)
+            })
+        })
+        .collect();
+    let mut updated_tools = Vec::new();
+    for handle in handles {
+        match handle.join() {
+            Ok(Ok(tool)) => updated_tools.push(tool),
+            Ok(Err(e)) => return Err(anyhow!("❌ Docker build failed: {e}")),
+            Err(_) => return Err(anyhow!("❌ Thread panicked during Docker build")),
+        }
+    }
+    for updated_tool in updated_tools {
+        for item in &mut workflow_json.workflow.specification.graph {
+            if let CWLDocument::CommandLineTool(tool) = item && tool.id == updated_tool.id {
+                    *tool = updated_tool.clone();
+            }
+        }
+    }
+    thread::sleep(Duration::from_secs(5));
     Ok(())
 }
 

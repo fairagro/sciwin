@@ -4,7 +4,7 @@ use commonwl::execution::{ContainerEngine, execute_cwlfile, set_container_engine
 use commonwl::prelude::*;
 use remote_execution::{check_status, download_results, export_rocrate, logout};
 use serde_yaml::{Number, Value};
-use std::{collections::HashMap, error::Error, fs, path::PathBuf};
+use std::{collections::HashMap, error::Error, fs, path::{Path, PathBuf}};
 
 pub fn handle_execute_commands(subcommand: &ExecuteCommands) -> Result<(), Box<dyn Error>> {
     match subcommand {
@@ -128,7 +128,7 @@ pub fn execute_local(args: &LocalExecuteArgs) -> Result<(), ExecutionError> {
     execute_cwlfile(&args.file, &args.args, args.out_dir.clone())
 }
 
-pub fn schedule_run(file: &PathBuf, input_file: &Option<PathBuf>, rocrate: bool, watch: bool, logout: bool) -> Result<(), Box<dyn Error>> {
+pub fn schedule_run(file: &Path, input_file: &Option<PathBuf>, rocrate: bool, watch: bool, logout: bool) -> Result<(), Box<dyn Error>> {
     let workflow_name = remote_execution::schedule_run(file, input_file)?;
 
     if watch {

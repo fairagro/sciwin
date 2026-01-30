@@ -5,9 +5,9 @@ use reana_ext::{
     reana::Reana,
 };
 use s4n_core::config;
-use std::{collections::HashMap, error::Error, fs, path::PathBuf};
+use std::{collections::HashMap, error::Error, fs, path::{PathBuf, Path}};
 
-pub fn execute_remote_start(file: &PathBuf, input_file: &Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+pub fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> Result<String, Box<dyn Error>> {
     let config_path = PathBuf::from("workflow.toml");
     let config: Option<config::Config> = if config_path.exists() {
         Some(toml::from_str(&fs::read_to_string(&config_path)?)?)
@@ -19,7 +19,6 @@ pub fn execute_remote_start(file: &PathBuf, input_file: &Option<PathBuf>) -> Res
     // Get credentials
     let (reana_instance, reana_token) = login_reana()?;
     let reana = Reana::new(reana_instance.clone(), reana_token.clone());
-
 
     // Ping
     let ping_status = ping_reana(&reana)?;
@@ -37,7 +36,7 @@ pub fn execute_remote_start(file: &PathBuf, input_file: &Option<PathBuf>) -> Res
     let Some(workflow_name) = create_response["workflow_name"].as_str() else {
         return Err("Missing workflow_name in response".into());
     };
-    upload_files(&reana, input_file, file, workflow_name, &workflow_json)?;
+    upload_files(&reana, input_file, file, workflow_name, &workflow_json, None)?;
     start_workflow(&reana, workflow_name, None, None, false, &converted_yaml)?;
     eprintln!("✅ Started workflow execution");
 

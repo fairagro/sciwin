@@ -21,6 +21,7 @@ pub mod graph;
 pub mod layout;
 pub mod types;
 pub mod workflow;
+pub mod reana_integration;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct ApplicationState {
