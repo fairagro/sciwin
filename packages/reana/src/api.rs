@@ -265,7 +265,7 @@ mod tests {
             .with_body(r#"{"status": "ok"}"#)
             .create();
         let url = &server.url();
-        let reana = Reana::new(url.to_string(), "".to_string());
+        let reana = Reana::new(url.to_string(), String::new());
 
         let response: Value = ping_reana(&reana).unwrap();
         assert_eq!(response["status"], "ok");
@@ -551,7 +551,7 @@ mod tests {
         write(dummy_cwl.path(), "cwlVersion: v1.2").unwrap();
         let url = &server.base_url();
         let reana = Reana::new(url.to_string(), reana_token.to_string());
-        let result = upload_files(&reana, &None, &dummy_cwl.path().to_path_buf(), workflow_name, &workflow_json, None);
+        let result = upload_files(&reana, &None, dummy_cwl.path(), workflow_name, &workflow_json, None);
 
         assert!(result.is_ok(), "upload_files failed: {:?}", result.err());
         _mock_upload.assert_calls(3);
