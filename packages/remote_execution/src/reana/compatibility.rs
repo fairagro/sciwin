@@ -181,14 +181,13 @@ fn inject_docker_pull(tool: &mut CommandLineTool) -> anyhow::Result<()> {
 
     let default_images = HashMap::from([("python", "python"), ("Rscript", "r-base"), ("node", "node")]);
 
-    if SCRIPT_EXECUTORS.contains(&&*command_vec[0]) && tool.get_requirement::<DockerRequirement>().is_some() {
+    if SCRIPT_EXECUTORS.contains(&&*command_vec[0]) {
         //is script executor but does not use containerization
         warn!(
             "Tool {} is using {} and does not use a proper container",
             id.green().bold(),
             command_vec[0].bold()
         );
-
         if let Some(container) = default_images.get(&&*command_vec[0]) {
             tool.requirements
                 .push(Requirement::DockerRequirement(DockerRequirement::from_pull(container)));
