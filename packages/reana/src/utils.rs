@@ -106,15 +106,32 @@ pub fn file_matches(requested_file: &str, candidate_path: &str) -> bool {
 }
 
 pub fn collect_files_recursive(dir: &Path, files: &mut HashSet<String>) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
+    let root = dir
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize directory: {}", dir.display()))?;
+
+    collect_files_recursive_inner(&root, &root, files)
+}
+
+fn collect_files_recursive_inner(root: &Path, dir: &Path, files: &mut HashSet<String>) -> Result<()> {
+    let canonical_dir = dir
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize directory during traversal: {}", dir.display()))?;
+    if !canonical_dir.starts_with(root) {
+        return Err(anyhow!(
+            "Attempted to traverse outside of root directory: {} (root: {})",
+            canonical_dir.display(),
+            root.display()
+        ));
+    }
+    for entry in fs::read_dir(&canonical_dir)? {
         let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) && name.starts_with('.') {
-                    continue;
-                }
-
-            collect_files_recursive(&path, files)?;
+                continue;
+            }
+            collect_files_recursive_inner(root, &path, files)?;
         } else if let Some(path_str) = path.to_str() {
             files.insert(path_str.to_string());
         }

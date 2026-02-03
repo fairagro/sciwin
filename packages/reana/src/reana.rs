@@ -39,7 +39,7 @@ impl Reana {
             .parse()?,
         );
 
-        let client = Client::builder().default_headers(headers).danger_accept_invalid_certs(true).build()?;
+        let client = Client::builder().default_headers(headers).build()?;
         let url = self.url(endpoint, params);
         match body {
             Content::Json(json) => client.post(&url).json(&json).send()?.error_for_status(),
@@ -49,7 +49,7 @@ impl Reana {
     }
 
     pub fn get(&self, endpoint: &WorkflowEndpoint) -> anyhow::Result<Response> {
-        let client = Client::builder().danger_accept_invalid_certs(true).build()?;
+        let client = Client::builder().build()?;
         let url = self.url(endpoint, None);
         client
             .get(&url)
@@ -60,7 +60,6 @@ impl Reana {
     pub fn ping(&self) -> anyhow::Result<Response> {
         let ping_url = format!("{}/api/ping", self.server);
         let client = Client::builder()
-            .danger_accept_invalid_certs(true)
             .build()
             .context("Failed to build HTTP client")?;
 
