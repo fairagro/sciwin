@@ -37,7 +37,7 @@ anyhow = "1.0.99"
 colored = "3.0.0"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
 fancy-regex = "0.16.2"
-git2 = { version = "0.20.3", features = ["vendored-openssl"] }
+git2 = { version = "0.20.4", features = ["vendored-openssl"] }
 keyring = { version = "3.6.3", features = [
     "apple-native",
     "linux-native",
