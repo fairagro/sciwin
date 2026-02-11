@@ -13,6 +13,9 @@ use s4n_core::parser::SCRIPT_EXECUTORS;
 
 pub fn compatibility_adjustments(workflow_json: &mut WorkflowJson) -> anyhow::Result<()> {
     let mut docker_jobs: Vec<CommandLineTool> = Vec::new();
+    if !is_docker_available() {
+        return Err(anyhow!("❌ Docker is not running or not accessible."));
+    }
     for item in &mut workflow_json.workflow.specification.graph {
         if let CWLDocument::CommandLineTool(tool) = item {
             adjust_basecommand(tool)?;
@@ -55,6 +58,14 @@ pub fn compatibility_adjustments(workflow_json: &mut WorkflowJson) -> anyhow::Re
     }
     thread::sleep(Duration::from_secs(5));
     Ok(())
+}
+
+fn is_docker_available() -> bool {
+    std::process::Command::new("docker")
+        .arg("info")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status().map(|s| s.success()).unwrap_or(false)
 }
 
 ///checks if tool has a docker pull already

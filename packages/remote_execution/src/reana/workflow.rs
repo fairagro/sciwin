@@ -27,7 +27,11 @@ pub fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> Result
     }
     // Generate worfklow.json
     let mut workflow_json = generate_workflow_json_from_cwl(file, input_file)?;
-    compatibility_adjustments(&mut workflow_json)?;
+
+    if let Err(e) = compatibility_adjustments(&mut workflow_json) {
+        eprintln!("❌ Compatibility adjustment failed: {e}");
+        std::process::exit(1);
+    }
 
     let workflow_json = serde_json::to_value(workflow_json)?;
     let converted_yaml: serde_yaml::Value = serde_json::from_value(workflow_json.clone())?;
