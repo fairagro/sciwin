@@ -39,12 +39,7 @@ pub fn download_remote_results(workflow_name: &str, all: bool, output_dir: Optio
                     .and_then(|items| items.as_array())
                     .map(|array| array.iter().filter_map(|item| item.get("name")?.as_str().map(String::from)).collect())
                     .unwrap_or_default();
-                if workspace_files.is_empty() {
-                    eprintln!("⚠️ No files found in workspace for workflow '{workflow_name}'.");
-                }
-                else {
                     download_files(&reana, workflow_name, &workspace_files, output_dir.map(|x| x.as_str()))?;
-                }
             }
         }
         "failed" => {
