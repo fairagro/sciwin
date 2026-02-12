@@ -11,8 +11,8 @@ pub fn check_status(workflow_name: &Option<String>) -> Result<(), Box<dyn std::e
     reana::check_remote_status(workflow_name)
 }
 
-pub fn download_results(workflow_name: &str, output_dir: Option<&String>) -> Result<(), Box<dyn std::error::Error>> {
-    reana::download_remote_results(workflow_name, output_dir)
+pub fn download_results(workflow_name: &str, all: bool, output_dir: Option<&String>) -> Result<(), Box<dyn std::error::Error>> {
+    reana::download_remote_results(workflow_name, all, output_dir)
 }
 
 pub fn export_rocrate(workflow_name: &str, output_dir: Option<&String>) -> Result<(), Box<dyn std::error::Error>> {

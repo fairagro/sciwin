@@ -40,9 +40,10 @@ pub fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> Result
     let Some(workflow_name) = create_response["workflow_name"].as_str() else {
         return Err("Missing workflow_name in response".into());
     };
-    upload_files(&reana, input_file, file, workflow_name, &workflow_json, None)?;
+    let working_dir = std::env::current_dir()?;
+    upload_files(&reana, input_file, file, workflow_name, &workflow_json, Some(&working_dir))?;
     start_workflow(&reana, workflow_name, None, None, false, &converted_yaml)?;
-    eprintln!("✅ Started workflow execution {workflow_name} on REANA instance {reana_instance}");
+    eprintln!("✅ Started workflow execution of '{workflow_name}' on REANA instance {reana_instance}");
     eprintln!("You can check its status using: s4n execute remote status '{workflow_name}' or use 's4n execute remote status' to check all workflows on REANA instance {reana_instance}");
 
     save_workflow_name(&reana_instance, workflow_name)?;

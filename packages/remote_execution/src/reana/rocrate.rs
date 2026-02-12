@@ -1,4 +1,4 @@
-use crate::reana::{auth::login_reana, workflow::analyze_workflow_logs};
+use crate::reana::{auth::login_reana, workflow::analyze_workflow_logs, status::evaluate_workflow_status};
 use reana_ext::{
     api::{get_workflow_logs, get_workflow_specification, get_workflow_status, get_workflow_workspace},
     reana::Reana,
@@ -11,9 +11,8 @@ pub fn export_rocrate(workflow_name: &str, ro_crate_dir: Option<&String>) -> Res
     let reana = Reana::new(reana_instance.clone(), reana_token.clone());
 
     // Get workflow status, only export if finished?
-    let status_response = get_workflow_logs(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
-    let workflow_status = status_response["status"].as_str().unwrap_or("unknown");
-    match workflow_status {
+    let workflow_status = evaluate_workflow_status(&reana, workflow_name, false)?;
+    match workflow_status.as_str() {
         "finished" => {
             let workflow_json = get_workflow_specification(&reana, workflow_name)?;
             let config_path = PathBuf::from("workflow.toml");
@@ -29,7 +28,7 @@ pub fn export_rocrate(workflow_name: &str, ro_crate_dir: Option<&String>) -> Res
                 "https://w3id.org/ro/wfrun/provenance/0.5",
                 "https://w3id.org/workflowhub/workflow-ro-crate/1.0",
             ];
-            let workspace_response = get_workflow_workspace(&reana_instance, &reana_token, workflow_name)?;
+            let workspace_response = get_workflow_workspace(&reana, workflow_name)?;
             let workspace_files: Vec<String> = workspace_response
                 .get("items")
                 .and_then(|items| items.as_array())

@@ -201,32 +201,24 @@ pub fn download_files(reana: &Reana, workflow_name: &str, files: &[String], fold
         eprintln!("ℹ️ No files to download.");
         return Ok(());
     }
-
-    if let Some(ref dir) = folder {
-        fs::create_dir_all(dir).with_context(|| format!("❌ Failed to create folder: {dir}"))?;
-    }
-
     for file_name in files {
         let response = reana.get(&WorkflowEndpoint::Workspace(workflow_name, Some(file_name.to_string())))?;
-
         if response.status().is_success() {
-            let file_path_name = Path::new(file_name)
-                .file_name()
-                .and_then(|f| f.to_str())
-                .context("❌ Invalid or missing UTF-8 file name")?
-                .to_string();
-
+            // reana adds all outputs in an outputs/ folder, remove this for now
+            let relative_path = file_name.strip_prefix("outputs/").unwrap_or(file_name);
             let output_path = match folder {
-                Some(dir) => Path::new(dir).join(&file_path_name),
-                None => PathBuf::from(&file_path_name),
+                Some(dir) => Path::new(dir).join(relative_path),
+                None => PathBuf::from(relative_path),
             };
-
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("❌ Failed to create folder: {}", parent.display()))?;
+            }
             let content = response.bytes().context("❌ Failed to read response bytes")?;
-
-            let mut file = File::create(&output_path).with_context(|| format!("❌ Failed to create file: {}", output_path.display()))?;
+            let mut file = File::create(&output_path)
+                .with_context(|| format!("❌ Failed to create file: {}", output_path.display()))?;
             file.write_all(&content)
                 .with_context(|| format!("❌ Failed to write to file: {}", output_path.display()))?;
-
             eprintln!("✅ Downloaded: {}", output_path.display());
         } else {
             let error_text = response.text().unwrap_or_else(|_| "Unknown error".to_string());
@@ -237,8 +229,8 @@ pub fn download_files(reana: &Reana, workflow_name: &str, files: &[String], fold
     Ok(())
 }
 
-pub fn get_workflow_workspace(reana_server: &str, reana_token: &str, workflow_id: &str) -> Result<Value> {
-    let response = Reana::new(reana_server.to_string(), reana_token.to_string()).get(&WorkflowEndpoint::Workspace(workflow_id, None))?;
+pub fn get_workflow_workspace(reana: &Reana, workflow_id: &str) -> Result<Value> {
+    let response = reana.get(&WorkflowEndpoint::Workspace(workflow_id, None))?;
 
     let json_response: Value = response.json().context("❌ Failed to parse JSON response")?;
 

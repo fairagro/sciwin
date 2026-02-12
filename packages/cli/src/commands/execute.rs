@@ -18,7 +18,7 @@ pub fn handle_execute_commands(subcommand: &ExecuteCommands) -> Result<(), Box<d
                 logout,
             } => schedule_run(file, input_file, *rocrate, *watch, *logout),
             RemoteSubcommands::Status { workflow_name } => check_status(workflow_name),
-            RemoteSubcommands::Download { workflow_name, output_dir } => download_results(workflow_name, output_dir.as_ref()),
+            RemoteSubcommands::Download { workflow_name, all, output_dir } => download_results(workflow_name, *all, output_dir.as_ref()),
             RemoteSubcommands::Rocrate { workflow_name, output_dir } => export_rocrate(workflow_name, output_dir.as_ref()),
             RemoteSubcommands::Logout => logout(),
         },
@@ -90,6 +90,8 @@ pub enum RemoteSubcommands {
     Download {
         #[arg(help = "Workflow name to download results for")]
         workflow_name: String,
+        #[arg(short = 'a', long = "all", help = "Download all files of the workflow")]
+        all: bool,
         #[arg(short = 'd', long = "output_dir", help = "Optional output directory to save downloaded files")]
         output_dir: Option<String>,
     },
