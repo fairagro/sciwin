@@ -86,7 +86,7 @@ pub enum RemoteSubcommands {
         #[arg(help = "Workflow name to check (if omitted, checks all)")]
         workflow_name: Option<String>,
     },
-    #[command(about = "Downloads finished Workflow from REANA")]
+    #[command(about = "Downloads workflow outputs from REANA")]
     Download {
         #[arg(help = "Workflow name to download results for")]
         workflow_name: String,
