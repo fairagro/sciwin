@@ -14,6 +14,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use commonwl::execution::execute_cwlfile;
+use crate::components::files::{FileType, read_node_type};
 
 #[component]
 pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<bool>, Signal<bool>)) -> Element {
@@ -145,37 +146,38 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                     Icon { width: 10, height: 10, icon: GoPlay }
                                 }
                                 // REANA 
-                                SmallRoundActionButton {
-                                    class: "hover:bg-fairagro-mid-500",
-                                    title: format!("Execute with REANA"),
-                                    onclick: {
-                                        let item = item.clone();
-                                        let show_settings = show_settings;
-                                        let app_state = app_state;
-
-                                        move |_| {
+                                if read_node_type(&item.path) == FileType::Workflow {
+                                    SmallRoundActionButton {
+                                        class: "hover:bg-fairagro-mid-500",
+                                        title: format!("Execute with REANA"),
+                                        onclick: {
                                             let item = item.clone();
                                             let show_settings = show_settings;
-                                            let working_dir = match app_state().working_directory.clone() {
-                                                Some(dir) => dir,
-                                                None => {
-                                                    eprintln!("❌ No working directory set");
-                                                    return Ok(());
-                                                }
-                                            };
-                                            spawn(async move {
-                                                execute_reana_workflow(item, working_dir, show_settings).await;
-                                            });
-                                        Ok(())
+                                            let app_state = app_state;
+
+                                            move |_| {
+                                                let item = item.clone();
+                                                let show_settings = show_settings;
+                                                let working_dir = match app_state().working_directory.clone() {
+                                                    Some(dir) => dir,
+                                                    None => {
+                                                        eprintln!("❌ No working directory set");
+                                                        return Ok(());
+                                                    }
+                                                };
+                                                spawn(async move {
+                                                    execute_reana_workflow(item, working_dir, show_settings).await;
+                                                });
+                                            Ok(())
+                                        }
+                                    },
+                                Icon {
+                                        width: 10,
+                                        height: 10,
+                                        icon: GoCloud,
                                     }
-                                },
-                            Icon {
-                                    width: 10,
-                                    height: 10,
-                                    icon: GoCloud,
                                 }
                             }
-
                         }
                     }
                 }
