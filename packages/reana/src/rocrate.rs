@@ -740,7 +740,7 @@ pub fn create_ro_crate(
     }
     let reana_instance = get_or_prompt_credential("reana", "instance", "Enter REANA instance URL: ")?;
     let reana_token = get_or_prompt_credential("reana", "token", "Enter REANA access token: ")?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance, reana_token);
     //download intermediate outputs that were found
     download_files(&reana, workflow_name, &found_paths, Some(&folder_name))?;
 

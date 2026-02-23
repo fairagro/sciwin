@@ -30,10 +30,11 @@ pub fn render<R: FlowchartRenderer>(r: &mut R, cwl: &Workflow, filename: &Path, 
 
         if !no_defaults && let Some(doc) = load_step(step, filename) {
             for input in &doc.inputs {
-                if !step.in_.iter().any(|i| i.id == input.id) && input.default.is_some() {
+                if let Some(default) = input.default.as_ref()
+                    && !step.in_.iter().any(|i| i.id == input.id)
+                {
                     let node_id = format!("{}_{}", step.id, input.id);
-                    r.node(&node_id, Some(&input.default.as_ref().unwrap().as_value_string()), RenderStyle::Small);
-                    r.edge(&node_id, &step.id, Some(&input.id), RenderStyle::Small);
+                    r.node(&node_id, Some(&default.as_value_string()), RenderStyle::Small);
                 }
             }
         }

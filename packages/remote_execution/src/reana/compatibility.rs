@@ -1,29 +1,71 @@
 use colored::Colorize;
 use commonwl::{prelude::*, requirements::WorkDirItem};
 use log::{info, warn};
-use reana::parser::WorkflowJson;
+use reana_ext::parser::WorkflowJson;
 use std::collections::HashMap;
 use std::process::{Command as SystemCommand, Stdio};
-use std::{env, fs, path::Path};
+use std::{env, fs, path::Path, thread};
 use util::{handle_process, is_docker_installed};
+use std::time::Duration;
+use anyhow::anyhow;
 
 use s4n_core::parser::SCRIPT_EXECUTORS;
 
-/// Performs some compatibility adjustments on workflow json for the exeuction using REANA.
 pub fn compatibility_adjustments(workflow_json: &mut WorkflowJson) -> anyhow::Result<()> {
+    let mut docker_jobs: Vec<CommandLineTool> = Vec::new();
+    if !is_docker_available() {
+        return Err(anyhow!("❌ Docker is not running or not accessible."));
+    }
     for item in &mut workflow_json.workflow.specification.graph {
         if let CWLDocument::CommandLineTool(tool) = item {
             adjust_basecommand(tool)?;
-            // if tool has a docker pull not necessary to inject a docker pull?
             if !has_docker_pull(tool) {
-                publish_docker_ephemeral(tool)?;
-                if !has_docker_pull(tool) {
-                    inject_docker_pull(tool)?;
-                }
+                docker_jobs.push(tool.clone());
             }
         }
     }
+    if docker_jobs.is_empty() {
+        return Ok(());
+    }
+    let handles: Vec<_> = docker_jobs
+        .into_iter()
+        .map(|mut tool| {
+            thread::spawn(move || -> anyhow::Result<CommandLineTool> {
+                if !has_docker_pull(&tool) {
+                    publish_docker_ephemeral(&mut tool)?;
+                    if !has_docker_pull(&tool) {
+                        inject_docker_pull(&mut tool)?;
+                    }
+                }
+                Ok(tool)
+            })
+        })
+        .collect();
+    let mut updated_tools = Vec::new();
+    for handle in handles {
+        match handle.join() {
+            Ok(Ok(tool)) => updated_tools.push(tool),
+            Ok(Err(e)) => return Err(anyhow!("❌ Docker build failed: {e}")),
+            Err(_) => return Err(anyhow!("❌ Thread panicked during Docker build")),
+        }
+    }
+    for updated_tool in updated_tools {
+        for item in &mut workflow_json.workflow.specification.graph {
+            if let CWLDocument::CommandLineTool(tool) = item && tool.id == updated_tool.id {
+                    *tool = updated_tool.clone();
+            }
+        }
+    }
+    thread::sleep(Duration::from_secs(5));
     Ok(())
+}
+
+fn is_docker_available() -> bool {
+    std::process::Command::new("docker")
+        .arg("info")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status().map(|s| s.success()).unwrap_or(false)
 }
 
 ///checks if tool has a docker pull already
@@ -150,14 +192,13 @@ fn inject_docker_pull(tool: &mut CommandLineTool) -> anyhow::Result<()> {
 
     let default_images = HashMap::from([("python", "python"), ("Rscript", "r-base"), ("node", "node")]);
 
-    if SCRIPT_EXECUTORS.contains(&&*command_vec[0]) && tool.get_requirement::<DockerRequirement>().is_some() {
+    if SCRIPT_EXECUTORS.contains(&&*command_vec[0]) {
         //is script executor but does not use containerization
         warn!(
             "Tool {} is using {} and does not use a proper container",
             id.green().bold(),
             command_vec[0].bold()
         );
-
         if let Some(container) = default_images.get(&&*command_vec[0]) {
             tool.requirements
                 .push(Requirement::DockerRequirement(DockerRequirement::from_pull(container)));

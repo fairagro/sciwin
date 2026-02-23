@@ -1,5 +1,5 @@
 use crate::reana::{Content, Reana, WorkflowEndpoint};
-use crate::utils::{collect_files_recursive, get_location, load_cwl_yaml, load_yaml_file, resolve_input_file_path, sanitize_path};
+use crate::utils::{collect_files_recursive, load_cwl_yaml, load_yaml_file, resolve_input_file_path, sanitize_path, get_location};
 use anyhow::{Context, Result};
 use serde_json::Value;
 use serde_json::json;
@@ -87,123 +87,112 @@ pub fn get_workflow_specification(reana: &Reana, workflow_id: &str) -> Result<Va
     }
 }
 
-pub fn upload_files(reana: &Reana, input_yaml: &Option<PathBuf>, file: &PathBuf, workflow_name: &str, workflow_json: &Value) -> Result<()> {
-    eprintln!("Uploading Files ...");
+pub fn upload_files(reana: &Reana, input_yaml: &Option<PathBuf>, file: &Path, workflow_name: &str, workflow_json: &Value, working_dir: Option<&PathBuf>) -> Result<()> {
+    eprintln!("📤 Uploading Files ...");
     let mut files: HashSet<String> = HashSet::new();
     let input_yaml_value = if let Some(input_path) = input_yaml {
         Some(load_yaml_file(Path::new(input_path)).context("Failed to load input YAML file")?)
     } else {
         None
     };
-
     let base_path = std::env::current_dir()
         .context("Failed to get current working directory")?
         .to_string_lossy()
         .to_string();
-
     let cwl_yaml = load_cwl_yaml(&base_path, file).context("Failed to load CWL YAML")?;
-
-    // Collect files from workflow JSON
     if let Some(inputs) = workflow_json.get("inputs") {
         if let Some(Value::Array(file_list)) = inputs.get("files") {
             for f in file_list.iter().filter_map(|v| v.as_str()) {
                 files.insert(f.to_string());
             }
         }
-        if let Some(Value::Array(dir_list)) = inputs.get("directories") {
+        if let Some(Value::Array(dir_list)) = inputs.get("directories").or_else(|| inputs.get("directory")){
             for dir in dir_list.iter().filter_map(|v| v.as_str()) {
-                let path = Path::new(dir);
-                if path.exists() && path.is_dir() {
-                    for entry in fs::read_dir(path).context("Failed to read directory")? {
-                        let entry = entry.context("Failed to read directory entry")?;
-                        let file_path = entry.path();
-                        if file_path.is_dir() {
-                            collect_files_recursive(&file_path, &mut files).context("Failed to recursively collect directory files")?;
-                        } else if file_path.is_file()
-                            && let Some(file_str) = file_path.to_str()
-                        {
-                            files.insert(file_str.to_string());
-                        }
-                    }
-                } else {
-                    // Resolve indirect directories
-                    if let Ok(Some(resolved_path)) =
-                        resolve_input_file_path(path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml))
-                    {
-                        let cwd = std::env::current_dir().context("Failed to get cwd")?;
-
-                        let base_path = if let Some(input_yaml_str) = input_yaml {
-                            cwd.join(input_yaml_str)
-                        } else {
-                            cwd.join(file)
-                        };
-
-                        let path_str = base_path.to_string_lossy().to_string();
-
-                        let l = get_location(&path_str, Path::new(&resolved_path)).context("Failed to get location")?;
-                        let resolved_dir = PathBuf::from(l);
-
-                        if resolved_dir.exists() && resolved_dir.is_dir() {
-                            for entry in fs::read_dir(resolved_dir).context("Failed to read resolved directory")? {
-                                let entry = entry.context("Failed to read directory entry")?;
-                                let file_path = entry.path();
-                                if file_path.is_dir() {
-                                    collect_files_recursive(&file_path, &mut files).context("Failed to collect files recursively")?;
-                                } else if file_path.is_file() {
-                                    let relative = file_path.strip_prefix(&cwd).unwrap_or(&file_path);
-                                    if let Some(file_str) = relative.to_str() {
-                                        files.insert(file_str.to_string());
-                                    }
-                                }
+                let mut path = PathBuf::from(dir);
+                if !path.exists() {
+                    if let Some(base) = working_dir {
+                        let candidate = base.join(&path);
+                        if candidate.exists() {
+                            path = candidate;
+                        } 
+                        else if let Ok(Some(resolved_path)) = resolve_input_file_path(path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml)) {
+                            let working_str = base.to_string_lossy().to_string();
+                            if let Ok(loc) = get_location(&working_str, Path::new(&resolved_path))
+                            {
+                                path = PathBuf::from(loc);
+                            } else {
+                                eprintln!("⚠️ Could not map location for {:?}", resolved_path);
+                                continue;
                             }
+                        } else {
+                            eprintln!("⚠️ Directory not found: {:?}", dir);
+                            continue;
                         }
+                    } else {
+                        eprintln!("⚠️ Directory not found: {:?} (no working_dir provided)", dir);
+                        continue;
                     }
+                }
+                if path.is_dir() {
+                    collect_files_recursive(&path, &mut files)
+                        .context("Failed to collect files recursively")?;
                 }
             }
         }
     }
 
     if files.is_empty() {
-        eprintln!("No files to upload found in workflow JSON.");
+        eprintln!("⚠️ No files to upload found in workflow JSON.");
         return Ok(());
     }
-
     for file_name in files {
         let mut file_path = PathBuf::from(&file_name);
-        if !file_path.exists()
-            && let Ok(Some(resolved)) = resolve_input_file_path(file_path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml))
-        {
-            let cwd = std::env::current_dir().context("Failed to get cwd")?;
-            let base_path = if let Some(input_yaml_str) = input_yaml {
-                cwd.join(input_yaml_str)
+        if !file_path.exists() {
+            let mut resolved = None;
+            if let Some(base) = working_dir {
+                let candidate = base.join(&file_path);
+                if candidate.exists() {
+                    resolved = Some(candidate);
+                }
+            }
+            if resolved.is_none()
+                && let Ok(Some(resolved_path)) = resolve_input_file_path(file_path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml))
+                && let Some(base) = working_dir
+            {
+                let working_str = base.to_string_lossy().to_string();
+                if let Ok(loc) = get_location(&working_str, Path::new(&resolved_path)) {
+                    resolved = Some(PathBuf::from(loc));
+                }
+            }
+            if let Some(found) = resolved {
+                file_path = found;
             } else {
-                cwd.join(file)
-            };
-
-            let path_str = base_path.to_string_lossy().to_string();
-            let l = get_location(&path_str, Path::new(&resolved)).context("Failed to resolve file location")?;
-            file_path = PathBuf::from(l);
+                eprintln!("⚠️ File not found: {:?}", file_path);
+                continue;
+            }
         }
-
-        // Read file content
-        let mut file = fs::File::open(&file_path).with_context(|| format!("Failed to open file '{}'", file_path.display()))?;
+        let mut handle = fs::File::open(&file_path).with_context(|| format!("Failed to open file '{}'", file_path.display()))?;
         let mut file_content = Vec::new();
-        file.read_to_end(&mut file_content)
-            .with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
-
-        let name = pathdiff::diff_paths(&file_name, std::env::current_dir()?).unwrap_or_else(|| Path::new(&file_name).to_path_buf());
-
+        handle.read_to_end(&mut file_content).with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
+        let relative = if let Some(base) = working_dir {
+            pathdiff::diff_paths(&file_path, base).unwrap_or_else(|| file_path.clone())
+        } else {
+            file_path.clone()
+        };
         let mut params = HashMap::new();
-        params.insert("file_name".to_string(), sanitize_path(&name.to_string_lossy()));
+        params.insert("file_name".to_string(), sanitize_path(&relative.to_string_lossy()));
         let response = reana.post(
             &WorkflowEndpoint::Workspace(workflow_name, None),
             Content::OctetStream(file_content),
             Some(params),
         )?;
-        eprintln!("✔️  Uploaded {file_name}");
-        let _response_text = response.text().context("Failed to read server response after upload")?;
+        if response.status().is_success() {
+            eprintln!("✔️  Uploaded {file_name}");
+        } else {
+            let error_text = response.text().unwrap_or_else(|_| "Unknown error".to_string());
+            eprintln!("❌ Failed to upload {file_name}. Response: {error_text}");
+        }
     }
-
     Ok(())
 }
 
@@ -212,32 +201,24 @@ pub fn download_files(reana: &Reana, workflow_name: &str, files: &[String], fold
         eprintln!("ℹ️ No files to download.");
         return Ok(());
     }
-
-    if let Some(ref dir) = folder {
-        fs::create_dir_all(dir).with_context(|| format!("❌ Failed to create folder: {dir}"))?;
-    }
-
     for file_name in files {
         let response = reana.get(&WorkflowEndpoint::Workspace(workflow_name, Some(file_name.to_string())))?;
-
         if response.status().is_success() {
-            let file_path_name = Path::new(file_name)
-                .file_name()
-                .and_then(|f| f.to_str())
-                .context("❌ Invalid or missing UTF-8 file name")?
-                .to_string();
-
+            // reana adds all outputs in an outputs/ folder, remove this for now
+            let relative_path = file_name.strip_prefix("outputs/").unwrap_or(file_name);
             let output_path = match folder {
-                Some(dir) => Path::new(dir).join(&file_path_name),
-                None => PathBuf::from(&file_path_name),
+                Some(dir) => Path::new(dir).join(relative_path),
+                None => PathBuf::from(relative_path),
             };
-
+            if let Some(parent) = output_path.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("❌ Failed to create folder: {}", parent.display()))?;
+            }
             let content = response.bytes().context("❌ Failed to read response bytes")?;
-
-            let mut file = File::create(&output_path).with_context(|| format!("❌ Failed to create file: {}", output_path.display()))?;
+            let mut file = File::create(&output_path)
+                .with_context(|| format!("❌ Failed to create file: {}", output_path.display()))?;
             file.write_all(&content)
                 .with_context(|| format!("❌ Failed to write to file: {}", output_path.display()))?;
-
             eprintln!("✅ Downloaded: {}", output_path.display());
         } else {
             let error_text = response.text().unwrap_or_else(|_| "Unknown error".to_string());
@@ -248,8 +229,8 @@ pub fn download_files(reana: &Reana, workflow_name: &str, files: &[String], fold
     Ok(())
 }
 
-pub fn get_workflow_workspace(reana_server: &str, reana_token: &str, workflow_id: &str) -> Result<Value> {
-    let response = Reana::new(reana_server, reana_token).get(&WorkflowEndpoint::Workspace(workflow_id, None))?;
+pub fn get_workflow_workspace(reana: &Reana, workflow_id: &str) -> Result<Value> {
+    let response = reana.get(&WorkflowEndpoint::Workspace(workflow_id, None))?;
 
     let json_response: Value = response.json().context("❌ Failed to parse JSON response")?;
 
@@ -276,7 +257,7 @@ mod tests {
             .with_body(r#"{"status": "ok"}"#)
             .create();
         let url = &server.url();
-        let reana = Reana::new(url, "");
+        let reana = Reana::new(url.to_string(), String::new());
 
         let response: Value = ping_reana(&reana).unwrap();
         assert_eq!(response["status"], "ok");
@@ -344,7 +325,7 @@ mod tests {
 
         let yaml_equiv: serde_yaml::Value = serde_yaml::from_str(&expected_json.to_string()).expect("YAML conversion failed");
         let url = &server.base_url();
-        let reana = Reana::new(url, "test-token");
+        let reana = Reana::new(url.to_string(), "test-token".to_string());
         let result = start_workflow(&reana, workflow_id, None, None, false, &yaml_equiv);
 
         assert!(result.is_err(), "Expected error, but got Ok.");
@@ -420,7 +401,7 @@ mod tests {
             }));
         });
         let url = &server.base_url();
-        let reana = Reana::new(url, "test-token");
+        let reana = Reana::new(url.to_string(), "test-token".to_string());
         let result = create_workflow(&reana, &workflow_payload, None);
 
         assert!(result.is_ok());
@@ -449,7 +430,7 @@ mod tests {
         });
 
         let url = &server.base_url();
-        let reana = Reana::new(url, "invalid-token");
+        let reana = Reana::new(url.to_string(), "invalid-token".to_string());
         let result = create_workflow(&reana, &workflow_payload, None);
 
         assert!(result.is_err());
@@ -472,7 +453,7 @@ mod tests {
         });
 
         let url = &server.base_url();
-        let reana = Reana::new(url, access_token);
+        let reana = Reana::new(url.to_string(), access_token.to_string());
         let result = get_workflow_status(&reana, workflow_id);
 
         assert!(result.is_ok());
@@ -497,7 +478,7 @@ mod tests {
         });
 
         let url = &server.base_url();
-        let reana = Reana::new(url, access_token);
+        let reana = Reana::new(url.to_string(), access_token.to_string());
         let result = get_workflow_status(&reana, workflow_id);
 
         assert!(result.is_err());
@@ -561,8 +542,8 @@ mod tests {
         let dummy_cwl = NamedTempFile::new().unwrap();
         write(dummy_cwl.path(), "cwlVersion: v1.2").unwrap();
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
-        let result = upload_files(&reana, &None, &dummy_cwl.path().to_path_buf(), workflow_name, &workflow_json);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
+        let result = upload_files(&reana, &None, dummy_cwl.path(), workflow_name, &workflow_json, None);
 
         assert!(result.is_ok(), "upload_files failed: {:?}", result.err());
         _mock_upload.assert_calls(3);
@@ -577,7 +558,7 @@ mod tests {
         let files = vec![];
 
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
         let result = download_files(&reana, workflow_name, &files, None);
 
         assert!(result.is_ok(), "download_files failed: {:?}", result.err());
@@ -609,7 +590,7 @@ mod tests {
         let files = vec!["results.svg".to_string()];
 
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
         let result = download_files(&reana, workflow_name, &files, None);
 
         env::set_current_dir(&original_dir).expect("Failed to restore original dir");
@@ -641,7 +622,7 @@ mod tests {
 
         let files = vec![test_filename.to_string()];
         let url = &server.base_url();
-        let reana = Reana::new(url, reana_token);
+        let reana = Reana::new(url.to_string(), reana_token.to_string());
         let result = download_files(&reana, workflow_name, &files, None);
 
         assert!(result.is_ok(), "download_files failed: {:?}", result.err());

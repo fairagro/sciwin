@@ -79,10 +79,18 @@ pub fn get_route(node: &Node) -> Route {
 }
 
 pub fn read_node_type(path: impl AsRef<Path>) -> FileType {
-    if path.as_ref().is_dir() || path.as_ref().extension() != Some(OsStr::new("cwl")) {
+    let path = path.as_ref();
+    if path.is_dir() || path.extension() != Some(OsStr::new("cwl")) {
         return FileType::Other;
     }
-    let content = std::fs::read_to_string(path).expect("Can not read file!");
+    let safe_path = match path.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return FileType::Other,
+    };
+    let content = match std::fs::read_to_string(&safe_path) {
+        Ok(c) => c,
+        Err(_) => return FileType::Other,
+    };
     let yaml: Value = serde_yaml::from_str(&content).unwrap_or(Value::Null);
 
     match yaml.get("class").and_then(|v| v.as_str()) {
@@ -99,10 +107,17 @@ mod tests {
 
     #[test]
     fn test_read_node_type() {
-        let path = "../../testdata/hello_world/workflows/main/main.cwl";
-        assert_eq!(read_node_type(path), FileType::Workflow);
+        let base = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+        let main_cwl = base
+            .join("../../testdata/hello_world/workflows/main/main.cwl")
+            .canonicalize()
+            .expect("Test file not found");
+        assert_eq!(read_node_type(main_cwl), FileType::Workflow);
 
-        let path = "../../testdata/hello_world/workflows/calculation/calculation.cwl";
-        assert_eq!(read_node_type(path), FileType::CommandLineTool);
+        let calc_cwl = base
+            .join("../../testdata/hello_world/workflows/calculation/calculation.cwl")
+            .canonicalize()
+            .expect("Test file not found");
+        assert_eq!(read_node_type(calc_cwl), FileType::CommandLineTool);
     }
 }

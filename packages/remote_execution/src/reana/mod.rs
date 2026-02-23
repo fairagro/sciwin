@@ -11,3 +11,4 @@ pub use rocrate::export_rocrate;
 pub use status::check_remote_status;
 pub use status::watch;
 pub use workflow::execute_remote_start;
+pub use compatibility::compatibility_adjustments;
