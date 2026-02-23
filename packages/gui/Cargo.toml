@@ -22,7 +22,7 @@ commonwl = { path = "../cwl" }
 repository = { path = "../repository" }
 s4n_core = { path = "../core" }
 
-dioxus = { version = "0.7.2", features = ["router"] }
+dioxus = { version = "0.7.3", features = ["router"] }
 dioxus-free-icons = { version = "0.10.0", features = [
     "octicons",
     "material-design-icons-maps",

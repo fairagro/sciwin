@@ -9,7 +9,7 @@ icon = ["assets/icon.ico", "assets/icon.png"]
 category = "Productivity"
 
 [bundle.windows]
-icon_path = "packages/gui/assets/icon.ico"
+icon_path = "assets/icon.ico"
 
 [web.app]
 title = "SciWIn Studio"
