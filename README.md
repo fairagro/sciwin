@@ -90,8 +90,23 @@ cargo nextest --workspace           # Run all tests
 <img src=".github/studio.png" alt="Screenshot of SciWIn Studio" width=750>
 
 ### Running SciWIn-Studio
-To run SciWIn-Studio, you need to [install the Dioxus CLI `dx`](https://dioxuslabs.com/learn/0.7/getting_started/):
+To run SciWIn-Studio in Development mode, you need to [install the Dioxus CLI `dx`](https://dioxuslabs.com/learn/0.7/getting_started/):
 ```bash
+# Install requirements
+sudo apt-get update 
+    sudo apt-get install -y \
+    libgtk-3-dev \
+    libglib2.0-dev \
+    libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev
+
 # Install Dioxus CLI
 curl -sSL http://dioxus.dev/install.sh | sh
 # or (slower)
