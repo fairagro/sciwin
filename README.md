@@ -94,7 +94,7 @@ To run SciWIn-Studio in Development mode, you need to [install the Dioxus CLI `d
 ```bash
 # Install requirements
 sudo apt-get update 
-    sudo apt-get install -y \
+sudo apt-get install -y \
     libgtk-3-dev \
     libglib2.0-dev \
     libwebkit2gtk-4.1-dev \
@@ -108,7 +108,8 @@ sudo apt-get update
     librsvg2-dev
 
 # Install Dioxus CLI
-curl -sSL http://dioxus.dev/install.sh | sh
+curl -sSL https://dioxus.dev/install.sh | bash
+
 # or (slower)
 cargo install dioxus-cli
 
