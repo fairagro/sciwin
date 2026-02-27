@@ -4,6 +4,7 @@ import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
 import tailwindcss from '@tailwindcss/vite';
 import starlightSidebarTopics from 'starlight-sidebar-topics'
+import starlightLinksValidator from 'starlight-links-validator'
 
 // https://astro.build/config
 export default defineConfig({
@@ -33,6 +34,7 @@ export default defineConfig({
         PageFrame: './src/components/PageFrame.astro',
       },
       plugins: [
+        starlightLinksValidator(),
         starlightSidebarTopics([
           {
             label: 'Home',
