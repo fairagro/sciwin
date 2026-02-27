@@ -56,10 +56,10 @@ Options:
 ```
 
 ## Demo Repository
-The [Demo Repository](https://github.com/fairagro/sciwin_client_demo) mainly contains two folders `data` and `code`. The result workflow will  download election data, print election results as `barplot`, convert input data into a `geojson` file, and maps it onto the `geojson` data resulting in a `choropleth` graph. See the images for the final outputs.
+The [Demo Repository](https://github.com/fairagro/m4.4_sciwin_client_demo) mainly contains two folders `data` and `code`. The result workflow will  download election data, print election results as `barplot`, convert input data into a `geojson` file, and maps it onto the `geojson` data resulting in a `choropleth` graph. See the images for the final outputs.
 
-![result](https://raw.githubusercontent.com/fairagro/sciwin_demo/refs/heads/complete_run/election.png)
-![result](https://raw.githubusercontent.com/fairagro/sciwin_demo/refs/heads/complete_run/plot.png)
+![result](https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client_demo/refs/heads/complete_run/election.png)
+![result](https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client_demo/refs/heads/complete_run/plot.png)
 
 ## Creating the CommandLineTools
 First of all, we start, by creating a new `s4n` project.
@@ -140,7 +140,7 @@ s4n create --name demo
 ```
 The workflow that is being built looks like the graph represented in the following image
 
-![the resulting workflow](https://raw.githubusercontent.com/fairagro/sciwin_demo/refs/heads/complete_run/workflow_interim.svg)
+![the resulting workflow](https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client_demo/refs/heads/complete_run/workflow_interim.svg)
 
 First of all a connection between the donwload script and `get_feature_info` as well as `plot_election` is created by
 ```bash
@@ -203,7 +203,7 @@ s4n create -c Dockerfile --container-tag pyplot --enable-network python code/plo
 ## Adding the new tools to Workflow
 The two new tools will now be added to the workflow.
 
-![the final resulting workflow](https://raw.githubusercontent.com/fairagro/sciwin_demo/refs/heads/complete_run/workflow_final.svg)
+![the final resulting workflow](https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client_demo/refs/heads/complete_run/workflow_final.svg)
 
 Knowing that the plot tool needs the geojson, a connection from the geojson output to the corresponding input can be created.
 ```bash
