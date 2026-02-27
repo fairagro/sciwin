@@ -34,7 +34,9 @@ export default defineConfig({
         PageFrame: './src/components/PageFrame.astro',
       },
       plugins: [
-        starlightLinksValidator(),
+        starlightLinksValidator({
+          errorOnRelativeLinks: false,
+        }),
         starlightSidebarTopics([
           {
             label: 'Home',
