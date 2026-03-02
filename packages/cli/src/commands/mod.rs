@@ -1,7 +1,6 @@
 use dialoguer::{Input, theme::ColorfulTheme};
 use log::warn;
 use repository::Config;
-use std::error::Error;
 
 mod annotate;
 mod connect;
@@ -25,7 +24,7 @@ pub use remove::*;
 pub use save::*;
 pub use visualize::*;
 
-pub fn check_git_config() -> Result<(), Box<dyn Error>> {
+pub fn check_git_config() -> anyhow::Result<()> {
     let mut config = Config::open_default()?;
     if config.get_string("user.name").is_err() || config.get_string("user.email").is_err() {
         warn!("User configuration not found!");
