@@ -67,14 +67,12 @@ pub async fn publish_docker_ephemeral(
         }
         let image_name = uuid::Uuid::new_v4().to_string();
         let tag = format!("ttl.sh/{image_name}:1h");
-        // Read docker content async
         let docker_content = match dockerfile {
             commonwl::Entry::Source(src) => src.clone(),
             commonwl::Entry::Include(include) => tokio::fs::read_to_string(&include.include).await?,
         };
         let file_path = env::temp_dir().join(&image_name);
         tokio::fs::write(&file_path, docker_content).await?;
-        // Build Docker image asynchronously
         let build = AsyncCommand::new("docker")
             .arg("build")
             .arg("-t").arg(&tag)
@@ -105,7 +103,6 @@ pub async fn publish_docker_ephemeral(
     Ok(())
 }
 
-/// Inject Docker pull if tool uses a script executor
 pub async fn inject_docker_pull(
     tool: &mut CommandLineTool,
     log_sender: &Option<Sender<String>>,
@@ -133,7 +130,6 @@ pub async fn inject_docker_pull(
     Ok(())
 }
 
-/// Check if Docker is available (blocking is fine, rarely called)
 fn is_docker_available() -> bool {
     std::process::Command::new("docker")
         .arg("info")
@@ -144,7 +140,6 @@ fn is_docker_available() -> bool {
         .unwrap_or(false)
 }
 
-/// Check if a tool already has a docker_pull requirement
 fn has_docker_pull(tool: &CommandLineTool) -> bool {
     tool.requirements.iter().any(|req| {
         if let Requirement::DockerRequirement(docker_req) = req {
@@ -155,7 +150,6 @@ fn has_docker_pull(tool: &CommandLineTool) -> bool {
     })
 }
 
-/// Adjust base command if initialWorkDirRequirement modifies scripts
 fn adjust_basecommand(tool: &mut CommandLineTool) -> Result<()> {
     let mut changed = false;
     let mut command_vec = match &tool.base_command {
