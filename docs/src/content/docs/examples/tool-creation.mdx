@@ -70,7 +70,7 @@ The `stdout` part will tell the tool to redirect output to the file called `hell
 A common usecase is to wrap a script in an interpreted language like python or R. Wrapping a python script follows the same principles like shown in the previous example where the `echo` command was wrapped.
 
     ```bash title="Command"
-    s4n create --name echo_python python echo.py --message "SciWIn rocks!" --output-file out.txt
+    s4n create --name echo_python python3 echo.py --message "SciWIn rocks!" --output-file out.txt
     ```
     ```python title="echo.py"
     import argparse;
@@ -118,7 +118,7 @@ A common usecase is to wrap a script in an interpreted language like python or R
         glob: $(inputs.outputfile)
 
     baseCommand:
-    - python
+    - python3
     - echo.py
     ```
 
@@ -129,7 +129,7 @@ Sometimes it is neccessary to run a highly complicated script on a remote enviro
 There is the `--no-run` flag which tells `s4n` to not run the script. However this will not create an output and therefore can not detect any output files.
 
     ``` bash title="Command"
-    s4n create --no-run python sleep.py
+    s4n create --no-run python3 sleep.py
     ```
     ```python title="sleep.py"
     from time import sleep
@@ -155,14 +155,14 @@ There is the `--no-run` flag which tells `s4n` to not run the script. However th
     inputs: []
     outputs: []
     baseCommand:
-    - python
+    - python3
     - sleep.py
     ```
 
 For this cases there is the possibility to specify outputs via the commandline using the `-o` or `--outputs` argument which tells the parser to add a output slot.
 
     ``` bash title="Command"
-    s4n create --name sleep2 --no-run -o sleep.txt python sleep.py
+    s4n create --name sleep2 --no-run -o sleep.txt python3 sleep.py
     ```
     ```yaml title="sleep2.cwl"
     #!/usr/bin/env cwl-runner
@@ -185,7 +185,7 @@ For this cases there is the possibility to specify outputs via the commandline u
         glob: sleep.txt
     
     baseCommand:
-    - python
+    - python3
     - sleep.py
     ```
 
@@ -195,7 +195,7 @@ This CWL file can then be executed remotely by using any runner e.g. `cwltool` a
 Like shown in the above example there is also the possibility to specify inputs explictly. This is needed e.g. if the scripts loads a hardcoded file like in the following example.
 
     ```bash title="Command"
-    s4n create -i file.txt -o out.txt python load.py
+    s4n create -i file.txt -o out.txt python3 load.py
     ```
     ```python title="load.py"
     with open('file.txt', 'r') as file:
@@ -227,7 +227,7 @@ Like shown in the above example there is also the possibility to specify inputs 
         glob: out.txt
     
     baseCommand:
-    - python
+    - python3
     - load.py
     ```
 
@@ -284,7 +284,7 @@ For full reproducibility it is recommended to use containers e.g. `docker` as re
 
 
     ```bash title="Command"
-    s4n create -c pandas/pandas:pip-all python calculation.py --population population.csv --speakers speakers_revised.csv
+    s4n create -c pandas/pandas:pip-all python3 calculation.py --population population.csv --speakers speakers_revised.csv
     ```
     ```python title="calculation.py"
     import pandas as pd
@@ -345,7 +345,7 @@ For full reproducibility it is recommended to use containers e.g. `docker` as re
         glob: results.csv
     
     baseCommand:
-    - python
+    - python3
     - calculation.py
     ```
 
@@ -356,7 +356,7 @@ Using a complex research environments a custom container is may needed. The same
 This can be achieved by using the `-c` argument with a path to a `Dockerfile`. A tag can be specified by using `-t`.
 
     ```bash title="Command"
-    s4n create -c Dockerfile -t my-docker python calculation.py --population population.csv --speakers speakers_revised.csv
+    s4n create -c Dockerfile -t my-docker python3 calculation.py --population population.csv --speakers speakers_revised.csv
     ```
     ```yaml title="calculation.cwl"
     #!/usr/bin/env cwl-runner
@@ -398,7 +398,7 @@ This can be achieved by using the `-c` argument with a path to a `Dockerfile`. A
         glob: results.csv
     
     baseCommand:
-    - python
+    - python3
     - calculation.py
     
     ```

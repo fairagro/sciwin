@@ -10,13 +10,16 @@ use s4n::{
     },
     logger::LOGGER,
 };
-use std::{error::Error, process::exit};
+use std::process::exit;
 
 fn main() {
     log::set_logger(&LOGGER).map(|()| log::set_max_level(LevelFilter::Info)).unwrap();
 
     if let Err(e) = run() {
         error!("{e}");
+        if let Some(src) = e.source() {
+            error!("Caused by: {src}");
+        }
         if let Some(cmd_err) = e.downcast_ref::<CommandError>() {
             exit(cmd_err.exit_code());
         } else {
@@ -26,16 +29,21 @@ fn main() {
     exit(0);
 }
 
-fn run() -> Result<(), Box<dyn Error>> {
+fn run() -> anyhow::Result<()> {
     let args = Cli::parse();
-
     check_git_config()?;
     match &args.command {
         Commands::Init(args) => Ok(handle_init_command(args)?),
-        Commands::Execute { command } => handle_execute_commands(command),
+        Commands::Execute { command } => {
+            handle_execute_commands(command).map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            Ok(())
+        }
         Commands::Install(args) => Ok(install_package(&args.identifier, &args.branch)?),
         Commands::Uninstall(args) => Ok(remove_package(&args.identifier)?),
-        Commands::Annotate { command, tool_name } => handle_annotation_command(command, tool_name),
+        Commands::Annotate { command, tool_name } => {
+            handle_annotation_command(command, tool_name).map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            Ok(())
+        }
         Commands::Completions { shell } => Ok(generate_completions(*shell, &mut Cli::command())?),
         Commands::List(args) => Ok(handle_list_command(args)?),
         Commands::Remove(args) => Ok(handle_remove_command(args)?),

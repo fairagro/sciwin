@@ -1,18 +1,19 @@
 use crate::config::Config;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use repository::Repository;
 use repository::{commit, get_modified_files, initial_commit, stage_all};
+use std::env;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 use std::{fs::File, io::Write};
 
-pub fn initialize_project(folder: &Path, arc: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn initialize_project(folder: &Path, arc: bool) -> anyhow::Result<()> {
     let folder = verify_base_dir(folder)?;
 
     let repo = if is_git_repo(&folder) {
-        Repository::open(&folder)?
+        Repository::open(&folder).with_context(|| format!("Could not open Repository at {folder:?}"))?
     } else {
         init_git_repo(&folder)?
     };
@@ -38,7 +39,7 @@ pub fn initialize_project(folder: &Path, arc: bool) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
-fn write_config(dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn write_config(dir: &Path) -> anyhow::Result<()> {
     // create workflow toml
     let mut cfg = Config::default();
     cfg.workflow.name = dir.file_stem().unwrap_or_default().to_string_lossy().into_owned();
@@ -54,15 +55,15 @@ fn is_git_repo(path: &Path) -> bool {
 
 const GITIGNORE_CONTENT: &str = include_str!("../resources/default.gitignore");
 
-fn init_git_repo(base_dir: &Path) -> Result<Repository, Box<dyn std::error::Error>> {
+fn init_git_repo(base_dir: &Path) -> anyhow::Result<Repository> {
     if !base_dir.exists() {
-        fs::create_dir_all(base_dir)?;
+        fs::create_dir_all(base_dir).with_context(|| format!("Could not create Repository at {base_dir:?}"))?;
     }
-    let repo = Repository::init(base_dir)?;
+    let repo = Repository::init(base_dir).with_context(|| format!("Could not init Repository at {base_dir:?}"))?;
 
     let gitignore_path = base_dir.join(PathBuf::from(".gitignore"));
     if !gitignore_path.exists() {
-        fs::write(&gitignore_path, GITIGNORE_CONTENT)?;
+        fs::write(&gitignore_path, GITIGNORE_CONTENT).with_context(|| format!("Could not create .gitignore file in {base_dir:?}"))?;
     }
 
     //append .s4n folder to .gitignore, whatever it may contains
@@ -72,7 +73,7 @@ fn init_git_repo(base_dir: &Path) -> Result<Repository, Box<dyn std::error::Erro
     Ok(repo)
 }
 
-fn create_minimal_folder_structure(base_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
     // Create the base directory
     if !base_dir.exists() {
         fs::create_dir_all(base_dir)?;
@@ -89,19 +90,21 @@ fn create_minimal_folder_structure(base_dir: &Path) -> Result<(), Box<dyn std::e
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
-    if let Some(parent) = folder.parent() {
-        let parent = parent.canonicalize()?;
+    if let Some(parent) = folder.parent()
+        && parent.exists()
+    {
+        let parent = parent.canonicalize().with_context(|| format!("Could not canonicalize {parent:?}"))?;
         let foldername = folder.file_name().unwrap_or_default();
         Ok(parent.join(foldername))
     } else {
-        Err(anyhow::anyhow!("Folder has no parent"))
+        Ok(env::current_dir()?.join(folder))
     }
 }
 
-fn create_arc_folder_structure(base_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn create_arc_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
     // Create the base directory
     if !base_dir.exists() {
-        fs::create_dir_all(base_dir)?;
+        fs::create_dir_all(base_dir).with_context(|| format!("Could not create folder at {base_dir:?}"))?;
     }
 
     create_investigation_excel_file(base_dir.to_str().unwrap_or(""))?;
@@ -110,15 +113,15 @@ fn create_arc_folder_structure(base_dir: &Path) -> Result<(), Box<dyn std::error
     for dir_name in dirs {
         let dir = base_dir.join(dir_name);
         if !dir.exists() {
-            fs::create_dir_all(&dir)?;
+            fs::create_dir_all(&dir).with_context(|| format!("Could not create folder at {dir:?}"))?;
         }
-        File::create(dir.join(".gitkeep"))?;
+        File::create(dir.join(".gitkeep")).with_context(|| format!("Could not create .gitkeep at {dir:?}"))?;
     }
 
     Ok(())
 }
 
-fn create_investigation_excel_file(directory: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn create_investigation_excel_file(directory: &str) -> anyhow::Result<()> {
     // Construct the full path for the Excel file
     let excel_path = PathBuf::from(directory).join("isa_investigation.xlsx");
 
@@ -126,9 +129,9 @@ fn create_investigation_excel_file(directory: &str) -> Result<(), Box<dyn std::e
     let bin = include_bytes!("../resources/isa.investigation.xlsx");
 
     // Create the directory if it doesn't exist
-    fs::create_dir_all(excel_path.parent().unwrap())?;
+    fs::create_dir_all(excel_path.parent().unwrap()).with_context(|| format!("Could not create folder for {excel_path:?}"))?;
     // Write the binary content to the file
-    fs::write(&excel_path, bin)?;
+    fs::write(&excel_path, bin).with_context(|| format!("Could not create {excel_path:?}"))?;
 
     Ok(())
 }

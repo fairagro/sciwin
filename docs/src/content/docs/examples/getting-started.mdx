@@ -92,11 +92,11 @@ git add .
 git commit -m "add python script"
 ```
 
-The python script usually would be called with the command `python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv > results.csv`. To create a CommandLineTool this only needs to be prefixed with `s4n create` or `s4n run`. However the `>` operator needs to be escaped using a backslash.
+The python script usually would be called with the command `python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv > results.csv`. To create a CommandLineTool this only needs to be prefixed with `s4n create` or `s4n run`. However the `>` operator needs to be escaped using a backslash.
 ```bash 
-s4n create python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv
+s4n create python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv
 # 📂 The current working directory is /home/ubuntu/test_project
-# ⏳ Executing Command: `python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv`
+# ⏳ Executing Command: `python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv`
 # 📜 Found changes:
 #         - results.csv
 # 
@@ -140,7 +140,7 @@ outputs:
 stdout: results.csv
 
 baseCommand:
-- python
+- python3
 - workflows/calculation/calculation.py
 ```
 
@@ -201,9 +201,9 @@ git commit -m "add python plot script"
 
 
 ```bash
-s4n create python workflows/plot/plot.py --data results.csv
+s4n create python3 workflows/plot/plot.py --data results.csv
 # 📂 The current working directory is /home/ubuntu/test_project
-# ⏳ Executing Command: `python workflows/plot/plot.py --data results.csv`
+# ⏳ Executing Command: `python3 workflows/plot/plot.py --data results.csv`
 # 📜 Found changes:
 #         - figure.png
 # 
@@ -240,7 +240,7 @@ outputs:
     glob: figure.png
 
 baseCommand:
-- python
+- python3
 - workflows/plot/plot.py
 ```
 
