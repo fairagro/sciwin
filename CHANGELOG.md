@@ -2,6 +2,9 @@
 ## 🚀 Features
 - `create` has option `--run-container` to execute the command for CommandLineTool creation with provided container
 - `execute local --apptainer` or `execute local --singularity` to use apptainer/singularity for local execution
+
+## 🐛 Bugfixes
+Fixed bugs with `s4n init` and the error reporting
   
 # v1.1.0
 - `create` now has `--env` option to load in an .env file
