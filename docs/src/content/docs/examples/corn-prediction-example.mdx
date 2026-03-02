@@ -55,7 +55,7 @@ The first step is to get soil data from soilgrids for the Iowa counties coordina
 
 ```bash
 s4n create -c Dockerfile --container-tag pyplot --enable-network \
-  python code/get_soil.py --geojson data/iowa_counties.geojson --soil_cache data/soil_data.csv
+  python3 code/get_soil.py --geojson data/iowa_counties.geojson --soil_cache data/soil_data.csv
 ```
 This creates a new directory `workflows/get_soil` with a CWL `CommandLineTool` file `get_soil.cwl`:
 
@@ -101,7 +101,7 @@ outputs:
     glob: soil.csv
 
 baseCommand:
-- python
+- python3
 - code/get_soil.py
 
 ```
@@ -112,7 +112,7 @@ Next, we fetch weather data for each county, for the year that was used for pred
 
 ```bash
 s4n create -c Dockerfile --container-tag pyplot --enable-network \
-  python code/get_weather.py --geojson data/iowa_counties.geojson
+  python3 code/get_weather.py --geojson data/iowa_counties.geojson
 ```
 
 
@@ -122,7 +122,7 @@ Now we combine soil and weather data into a single feature set.
 
 ```bash
 s4n create -c Dockerfile --container-tag pyplot --enable-network \
-  python code/merge_features.py --geojson data/iowa_counties.geojson \
+  python3 code/merge_features.py --geojson data/iowa_counties.geojson \
                                 --weather weather.csv \
                                 --soil soil.csv
 ```
@@ -133,7 +133,7 @@ We train a simple model using historical yield data.
 
 ```bash
 s4n create -c Dockerfile --container-tag pyplot --enable-network \
-  python code/train_model.py --features county_features.csv \
+  python3 code/train_model.py --features county_features.csv \
                              --yield data/iowa_yield.csv
 ```
 
@@ -143,7 +143,7 @@ Now we use the trained model to predict yields for each county.
 
 ```bash
 s4n create -c Dockerfile --container-tag pyplot --enable-network \
-  python code/predict_yields.py --features county_features.csv \
+  python3 code/predict_yields.py --features county_features.csv \
                                 --model model.pkl \
                                 --scaler scaler.pkl
 ```
@@ -154,7 +154,7 @@ Finally, we visualize the predictions on a map.
 
 ```bash
 s4n create -c Dockerfile --container-tag pyplot --enable-network \
-  python code/plot_yields.py --predictions county_predictions.csv \
+  python3 code/plot_yields.py --predictions county_predictions.csv \
                              --geojson data/iowa_counties.geojson
 ```
 

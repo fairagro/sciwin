@@ -120,17 +120,17 @@ pip install plotly pandas kaleido==0.2.1 matplotlib
 The next step is to download election data using a series of API calls for which luckily already a script exists. The script downloads the data from `votemanager.kdo.de` and writes the `csv` to stdout.
 A tool can be created easily be prefixing the python call. However we also need to escape the `>` using a backslash for it to properly work
 ```bash
-s4n create python code/download_election_data.py --ags 03101000 --election "Bundestagswahl 2025" \> data.csv
+s4n create python3 code/download_election_data.py --ags 03101000 --election "Bundestagswahl 2025" \> data.csv
 ```
 
 The written csv file lacks the header information of which party results correspond to which column. Therefore we use the `get_feature_info` script and create a tool as follows:
 ```bash
-s4n create python code/get_feature_info.py --data data.csv
+s4n create python3 code/get_feature_info.py --data data.csv
 ```
 
 With this information the election plot can be outputted. The script `plot_election` does the job and accepts the json file from `get_feature_info` and the aforementioned csv.
 ```bash
-s4n create -c Dockerfile --container-tag pyplot --enable-network python code/plot_election.py --data data.csv --features features.json
+s4n create -c Dockerfile --container-tag pyplot --enable-network python3 code/plot_election.py --data data.csv --features features.json
 ```
 
 ## Combining the Tools into a workflow
