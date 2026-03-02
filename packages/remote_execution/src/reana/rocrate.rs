@@ -6,7 +6,7 @@ use reana_ext::{
 };
 use std::{error::Error, fs, path::PathBuf};
 
-pub fn export_rocrate(workflow_name: &str, ro_crate_dir: Option<&String>) -> Result<(), Box<dyn Error>> {
+pub fn export_rocrate(workflow_name: &str, ro_crate_dir: Option<&String>, working_dir: Option<&String>) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
     let reana = Reana::new(reana_instance.clone(), reana_token.clone());
 
@@ -15,7 +15,11 @@ pub fn export_rocrate(workflow_name: &str, ro_crate_dir: Option<&String>) -> Res
     match workflow_status.as_str() {
         "finished" => {
             let workflow_json = get_workflow_specification(&reana, workflow_name)?;
-            let config_path = PathBuf::from("workflow.toml");
+            let config_path = if let Some(working_dir) = working_dir {
+                PathBuf::from(working_dir).join("workflow.toml")
+            } else {
+                PathBuf::from("workflow.toml")
+            };
             let config_str = fs::read_to_string(&config_path)?;
             let specification = workflow_json
                 .get("specification")

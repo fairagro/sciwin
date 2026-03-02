@@ -1,53 +1,74 @@
-use crate::reana::{auth::login_reana, compatibility::compatibility_adjustments, status::status_file_path};
+use crate::reana::{auth::login_reana, compatibility::{compatibility_adjustments}, status::status_file_path};
 use reana_ext::{
     api::{create_workflow, ping_reana, upload_files, start_workflow},
     parser::generate_workflow_json_from_cwl,
     reana::Reana,
 };
 use s4n_core::config;
-use std::{collections::HashMap, error::Error, fs, path::{PathBuf, Path}};
+use std::{collections::HashMap, fs, path::{PathBuf, Path}};
+use anyhow::{Result, anyhow};
+use std::env;
 
-pub fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> Result<String, Box<dyn Error>> {
+pub async fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> Result<String> {
     let config_path = PathBuf::from("workflow.toml");
     let config: Option<config::Config> = if config_path.exists() {
-        Some(toml::from_str(&fs::read_to_string(&config_path)?)?)
+        let contents = std::fs::read_to_string(&config_path)?; 
+        Some(toml::from_str(&contents)?)
     } else {
         None
     };
     let workflow_name = derive_workflow_name(file, config.as_ref());
 
     // Get credentials
-    let (reana_instance, reana_token) = login_reana()?;
+    let (reana_instance, reana_token) = login_reana()
+        .map_err(|e| anyhow!("Failed to login to REANA: {e}"))?;
     let reana = Reana::new(reana_instance.clone(), reana_token.clone());
 
-    // Ping
-    let ping_status = ping_reana(&reana)?;
+    // Ping server
+    let ping_status = ping_reana(&reana)
+        .map_err(|e| anyhow!("Failed to ping REANA server: {e}"))?;
     if ping_status.get("status").and_then(|s| s.as_str()) != Some("200") {
-        return Err(format!("⚠️ Unexpected response from Reana server: {ping_status:?}").into());
-    }
-    // Generate worfklow.json
-    let mut workflow_json = generate_workflow_json_from_cwl(file, input_file)?;
-
-    if let Err(e) = compatibility_adjustments(&mut workflow_json) {
-        eprintln!("❌ Compatibility adjustment failed: {e}");
-        std::process::exit(1);
+        return Err(anyhow!("⚠️ Unexpected response from REANA server: {ping_status:?}"));
     }
 
-    let workflow_json = serde_json::to_value(workflow_json)?;
-    let converted_yaml: serde_yaml::Value = serde_json::from_value(workflow_json.clone())?;
-    // Create workflow
-    let create_response = create_workflow(&reana, &workflow_json, Some(&workflow_name))?;
-    let Some(workflow_name) = create_response["workflow_name"].as_str() else {
-        return Err("Missing workflow_name in response".into());
-    };
-    let working_dir = std::env::current_dir()?;
-    upload_files(&reana, input_file, file, workflow_name, &workflow_json, Some(&working_dir))?;
-    start_workflow(&reana, workflow_name, None, None, false, &converted_yaml)?;
-    eprintln!("✅ Started workflow execution of '{workflow_name}'.");
-    eprintln!("You can check its status using: s4n execute remote status '{workflow_name}' or use 's4n execute remote status' to check all workflows.");
+    let mut workflow_json = generate_workflow_json_from_cwl(file, input_file)
+        .map_err(|e| anyhow!("Failed to generate workflow JSON: {e}"))?;
 
-    save_workflow_name(&reana_instance, workflow_name)?;
-    Ok(workflow_name.to_owned())
+    compatibility_adjustments(&mut workflow_json, None).await
+    .map_err(|e| anyhow!("❌ Compatibility adjustment failed: {e}"))?;
+
+    let workflow_json_value = serde_json::to_value(&workflow_json)
+        .map_err(|e| anyhow!("Failed to convert workflow to JSON value: {e}"))?;
+    let converted_yaml: serde_yaml::Value = serde_json::from_value(workflow_json_value.clone())
+        .map_err(|e| anyhow!("Failed to convert JSON to YAML: {e}"))?;
+
+    let workflow_name_clone = workflow_name.clone();
+    let create_response = create_workflow(&reana, &workflow_json_value, Some(&workflow_name_clone))
+        .map_err(|e| anyhow!("Failed to create workflow: {e}"))?;
+    let workflow_name_str = create_response["workflow_name"]
+        .as_str()
+        .ok_or_else(|| anyhow!("Missing workflow_name in response"))?;
+
+    let working_dir = env::current_dir()
+        .map_err(|e| anyhow!("Failed to get current directory: {e}"))?;
+
+    // Upload files
+    upload_files(&reana, input_file, file, workflow_name_str, &workflow_json_value, Some(&working_dir))
+        .map_err(|e| anyhow!("Failed to upload files: {e}"))?;
+
+    // Start workflow
+    start_workflow(&reana, workflow_name_str, None, None, false, &converted_yaml)
+        .map_err(|e| anyhow!("Failed to start workflow: {e}"))?;
+
+    eprintln!("✅ Started workflow execution of '{workflow_name_str}'.");
+    eprintln!("You can check its status using: s4n execute remote status '{workflow_name_str}' or use 's4n execute remote status' to check all workflows.");
+
+    // Save workflow name
+    save_workflow_name(&reana_instance, workflow_name_str)
+        .await
+        .map_err(|e| anyhow!("Failed to save workflow name: {e}"))?;
+
+    Ok(workflow_name_str.to_owned())
 }
 
 pub fn analyze_workflow_logs(logs_str: &str) {
@@ -81,7 +102,7 @@ pub fn analyze_workflow_logs(logs_str: &str) {
     }
 }
 
-fn save_workflow_name(instance_url: &str, name: &str) -> std::io::Result<()> {
+pub async fn save_workflow_name(instance_url: &str, name: &str) -> std::io::Result<()> {
     let file_path = status_file_path();
     let mut workflows: HashMap<String, Vec<String>> = if file_path.exists() {
         let content = fs::read_to_string(&file_path)?;
@@ -97,7 +118,7 @@ fn save_workflow_name(instance_url: &str, name: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-pub(super) fn get_saved_workflows(instance_url: &str) -> Vec<String> {
+pub fn get_saved_workflows(instance_url: &str) -> Vec<String> {
     let file_path = status_file_path();
     if !file_path.exists() {
         return vec![];

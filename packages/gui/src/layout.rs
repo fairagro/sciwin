@@ -1,7 +1,7 @@
 use crate::{
     ApplicationState,
     components::{
-        CodeViewer, ConfirmDialog, ICON_SIZE, NoProject, NoProjectDialog, OkDialog, RoundActionButton, SmallRoundActionButton, ToolAddForm,
+        CodeViewer, TerminalViewer, ConfirmDialog, ICON_SIZE, NoProject, NoProjectDialog, OkDialog, RoundActionButton, SmallRoundActionButton, ToolAddForm,
         WorkflowAddDialog,
         files::{FilesView, View},
         graph::GraphEditor,
@@ -321,11 +321,16 @@ pub fn Empty() -> Element {
 
 #[component]
 pub fn WorkflowView(path: String) -> Element {
-    rsx!(
+    let mut app_state = use_app_state();
+    use_effect(move || {
+        app_state.write().active_tab.set("editor".to_string());
+    });
+    rsx! {
         Tabs { class: "h-full min-h-0", default_value: "editor".to_string(),
             TabList {
                 TabTrigger { index: 0usize, value: "editor".to_string(), "Nodes" }
                 TabTrigger { index: 1usize, value: "code".to_string(), "Code" }
+                TabTrigger { index: 2usize, value: "terminal".to_string(), "Terminal" }
             }
             TabContent {
                 index: 0usize,
@@ -339,22 +344,39 @@ pub fn WorkflowView(path: String) -> Element {
                 value: "code".to_string(),
                 CodeViewer { path: path.clone() }
             }
+            TabContent {
+                index: 2usize,
+                class: "h-full min-h-0",
+                value: "terminal".to_string(),
+                TerminalViewer { exec_type: Some((app_state.read().terminal_exec_type)()) }
+            }
         }
-    )
+    }
 }
 
 #[component]
 pub fn ToolView(path: String) -> Element {
+    let mut app_state = use_app_state();
+    use_effect(move || {
+        app_state.write().active_tab.set("code".to_string());
+    });
     rsx! {
         Tabs { class: "h-full min-h-0", default_value: "code".to_string(),
             TabList {
                 TabTrigger { index: 0usize, value: "code".to_string(), "Code" }
+                TabTrigger { index: 2usize, value: "terminal".to_string(), "Terminal" }
             }
             TabContent {
                 index: 0usize,
                 class: "h-full min-h-0",
                 value: "code".to_string(),
                 CodeViewer { path }
+            }
+            TabContent {
+                index: 2usize,
+                class: "h-full min-h-0",
+                value: "terminal".to_string(),
+                TerminalViewer { exec_type: Some((app_state.read().terminal_exec_type)()) }
             }
         }
     }

@@ -3,10 +3,10 @@ use crate::components::{ICON_SIZE, SmallRoundActionButton};
 use crate::files::{get_cwl_files, get_submodules_cwl_files};
 use crate::layout::{INPUT_TEXT_CLASSES, RELOAD_TRIGGER, Route};
 use crate::use_app_state;
-use crate::reana_integration::{execute_reana_workflow, store_reana_credentials};
+use crate::reana_integration::{execute_reana_workflow, get_reana_credentials};
 use dioxus::prelude::*;
 use dioxus_free_icons::Icon;
-use dioxus_free_icons::icons::go_icons::{GoCloud, GoFileDirectory, GoPlusCircle, GoTrash, GoGear, GoPlay};
+use dioxus_free_icons::icons::go_icons::{GoCloud, GoFileDirectory, GoPlusCircle, GoTrash, GoPlay};
 use repository::Repository;
 use repository::submodule::{add_submodule, remove_submodule};
 use reqwest::Url;
@@ -15,17 +15,20 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use commonwl::execution::execute_cwlfile;
 use crate::components::files::{FileType, read_node_type};
+use crate::components::ExecutionType;
+use tokio::sync::mpsc;
+use dioxus::core::spawn;
 
 #[component]
 pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<bool>, Signal<bool>)) -> Element {
     let mut app_state = use_app_state();
 
     let files = use_memo(move || {
-        RELOAD_TRIGGER(); //subscribe to changes
+        RELOAD_TRIGGER(); 
         get_cwl_files(project_path().join("workflows"))
     });
     let submodule_files = use_memo(move || {
-        RELOAD_TRIGGER(); //subscribe to changes
+        RELOAD_TRIGGER();
         get_submodules_cwl_files(project_path())
     });
 
@@ -33,10 +36,7 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
     let mut adding = use_signal(|| false);
     let mut processing = use_signal(|| false);
     let mut new_package = use_signal(String::new);
-    let mut show_settings = use_signal(|| false);
-    let mut reana_instance = use_signal(String::new);
-    let mut reana_token = use_signal(String::new);
-
+    let show_settings = use_signal(|| false);
     rsx! {
         div { class: "flex flex-grow flex-col overflow-y-auto",
             h2 { class: "mt-2 font-bold flex gap-1 items-center",
@@ -129,35 +129,86 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                         let app_state = app_state;
                                         move |_| {
                                             let item = item.clone();
-                                            let app_state = app_state;
+                                            let mut app_state = app_state;
                                             async move {
+                                                {
+                                                    let mut state = app_state.write();
+                                                    state.active_tab.set("terminal".to_string());
+                                                    state.show_terminal_log.set(true);
+                                                    state.terminal_log.set(String::new());
+                                                    state.terminal_exec_type.set(ExecutionType::Local);
+                                                }
                                                 let Some(dir) = app_state().working_directory.clone() else {
                                                     eprintln!("❌ No working directory");
                                                     return Ok(());
                                                 };
                                                 let args = vec![dir.join("inputs.yml").to_string_lossy().to_string()];
-                                                tokio::task::spawn_blocking(move || {
-                                                    let _ = execute_cwlfile(&item.path, &args, Some(dir));
+                                                let mut terminal_signal = app_state().terminal_log;
+                                                terminal_signal.set("🚀 Starting local execution...\n".to_string());
+                                                let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
+                                                tokio::task::spawn_blocking({
+                                                    let item = item.clone();
+                                                    let args = args.clone();
+                                                    let dir = dir.clone();
+                                                    let tx = tx.clone();
+                                                    move || {
+                                                        let mut cwl_path = std::path::PathBuf::from(&item.path);
+                                                        if cwl_path.is_relative() {
+                                                            cwl_path = std::env::current_dir()
+                                                                .unwrap_or_default()
+                                                                .join(&cwl_path);
+                                                        }
+                                                        cwl_path = cwl_path.canonicalize().unwrap_or(cwl_path.clone());
+                                                        let inputs_file = dir.join("inputs.yml");
+                                                        if !cwl_path.exists() {
+                                                            let _ = tx.blocking_send(format!("❌ CWL file not found: {:?}\n", cwl_path));
+                                                            return;
+                                                        }
+                                                        if !inputs_file.exists() {
+                                                            let _ = tx.blocking_send(format!("❌ inputs.yml not found: {:?}\n", inputs_file));
+                                                            return;
+                                                        }
+                                                        let _ = tx.blocking_send("⚙️ Starting CWL execution...\n".to_string());
+                                                        let result = execute_cwlfile(&cwl_path, &args, Some(dir));
+                                                        let _ = match result {
+                                                            Ok(_) => tx.blocking_send("✅ Local execution completed.\n".to_string()),
+                                                            Err(e) => tx.blocking_send(format!("❌ Execution failed: {e}\n")),
+                                                        };
+                                                    }
                                                 });
+                                                while let Some(line) = rx.recv().await {
+                                                    terminal_signal.with_mut(|t| t.push_str(&line));
+                                                }
                                                 Ok(())
                                             }
                                         }
                                     },
                                     Icon { width: 10, height: 10, icon: GoPlay }
-                                }
-                                // REANA 
+                                }      
+                                // REANA                              
                                 if read_node_type(&item.path) == FileType::Workflow {
                                     SmallRoundActionButton {
                                         class: "hover:bg-fairagro-mid-500",
-                                        title: format!("Execute with REANA"),
+                                        title: "Execute with REANA".to_string(),
                                         onclick: {
                                             let item = item.clone();
-                                            let show_settings = show_settings;
                                             let app_state = app_state;
-
                                             move |_| {
                                                 let item = item.clone();
                                                 let show_settings = show_settings;
+                                                let mut app_state = app_state;
+
+                                                app_state.write().active_tab.set("terminal".to_string());
+                                                app_state.write().show_terminal_log.set(true);
+                                                app_state.write().terminal_log.set(String::new());
+                                                app_state.write().terminal_exec_type.set(ExecutionType::Remote);
+
+                                                let creds = get_reana_credentials().ok().flatten();
+                                                if creds.is_none() {
+                                                    app_state.write().show_manage_reana_modal.set(true);
+                                                    return Ok(());
+                                                }
+                                                let (_instance_url, _token) = creds.unwrap();
                                                 let working_dir = match app_state().working_directory.clone() {
                                                     Some(dir) => dir,
                                                     None => {
@@ -165,29 +216,36 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                                         return Ok(());
                                                     }
                                                 };
+                                                let mut terminal_signal = app_state().terminal_log;
+                                                let (tx, mut rx) = mpsc::channel::<String>(100);
                                                 spawn(async move {
-                                                    execute_reana_workflow(item, working_dir, show_settings).await;
+                                                    while let Some(msg) = rx.recv().await {
+                                                        let mut log = terminal_signal();
+                                                        log.push_str(&msg);
+                                                        terminal_signal.set(log);
+                                                    }
                                                 });
-                                            Ok(())
-                                        }
-                                    },
-                                Icon {
-                                        width: 10,
-                                        height: 10,
-                                        icon: GoCloud,
+                                                dioxus::prelude::spawn(async move {
+                                                    if let Err(e) = execute_reana_workflow(item, working_dir, show_settings, Some(tx)).await {
+                                                        let mut log = terminal_signal();
+                                                        log.push_str(&format!("\n❌ Execution failed: {e}\n"));
+                                                        terminal_signal.set(log);
+                                                    }
+                                                });
+                                                Ok(())
+                                            }
+                                        },
+                                        Icon { width: 10, height: 10, icon: GoCloud }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-
             for (module , files) in submodule_files() {
-                Submodule_View { module, files, dialog_signals }
+                    Submodule_View { module, files, dialog_signals }
+                }
             }
-        }
-
             h2 {
                 class: "mt-2 font-bold flex gap-1 items-center cursor-pointer",
                 onclick: move |_| adding.set(true),
@@ -229,56 +287,6 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                 }
                 else {
                     "..."
-                }
-            }
-            //REANA SETTINGS
-            div { class: "border rounded p-3",
-                h2 {
-                    class: "font-bold flex items-center gap-2 cursor-pointer",
-                    onclick: move |_| show_settings.set(!show_settings()),
-                    Icon { width: ICON_SIZE, height: ICON_SIZE, icon: GoGear },
-                    "REANA Settings"
-                }
-
-                if show_settings() {
-                    div { class: "flex flex-col gap-2 mt-2",
-                        input {
-                            class: "{INPUT_TEXT_CLASSES}",
-                            placeholder: "REANA instance URL",
-                            oninput: move |e| reana_instance.set(e.value()),
-                        }
-                        input {
-                            class: "{INPUT_TEXT_CLASSES}",
-                            r#type: "password",
-                            placeholder: "REANA access token",
-                            oninput: move |e| reana_token.set(e.value()),
-                        }
-
-                        div { class: "flex justify-end gap-2",
-                            button {
-                                class: "px-3 py-1 rounded bg-zinc-200",
-                                onclick: move |_| show_settings.set(false),
-                                "Cancel"
-                            }
-                            button {
-                                class: "px-3 py-1 rounded bg-fairagro-mid-500 text-white",
-                                onclick: move |_| {
-                                    let i = reana_instance();
-                                    let t = reana_token();
-                                    if i.is_empty() || t.is_empty() {
-                                        eprintln!("❌ Instance or token empty");
-                                        return;
-                                    }
-                                    if let Err(e) = store_reana_credentials(&i, &t) {
-                                        eprintln!("❌ Failed to store credentials: {e}");
-                                        return;
-                                    }
-                                    show_settings.set(false);
-                                },
-                                "Save"
-                            }
-                        }
-                    }
                 }
             }
         }

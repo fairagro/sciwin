@@ -66,7 +66,7 @@ pub fn watch(workflow_name: &str, rocrate: bool) -> Result<(), Box<dyn Error>> {
                     if let Err(e) = crate::reana::download_remote_results(workflow_name, false, None) {
                         eprintln!("Error downloading remote results: {e}");
                     }
-                    if rocrate && let Err(e) = export_rocrate(workflow_name, Some(&"rocrate".to_string())) {
+                    if rocrate && let Err(e) = export_rocrate(workflow_name, Some(&"rocrate".to_string()), None) {
                         eprintln!("Error trying to create a Provenance RO-Crate: {e}");
                     }
                 }
