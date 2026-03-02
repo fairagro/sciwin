@@ -19,7 +19,7 @@ pub fn handle_execute_commands(subcommand: &ExecuteCommands) -> Result<(), Box<d
             } => schedule_run(file, input_file, *rocrate, *watch, *logout),
             RemoteSubcommands::Status { workflow_name } => check_status(workflow_name),
             RemoteSubcommands::Download { workflow_name, all, output_dir } => download_results(workflow_name, *all, output_dir.as_ref()),
-            RemoteSubcommands::Rocrate { workflow_name, output_dir } => export_rocrate(workflow_name, output_dir.as_ref()),
+            RemoteSubcommands::Rocrate { workflow_name, output_dir } => export_rocrate(workflow_name, output_dir.as_ref(), None),
             RemoteSubcommands::Logout => logout(),
         },
         ExecuteCommands::MakeTemplate(args) => make_template(&args.cwl),
