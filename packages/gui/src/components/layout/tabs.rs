@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_primitives::tabs::{self, TabContentProps, TabListProps, TabTriggerProps};
+use crate::use_app_state;
 
 #[derive(Props, Clone, PartialEq)]
 pub struct TabsProps {
@@ -14,10 +15,22 @@ pub struct TabsProps {
 
 #[component]
 pub fn Tabs(props: TabsProps) -> Element {
+    let mut app_state = use_app_state();
+    let active_tab = use_signal(|| app_state.read().active_tab.to_string());
+    {
+        let mut active_tab = active_tab;
+        let app_state = app_state;
+        use_effect(move || {
+            active_tab.set(app_state.read().active_tab.to_string());
+        });
+    }
     rsx! {
         tabs::Tabs {
-            class: props.class + " select-none grid h-full w-full grid-rows-[auto_1fr]",
-            default_value: props.default_value,
+            class: format!("{} select-none grid h-full w-full grid-rows-[auto_1fr]", props.class),
+            value: active_tab(),
+            on_value_change: move |new_value: String| {
+                app_state.write().active_tab.set(new_value);
+            },
             {props.children}
         }
     }
@@ -49,7 +62,7 @@ pub fn TabTrigger(props: TabTriggerProps) -> Element {
 pub fn TabContent(props: TabContentProps) -> Element {
     rsx! {
         tabs::TabContent {
-            class: props.class.unwrap_or_default() + " p-1 border-1 border-zinc-400 bg-white",
+            class: format!("{} p-1 border-1 border-zinc-400 bg-white", props.class.clone().unwrap_or_default()),
             value: props.value,
             id: props.id,
             index: props.index,
