@@ -152,23 +152,19 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                                     let dir = dir.clone();
                                                     let tx = tx.clone();
                                                     move || {
-                                                        let mut cwl_path = std::path::PathBuf::from(&item.path);
-                                                        if cwl_path.is_relative() {
-                                                            cwl_path = std::env::current_dir()
-                                                                .unwrap_or_default()
-                                                                .join(&cwl_path);
-                                                        }
-                                                        cwl_path = cwl_path.canonicalize().unwrap_or(cwl_path.clone());
+                                                        let result = resolve_safe_cwl_path(&dir, Path::new(&item.path));
+                                                        let cwl_path = match result {
+                                                            Ok(path) => path,
+                                                            Err(msg) => {
+                                                                let _ = tx.blocking_send(format!("{msg}\n"));
+                                                                return;
+                                                            }
+                                                        };
                                                         let inputs_file = dir.join("inputs.yml");
-                                                        if !cwl_path.exists() {
-                                                            let _ = tx.blocking_send(format!("❌ CWL file not found: {:?}\n", cwl_path));
-                                                            return;
-                                                        }
                                                         if !inputs_file.exists() {
                                                             let _ = tx.blocking_send(format!("❌ inputs.yml not found: {:?}\n", inputs_file));
                                                             return;
                                                         }
-                                                        let _ = tx.blocking_send("⚙️ Starting CWL execution...\n".to_string());
                                                         let result = execute_cwlfile(&cwl_path, &args, Some(dir));
                                                         let _ = match result {
                                                             Ok(_) => tx.blocking_send("✅ Local execution completed.\n".to_string()),
@@ -375,4 +371,29 @@ pub fn Submodule_View(module: String, files: Vec<Node>, dialog_signals: (Signal<
             }
         }
     }
+}
+
+pub fn resolve_safe_cwl_path(base_dir: &Path, candidate: &Path) -> Result<PathBuf, String> {
+    let base = base_dir
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize base directory {:?}: {e}", base_dir))?;
+    let joined = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        base.join(candidate)
+    };
+    let resolved = joined
+        .canonicalize()
+        .map_err(|e| format!("Failed to canonicalize CWL path {:?}: {e}", candidate))?;
+    if !resolved.starts_with(&base) {
+        return Err(format!(
+            "❌ Unsafe CWL path: {:?} is outside the working directory {:?}",
+            resolved, base
+        ));
+    }
+    if !resolved.exists() {
+        return Err(format!("❌ CWL file not found: {:?}", resolved));
+    }
+
+    Ok(resolved)
 }

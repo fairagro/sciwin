@@ -3,12 +3,14 @@ use commonwl::{prelude::*, requirements::WorkDirItem};
 use log::{info, warn};
 use reana_ext::parser::WorkflowJson;
 use std::collections::HashMap;
-use std::{env, path::Path};
+use std::path::Path;
 use util::is_docker_installed;
 use anyhow::{Result, anyhow};
 use tokio::sync::mpsc::Sender;
 use tokio::process::Command as AsyncCommand;
 use s4n_core::parser::SCRIPT_EXECUTORS;
+use tempfile::NamedTempFile;
+use std::io::Write;
 
 pub async fn log_msg(log_sender: &Option<Sender<String>>, message: &str) {
     if let Some(tx) = log_sender {
@@ -71,8 +73,14 @@ pub async fn publish_docker_ephemeral(
             commonwl::Entry::Source(src) => src.clone(),
             commonwl::Entry::Include(include) => tokio::fs::read_to_string(&include.include).await?,
         };
-        let file_path = env::temp_dir().join(&image_name);
-        tokio::fs::write(&file_path, docker_content).await?;
+        let mut temp_file = NamedTempFile::new()
+            .map_err(|e| anyhow!("Failed to create temporary file: {e}"))?;
+
+        temp_file
+            .write_all(docker_content.as_bytes())
+            .map_err(|e| anyhow!("Failed to write temporary Dockerfile: {e}"))?;
+
+        let file_path = temp_file.into_temp_path();
         let build = AsyncCommand::new("docker")
             .arg("build")
             .arg("-t").arg(&tag)
@@ -102,7 +110,6 @@ pub async fn publish_docker_ephemeral(
     }
     Ok(())
 }
-
 pub async fn inject_docker_pull(
     tool: &mut CommandLineTool,
     log_sender: &Option<Sender<String>>,
