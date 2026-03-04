@@ -7,6 +7,9 @@ repository.workspace = true
 license.workspace = true
 publish = false             # prevent dist from publishing testing version
 
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 anyhow.workspace = true
 pathdiff.workspace = true
