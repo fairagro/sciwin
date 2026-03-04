@@ -850,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "cwl_annotation",
  "cwl_core",
@@ -1211,7 +1211,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_annotation"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "dialoguer",
  "reqwest",
@@ -1226,7 +1226,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "rstest",
  "serde",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_execution"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "cwl_core",
@@ -5385,7 +5385,7 @@ checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
 name = "reana"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5473,7 +5473,7 @@ checksum = "ba39f3699c378cd8970968dcbff9c43159ea4cfbd88d43c00b22f2ef10a435d2"
 
 [[package]]
 name = "remote_execution"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -5492,7 +5492,7 @@ dependencies = [
 
 [[package]]
 name = "repository"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "configparser",
@@ -5773,7 +5773,7 @@ checksum = "dd29631678d6fb0903b69223673e122c32e9ae559d0960a38d574695ebc0ea15"
 
 [[package]]
 name = "s4n"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5802,7 +5802,7 @@ dependencies = [
 
 [[package]]
 name = "s4n_core"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "calamine",
@@ -7145,7 +7145,7 @@ dependencies = [
 
 [[package]]
 name = "test_utils"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "copy_dir",
  "git2",
@@ -7747,7 +7747,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "util"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "wait-timeout",
 ]

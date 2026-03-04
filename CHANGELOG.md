@@ -1,4 +1,6 @@
 # Unreleased
+
+# v1.2.0
 ## 🚀 Features
 - `create` has option `--run-container` to execute the command for CommandLineTool creation with provided container
 - `execute local --apptainer` or `execute local --singularity` to use apptainer/singularity for local execution

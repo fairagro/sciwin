@@ -20,7 +20,7 @@ resolver = "3"
 rustyscript = {git = "https://github.com/Foorack/rustyscript", branch="upgrade-deno"}
 
 [workspace.package]
-version = "1.1.0"
+version = "1.2.0"
 edition = "2024"
 repository = "https://github.com/fairagro/sciwin"
 license = "MIT OR Apache-2.0"
