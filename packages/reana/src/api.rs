@@ -10,9 +10,12 @@ use std::{
     collections::HashMap,
     error::Error,
     fs,
-    io::{Read, Write},
+    io::Write,
     path::PathBuf,
 };
+use futures::stream::{FuturesUnordered, StreamExt};
+use std::sync::Arc;
+use tokio::task::spawn_blocking;
 
 pub fn create_workflow(reana: &Reana, workflow: &Value, workflow_name: Option<&str>) -> Result<Value, Box<dyn Error>> {
     let mut params = HashMap::new();
@@ -87,26 +90,32 @@ pub fn get_workflow_specification(reana: &Reana, workflow_id: &str) -> Result<Va
     }
 }
 
-pub fn upload_files(reana: &Reana, input_yaml: &Option<PathBuf>, file: &Path, workflow_name: &str, workflow_json: &Value, working_dir: Option<&PathBuf>) -> Result<()> {
-    eprintln!("📤 Uploading Files ...");
+
+pub async fn upload_files_parallel(
+    reana: Arc<Reana>,
+    input_yaml: &Option<PathBuf>,
+    file: &Path,
+    workflow_name: &str,
+    workflow_json: &Value,
+    working_dir: Option<&PathBuf>,
+) -> Result<()> {
+    eprintln!("📤 Collecting files to upload...");
     let mut files: HashSet<String> = HashSet::new();
     let input_yaml_value = if let Some(input_path) = input_yaml {
-        Some(load_yaml_file(Path::new(input_path)).context("Failed to load input YAML file")?)
+        Some(load_yaml_file(Path::new(input_path)).context("Failed to load input YAML")?)
     } else {
         None
     };
-    let base_path = std::env::current_dir()
-        .context("Failed to get current working directory")?
-        .to_string_lossy()
-        .to_string();
+    let base_path = std::env::current_dir()?.to_string_lossy().to_string();
     let cwl_yaml = load_cwl_yaml(&base_path, file).context("Failed to load CWL YAML")?;
+    // Collect files and directories from workflow JSON
     if let Some(inputs) = workflow_json.get("inputs") {
         if let Some(Value::Array(file_list)) = inputs.get("files") {
             for f in file_list.iter().filter_map(|v| v.as_str()) {
                 files.insert(f.to_string());
             }
         }
-        if let Some(Value::Array(dir_list)) = inputs.get("directories").or_else(|| inputs.get("directory")){
+        if let Some(Value::Array(dir_list)) = inputs.get("directories").or_else(|| inputs.get("directory")) {
             for dir in dir_list.iter().filter_map(|v| v.as_str()) {
                 let mut path = PathBuf::from(dir);
                 if !path.exists() {
@@ -114,15 +123,12 @@ pub fn upload_files(reana: &Reana, input_yaml: &Option<PathBuf>, file: &Path, wo
                         let candidate = base.join(&path);
                         if candidate.exists() {
                             path = candidate;
-                        } 
-                        else if let Ok(Some(resolved_path)) = resolve_input_file_path(path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml)) {
-                            let working_str = base.to_string_lossy().to_string();
-                            if let Ok(loc) = get_location(&working_str, Path::new(&resolved_path))
-                            {
-                                path = PathBuf::from(loc);
-                            } else {
-                                eprintln!("⚠️ Could not map location for {:?}", resolved_path);
-                                continue;
+                        } else if let Ok(Some(resolved_path)) =
+                            resolve_input_file_path(path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml))
+                        {
+                            if let Some(base) = working_dir && let Ok(loc) = get_location(&base.to_string_lossy(), Path::new(&resolved_path)) {
+                                    path = PathBuf::from(loc);
+                                
                             }
                         } else {
                             eprintln!("⚠️ Directory not found: {:?}", dir);
@@ -140,59 +146,75 @@ pub fn upload_files(reana: &Reana, input_yaml: &Option<PathBuf>, file: &Path, wo
             }
         }
     }
-
     if files.is_empty() {
         eprintln!("⚠️ No files to upload found in workflow JSON.");
         return Ok(());
     }
-    for file_name in files {
-        let mut file_path = PathBuf::from(&file_name);
-        if !file_path.exists() {
-            let mut resolved = None;
-            if let Some(base) = working_dir {
-                let candidate = base.join(&file_path);
-                if candidate.exists() {
-                    resolved = Some(candidate);
+    eprintln!("📤 Uploading {} files safely in parallel...", files.len());
+    let futures: FuturesUnordered<_> = files.into_iter().map(|file_name| {
+        let reana = reana.clone();
+        let workflow_name = workflow_name.to_string();
+        let working_dir = working_dir.cloned();
+        let input_yaml_value = input_yaml_value.clone();
+        let cwl_yaml = cwl_yaml.clone();
+        spawn_blocking(move || -> anyhow::Result<()> {
+            // Resolve file path
+            let mut file_path = PathBuf::from(&file_name);
+            if !file_path.exists() {
+                let mut resolved = None;
+                if let Some(base) = &working_dir {
+                    let candidate = base.join(&file_path);
+                    if candidate.exists() {
+                        resolved = Some(candidate);
+                    }
+                }
+                if resolved.is_none()
+                    && let Ok(Some(resolved_path)) =
+                        resolve_input_file_path(file_path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml))
+                    && let Some(base) = &working_dir
+                    && let Ok(loc) = get_location(&base.to_string_lossy(), Path::new(&resolved_path)) {
+                        resolved = Some(PathBuf::from(loc));
+                }
+                if let Some(found) = resolved {
+                    file_path = found;
+                } else {
+                    eprintln!("⚠️ File not found: {:?}", file_path);
+                    return Ok(());
                 }
             }
-            if resolved.is_none()
-                && let Ok(Some(resolved_path)) = resolve_input_file_path(file_path.to_string_lossy().as_ref(), input_yaml_value.as_ref(), Some(&cwl_yaml))
-                && let Some(base) = working_dir
-            {
-                let working_str = base.to_string_lossy().to_string();
-                if let Ok(loc) = get_location(&working_str, Path::new(&resolved_path)) {
-                    resolved = Some(PathBuf::from(loc));
-                }
-            }
-            if let Some(found) = resolved {
-                file_path = found;
+            // Read file content
+            let file_content = fs::read(&file_path)
+                .with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
+            // Relative path for params
+            let relative = if let Some(base) = &working_dir {
+                pathdiff::diff_paths(&file_path, base).unwrap_or(file_path.clone())
             } else {
-                eprintln!("⚠️ File not found: {:?}", file_path);
-                continue;
+                file_path.clone()
+            };
+            let mut params = std::collections::HashMap::new();
+            params.insert("file_name".to_string(), sanitize_path(&relative.to_string_lossy()));
+            // Upload file via REANA
+            let response = reana.post(
+                &WorkflowEndpoint::Workspace(&workflow_name, None),
+                Content::OctetStream(file_content),
+                Some(params),
+            )?;
+            if response.status().is_success() {
+                eprintln!("✔️ Uploaded {}", file_name);
+            } else {
+                let error_text = response.text().unwrap_or_else(|_| "Unknown error".to_string());
+                eprintln!("❌ Failed to upload {}. Response: {}", file_name, error_text);
             }
+
+            Ok(())
+        })
+    }).collect();
+    // Await all upload tasks
+    futures.for_each(|res| async {
+        if let Err(e) = res {
+            eprintln!("❌ Upload task failed: {:?}", e);
         }
-        let mut handle = fs::File::open(&file_path).with_context(|| format!("Failed to open file '{}'", file_path.display()))?;
-        let mut file_content = Vec::new();
-        handle.read_to_end(&mut file_content).with_context(|| format!("Failed to read file '{}'", file_path.display()))?;
-        let relative = if let Some(base) = working_dir {
-            pathdiff::diff_paths(&file_path, base).unwrap_or_else(|| file_path.clone())
-        } else {
-            file_path.clone()
-        };
-        let mut params = HashMap::new();
-        params.insert("file_name".to_string(), sanitize_path(&relative.to_string_lossy()));
-        let response = reana.post(
-            &WorkflowEndpoint::Workspace(workflow_name, None),
-            Content::OctetStream(file_content),
-            Some(params),
-        )?;
-        if response.status().is_success() {
-            eprintln!("✔️  Uploaded {file_name}");
-        } else {
-            let error_text = response.text().unwrap_or_else(|_| "Unknown error".to_string());
-            eprintln!("❌ Failed to upload {file_name}. Response: {error_text}");
-        }
-    }
+    }).await;
     Ok(())
 }
 
@@ -246,6 +268,8 @@ mod tests {
     use serde_json::{Value, json};
     use std::fs::{create_dir_all, write};
     use tempfile::{NamedTempFile, tempdir};
+    use std::sync::Arc;
+    use tokio;
 
     #[test]
     fn test_ping_reana_success() {
@@ -489,13 +513,11 @@ mod tests {
         assert!(err_msg.contains("workflow not found"));
     }
 
-    #[test]
-    fn test_upload_files() {
-        let server = MockServer::start();
-
+    #[tokio::test]
+    async fn test_upload_files_parallel() {
+        let server = MockServer::start_async().await;
         let reana_token = "test-token";
         let workflow_name = "my_workflow";
-
         let base_dir = tempdir().unwrap();
         let data_dir = base_dir.path().join("data");
         let wf_dir = base_dir.path().join("testdata/hello_world/workflows");
@@ -519,7 +541,7 @@ mod tests {
             then.status(200).header("content-type", "text/plain").body("uploaded");
         });
 
-        let workflow_json = json!({
+        let workflow_json: Value = json!({
             "inputs": {
                 "directories": [ wf_dir.to_str().unwrap() ],
                 "files": [
@@ -527,26 +549,27 @@ mod tests {
                     spk_file.to_str().unwrap()
                 ],
                 "parameters": {
-                    "population": {
-                        "class": "File",
-                        "location": pop_file.to_str().unwrap()
-                    },
-                    "speakers": {
-                        "class": "File",
-                        "location": spk_file.to_str().unwrap()
-                    }
+                    "population": { "class": "File", "location": pop_file.to_str().unwrap() },
+                    "speakers": { "class": "File", "location": spk_file.to_str().unwrap() }
                 }
             }
         });
 
         let dummy_cwl = NamedTempFile::new().unwrap();
         write(dummy_cwl.path(), "cwlVersion: v1.2").unwrap();
-        let url = &server.base_url();
-        let reana = Reana::new(url.to_string(), reana_token.to_string());
-        let result = upload_files(&reana, &None, dummy_cwl.path(), workflow_name, &workflow_json, None);
+        let reana_url = server.base_url();
+        let reana = Arc::new(Reana::new(reana_url, reana_token.to_string()));
+        let result = upload_files_parallel(
+            reana.clone(),
+            &None,
+            dummy_cwl.path(),
+            workflow_name,
+            &workflow_json,
+            None
+        ).await;
 
-        assert!(result.is_ok(), "upload_files failed: {:?}", result.err());
-        _mock_upload.assert_calls(3);
+        assert!(result.is_ok(), "upload_files_parallel failed: {:?}", result.err());
+        assert_eq!(_mock_upload.calls(), 3, "Expected 3 file uploads");
     }
 
     #[test]

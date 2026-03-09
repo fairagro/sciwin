@@ -1,11 +1,11 @@
 use crate::reana::{auth::login_reana, compatibility::{compatibility_adjustments}, status::status_file_path};
 use reana_ext::{
-    api::{create_workflow, ping_reana, upload_files, start_workflow},
+    api::{create_workflow, ping_reana, upload_files_parallel, start_workflow},
     parser::generate_workflow_json_from_cwl,
     reana::Reana,
 };
 use s4n_core::config;
-use std::{collections::HashMap, fs, path::{PathBuf, Path}};
+use std::{collections::HashMap, fs, path::{PathBuf, Path}, sync::Arc};
 use anyhow::{Result, anyhow};
 use std::env;
 
@@ -53,8 +53,10 @@ pub async fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> 
         .map_err(|e| anyhow!("Failed to get current directory: {e}"))?;
 
     // Upload files
-    upload_files(&reana, input_file, file, workflow_name_str, &workflow_json_value, Some(&working_dir))
-        .map_err(|e| anyhow!("Failed to upload files: {e}"))?;
+    let reana = Arc::new(reana);
+    upload_files_parallel(reana.clone(), input_file, file, workflow_name_str, &workflow_json_value, Some(&working_dir))
+    .await
+    .map_err(|e| anyhow!("Failed to upload files: {e}"))?;
 
     // Start workflow
     start_workflow(&reana, workflow_name_str, None, None, false, &converted_yaml)

@@ -130,49 +130,28 @@ pub async fn run_reana_async(
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("Missing workflow_name in response"))?;
 
-            Ok(workflow_name_str.to_string()) 
+            Ok(workflow_name_str.to_string())
         })
-        .await?? 
-    }; 
+        .await??
+    };
     log_msg(&log_sender, &format!("Created workflow '{}'", workflow_name_str)).await;
     save_workflow_name(&instance_url, &workflow_name_str).await
-            .map_err(|e| anyhow::anyhow!("Saving workflow failed: {e}"))?;
+        .map_err(|e| anyhow::anyhow!("Saving workflow failed: {e}"))?;
     log_msg(&log_sender, "📤 Uploading input files...").await;
-    {
-        let reana = reana.clone();
-        let workflow_json = workflow_json.clone();
-        let workflow_name = workflow_name.clone();
-        let file_name = file_name.clone();
-        let working_dir = working_dir.clone();
-        spawn_blocking(move || {
-            reana::api::upload_files(
-                &reana,
-                &None,
-                &file_name,
-                &workflow_name,
-                &workflow_json,
-                Some(&working_dir),
-            )
-            .map_err(|e| anyhow::anyhow!("Upload files failed: {e}"))
-        })
-        .await??;
-    }
+    reana::api::upload_files_parallel(reana.clone(), &None, &file_name, &workflow_name, &workflow_json, Some(&working_dir))
+    .await
+    .map_err(|e| anyhow::anyhow!("Upload files failed: {e}"))?;
     let yaml: serde_yaml::Value = serde_json::from_value(workflow_json)
         .map_err(|e| anyhow::anyhow!("JSON to YAML conversion failed: {e}"))?;
-    {
-        let reana = reana.clone();
-        let workflow_name = workflow_name.clone();
-        log_msg(&log_sender, &format!("▶️ Starting workflow execution for '{}'", workflow_name_str)).await;
-        let yaml = yaml.clone();
-        spawn_blocking(move || {
-            reana::api::start_workflow(&reana, &workflow_name, None, None, false, &yaml)
-                .map_err(|e| anyhow::anyhow!("Start workflow failed: {e}"))
-        })
-        .await??;
-    }
+    log_msg(&log_sender, &format!("▶️ Starting workflow execution for '{}'", workflow_name_str)).await;
+    spawn_blocking(move || {
+        reana::api::start_workflow(&reana, &workflow_name, None, None, false, &yaml)
+            .map_err(|e| anyhow::anyhow!("Start workflow failed: {e}"))
+    })
+    .await??;
     log_msg(&log_sender, "✅ Workflow started successfully!").await;
 
-Ok(())
+    Ok(())
 }
 
 pub async fn execute_reana_workflow(
