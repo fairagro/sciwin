@@ -1,5 +1,5 @@
 use crate::{
-    components::{ICON_SIZE, SmallRoundActionButton, ToastItem},
+    components::{ICON_SIZE, NonRotatingActionButton, ToastItem},
     use_app_state,
 };
 use dioxus::prelude::*;
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::reana_integration::{get_reana_credentials, store_reana_credentials, delete_reana_credentials};
 use crate::reana_integration::get_last_workflow_name;
 use remote_execution::export_rocrate;
-
+use crate::layout::Route;
 
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum ExecutionType {
@@ -24,135 +24,116 @@ pub enum ExecutionType {
 pub fn TerminalViewer(
     #[props(optional)] exec_type: Option<ExecutionType>,
 ) -> Element {
-    let exec_type = exec_type.unwrap_or(ExecutionType::Local);
     let app_state = use_app_state();
+    let navigator = use_navigator();
+    let exec_type = exec_type.unwrap_or_else(|| (*app_state().terminal_exec_type.read()).clone());
     let terminal_signal = &app_state().terminal_log;
-    let show_terminal_log = app_state().show_terminal_log;
     let mut toast_items = use_context::<Signal<Vec<ToastItem>>>();
     let show_modal = &app_state().show_manage_reana_modal;
-
     let title = match exec_type {
         ExecutionType::Local => "Local Execution",
         ExecutionType::Remote => "Remote Execution",
     };
-
     rsx! {
         div {
-            id: "terminal",
-            class: "relative flex flex-col w-full h-full min-h-0 overflow-hidden border border-gray-300 rounded-lg",
+            class: "h-full w-full flex flex-col bg-black text-green-400",
             div {
-                class: "flex justify-between items-center bg-gray-100 px-3 py-2 border-b border-gray-300",
-                h2 { class: "text-sm font-semibold text-gray-700", "{title}" }
-                if exec_type == ExecutionType::Remote {
-                    div {
-                         class: "flex items-center space-x-1 px-2 py-1 rounded-md select-none",
-                        // Download Results button
-                        SmallRoundActionButton {
-                            onclick: move |_| {
-                                toast_items.write().push(ToastItem::new(
-                                    "Download Results".to_string(),
-                                    "Downloading files...".to_string(),
-                                    3,
-                                ));
-                                let output_dir: Option<String> = app_state()
-                                    .working_directory
-                                    .as_ref()
-                                    .map(|path| path.to_string_lossy().to_string());
-                                use_coroutine(move |mut _co: dioxus::prelude::UnboundedReceiver<()>| {
-                                    let output_dir = output_dir.clone();
-                                    async move {
-                                        let workflow_name: String = match get_last_workflow_name().await {
-                                            Ok(name) => name,
-                                            Err(e) => {
-                                                eprintln!("❌ Failed to get workflow name: {e}");
-                                                return;
-                                            }
-                                        };
-                                        let result = tokio::task::spawn_blocking(move || {
-                                            remote_execution::download_results(
-                                                &workflow_name,
-                                                false,
-                                                output_dir.as_ref(),
-                                            )
-                                            .map_err(|e| e.to_string())
-                                        }).await;
-                                        match result {
-                                            Ok(Ok(())) => eprintln!("✅ Download completed successfully."),
-                                            Ok(Err(e)) => eprintln!("❌ Download failed: {e}"),
-                                            Err(e) => eprintln!("❌ Task panicked: {e}"),
-                                        }
-                                    }
-                                });
-                            },
-                            div {
-                                class: "flex items-center space-x-1",
-                                Icon { icon: GoDownload, width: ICON_SIZE, height: ICON_SIZE }
-                                span { "Download Results" }
-                            }
-                        }
-                        // Export RO-Crate button
-                        SmallRoundActionButton {
-                            onclick: move |_| {
-                                toast_items.write().push(ToastItem::new(
-                                    "Export RO-Crate".to_string(),
-                                    "Exporting RO-Crate...".to_string(),
-                                    3,
-                                ));
-                                let working_dir: Option<String> = app_state()
-                                    .working_directory
-                                    .as_ref()
-                                    .map(|path| path.to_string_lossy().to_string());
-                                let output_dir: Option<String> = working_dir.clone().map(|dir| {
-                                    std::path::Path::new(&dir)
-                                        .join("rocrate")
-                                        .to_string_lossy()
-                                        .into_owned()
-                                });
-                                use_coroutine(move |mut _co: dioxus::prelude::UnboundedReceiver<()>| {
-                                    let working_dir = working_dir.clone();
-                                    let output_dir = output_dir.clone();
-                                    async move {
-                                        let workflow_name: String = match get_last_workflow_name().await {
-                                            Ok(name) => name,
-                                            Err(e) => {
-                                                eprintln!("❌ Failed to get workflow name: {e}");
-                                                return;
-                                            }
-                                        };
-                                        let result = tokio::task::spawn_blocking(move || {
-                                            export_rocrate(
-                                                &workflow_name,
-                                                output_dir.as_ref(),
-                                                working_dir.as_ref(),
-                                            )
-                                            .map_err(|e| e.to_string())
-                                        }).await;
-                                        match result {
-                                            Ok(Ok(())) => eprintln!("✅ RO-Crate exported successfully."),
-                                            Ok(Err(e)) => eprintln!("❌ RO-Crate export failed: {e}"),
-                                            Err(e) => eprintln!("❌ Task panicked: {e}"),
-                                        }
-                                    }
-                                });
-                            },
-                            div {
-                                class: "flex items-center space-x-1",
-                                Icon { icon: GoPackage, width: ICON_SIZE, height: ICON_SIZE }
-                                span { "Export RO-Crate" }
-                            }
-                        }
-                        ManageReanaButton {
-                                show_modal: *show_modal
-                            }
-                    }
+                class: "flex justify-between items-center bg-zinc-900 text-white px-3 py-2 select-none",
+                h2 { class: "text-sm font-semibold text-gray-100", "{title}" }
+                button {
+                    class: "text-red-400 hover:text-red-600 text-sm",
+                    onclick: move |_| {
+                        navigator.push(Route::Empty);
+                    },
+                    "✕"
                 }
             }
-            if show_terminal_log() {
+            // Remote action buttons
+            if exec_type == ExecutionType::Remote {
                 div {
-                    id: "editor-container",
-                    class: "flex-1 overflow-y-scroll bg-black text-green-400 text-xs font-mono p-2 whitespace-pre-wrap",
-                    pre { "{terminal_signal()}" }
+                    class: "flex items-center space-x-2 px-3 py-2 bg-zinc-800 text-white",
+                    NonRotatingActionButton {
+                        onclick: move |_| {
+                            toast_items.write().push(ToastItem::new(
+                                "Download Results".to_string(),
+                                "Downloading files...".to_string(),
+                                3,
+                            ));
+                            let output_dir: Option<String> = app_state()
+                                .working_directory
+                                .as_ref()
+                                .map(|p| p.to_string_lossy().to_string());
+                            use_coroutine(move |mut _co: dioxus::prelude::UnboundedReceiver<()>| {
+                                let output_dir = output_dir.clone();
+                                async move {
+                                    let workflow_name = match get_last_workflow_name().await {
+                                        Ok(n) => n,
+                                        Err(e) => { eprintln!("❌ Failed to get workflow name: {e}"); return; }
+                                    };
+                                    let result = tokio::task::spawn_blocking(move || {
+                                        remote_execution::download_results(&workflow_name, false, output_dir.as_ref())
+                                            .map_err(|e| e.to_string())
+                                    }).await;
+                                    match result {
+                                        Ok(Ok(())) => eprintln!("✅ Download completed successfully."),
+                                        Ok(Err(e)) => eprintln!("❌ Download failed: {e}"),
+                                        Err(e) => eprintln!("❌ Task panicked: {e}"),
+                                    }
+                                }
+                            });
+                        },
+                        div {
+                            class: "flex items-center space-x-1",
+                            Icon { icon: GoDownload, width: ICON_SIZE, height: ICON_SIZE }
+                            span { "Download Results" }
+                        }
+                    }
+                    NonRotatingActionButton {
+                        onclick: move |_| {
+                            toast_items.write().push(ToastItem::new(
+                                "Export RO-Crate".to_string(),
+                                "Exporting RO-Crate...".to_string(),
+                                3,
+                            ));
+                            let working_dir: Option<String> = app_state()
+                                .working_directory
+                                .as_ref()
+                                .map(|p| p.to_string_lossy().to_string());
+                            let output_dir: Option<String> = working_dir.clone().map(|dir| {
+                                std::path::Path::new(&dir).join("rocrate").to_string_lossy().into_owned()
+                            });
+                            use_coroutine(move |mut _co: dioxus::prelude::UnboundedReceiver<()>| {
+                                let working_dir = working_dir.clone();
+                                let output_dir = output_dir.clone();
+                                async move {
+                                    let workflow_name: String = match get_last_workflow_name().await {
+                                        Ok(name) => name,
+                                        Err(e) => { eprintln!("❌ Failed to get workflow name: {e}"); return; }
+                                    };
+                                    let result = tokio::task::spawn_blocking(move || {
+                                        export_rocrate(&workflow_name, output_dir.as_ref(), working_dir.as_ref())
+                                            .map_err(|e| e.to_string())
+                                    }).await;
+                                    match result {
+                                        Ok(Ok(())) => eprintln!("✅ RO-Crate exported successfully."),
+                                        Ok(Err(e)) => eprintln!("❌ RO-Crate export failed: {e}"),
+                                        Err(e) => eprintln!("❌ Task panicked: {e}"),
+                                    }
+                                }
+                            });
+                        },
+                        div {
+                            class: "flex items-center space-x-1",
+                            Icon { icon: GoPackage, width: ICON_SIZE, height: ICON_SIZE }
+                            span { "Export RO-Crate" }
+                        }
+                    }
+                    ManageReanaButton { show_modal: *show_modal }
                 }
+            }
+            div {
+                class: "flex-1 overflow-y-auto bg-black text-green-400 text-xs font-mono p-3 whitespace-pre-wrap",
+                pre { "{terminal_signal()}" }
             }
         }
     }
@@ -164,7 +145,7 @@ struct ReanaInstance {
     token: String,
 }
 
-#[component]
+#[component] 
 pub fn ManageReanaButton(
     #[props(optional)] show_modal: Option<Signal<bool>>,
 ) -> Element {
@@ -193,7 +174,9 @@ pub fn ManageReanaButton(
     let instance_list = {
         let list = instances.read();
         if list.is_empty() {
-            rsx! { p { class: "text-gray-500", "No instances configured." } }
+            rsx! {
+                p { class: "text-gray-400", "No instances configured." }
+            }
         } else {
             rsx! {
                 ul {
@@ -202,15 +185,14 @@ pub fn ManageReanaButton(
                         rsx! {
                             li {
                                 key: "{i}",
-                                class: "flex justify-between items-center border p-2 rounded",
-                                div { span { class: "font-medium", "{instance.url}" } }
+                                class: "flex justify-between items-center border border-gray-700 p-2 rounded bg-zinc-800",
+                                div { span { class: "font-medium text-white", "{instance.url}" } }
                                 button {
-                                    class: "text-red-600 hover:text-red-800",
+                                    class: "text-red-600 hover:text-red-800 px-2 py-1 rounded",
                                     onclick: move |_| {
                                         if let Err(e) = delete_reana_credentials() {
                                             push_toast("Error", format!("Failed to delete credentials: {e}"), 3);
                                         } else {
-                                            push_toast("Deleted", "REANA credentials removed successfully".to_string(), 2);
                                             instances.write().remove(i);
                                         }
                                     },
@@ -223,11 +205,9 @@ pub fn ManageReanaButton(
             }
         }
     };
-
     rsx! {
-        SmallRoundActionButton {
+        NonRotatingActionButton {
             onclick: move |_| {
-                push_toast("Manage REANA Instances", "Opening REANA manager...".to_string(), 3);
                 show_modal.set(true);
             },
             div {
@@ -238,21 +218,20 @@ pub fn ManageReanaButton(
         }
         if show_modal() {
             div {
-                class: "fixed top-20 right-20 bg-white p-6 rounded-lg shadow-lg w-96 space-y-4 z-50",
+                class: "fixed top-20 right-20 bg-zinc-900 text-white p-6 rounded-lg shadow-lg w-96 space-y-4 z-50",
                 h2 { class: "text-lg font-bold mb-2", "Configured REANA Instances" }
                 {instance_list}
-
                 div {
-                    class: "space-y-2 border-t pt-4",
-                    h3 { class: "font-semibold", "Add New Instance" }
+                    class: "space-y-2 border-t border-gray-700 pt-4",
+                    h3 { class: "font-semibold text-white", "Add New Instance" }
                     input {
-                        class: "w-full border rounded px-2 py-1",
+                        class: "w-full border border-gray-700 rounded px-2 py-1 bg-zinc-800 text-white placeholder-gray-400",
                         placeholder: "Instance URL",
                         value: "{new_url()}",
                         oninput: move |e| new_url.set(e.value()),
                     }
                     input {
-                        class: "w-full border rounded px-2 py-1",
+                        class: "w-full border border-gray-700 rounded px-2 py-1 bg-zinc-800 text-white placeholder-gray-400",
                         placeholder: "API Token",
                         value: "{new_token()}",
                         oninput: move |e| new_token.set(e.value()),
@@ -266,7 +245,6 @@ pub fn ManageReanaButton(
                                     if let Err(err) = store_reana_credentials(&new_url(), &new_token()) {
                                         push_toast("Error", format!("Failed to store credentials: {}", err), 4);
                                     } else {
-                                        push_toast("Success", "REANA credentials saved successfully".to_string(), 2);
                                         instances.write().push(ReanaInstance { url: new_url(), token: new_token() });
                                         new_url.set(String::new());
                                         new_token.set(String::new());
@@ -276,13 +254,24 @@ pub fn ManageReanaButton(
                             "Add Instance"
                         }
                         button {
-                            class: "bg-gray-400 text-white px-3 py-1 rounded hover:bg-gray-500",
+                            class: "bg-gray-700 text-white px-3 py-1 rounded hover:bg-gray-600",
                             onclick: move |_| show_modal.set(false),
                             "Close"
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+#[component]
+pub fn GlobalTerminal() -> Element {
+    let app_state = use_app_state();
+    rsx! {
+        div { 
+            class: "h-full w-full flex flex-col bg-black text-green-400 p-4",
+            TerminalViewer { exec_type: Some((*app_state().terminal_exec_type.read()).clone()) }
         }
     }
 }

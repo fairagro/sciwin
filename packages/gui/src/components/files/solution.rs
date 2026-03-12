@@ -18,6 +18,7 @@ use crate::components::files::{FileType, read_node_type};
 use crate::components::ExecutionType;
 use tokio::sync::mpsc;
 use dioxus::core::spawn;
+use tokio::task::spawn_blocking;
 
 #[component]
 pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<bool>, Signal<bool>)) -> Element {
@@ -120,7 +121,7 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                         icon: GoTrash,
                                     }
                                 }
-                                // local
+                                 // local
                                 SmallRoundActionButton {
                                     class: "hover:bg-fairagro-mid-500",
                                     title: "Run locally",
@@ -133,6 +134,7 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                             async move {
                                                 {
                                                     let mut state = app_state.write();
+                                                    navigator().push(Route::GlobalTerminal);
                                                     state.active_tab.set("terminal".to_string());
                                                     state.show_terminal_log.set(true);
                                                     state.terminal_log.set(String::new());
@@ -193,12 +195,11 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                                 let item = item.clone();
                                                 let show_settings = show_settings;
                                                 let mut app_state = app_state;
-
+                                                navigator().push(Route::GlobalTerminal);
                                                 app_state.write().active_tab.set("terminal".to_string());
                                                 app_state.write().show_terminal_log.set(true);
                                                 app_state.write().terminal_log.set(String::new());
                                                 app_state.write().terminal_exec_type.set(ExecutionType::Remote);
-
                                                 let creds = get_reana_credentials().ok().flatten();
                                                 if creds.is_none() {
                                                     app_state.write().show_manage_reana_modal.set(true);
@@ -291,9 +292,10 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
 
 #[component]
 pub fn Submodule_View(module: String, files: Vec<Node>, dialog_signals: (Signal<bool>, Signal<bool>)) -> Element {
-    let mut app_state = use_app_state();
+    let app_state = use_app_state();
     let mut hover = use_signal(|| false);
-
+    let show_settings = use_signal(|| false);
+    let module_for_buttons = module.clone();
     rsx! {
         div {
             onmouseenter: move |_| hover.set(true),
@@ -306,19 +308,21 @@ pub fn Submodule_View(module: String, files: Vec<Node>, dialog_signals: (Signal<
                     title: "Uninstall {module}",
                     onclick: move |_| {
                         let module = module.clone();
+                        let app_state = app_state;
                         async move {
-                            //0 open, 1 confirmed
                             dialog_signals.0.set(true);
                             loop {
                                 if !dialog_signals.0() {
                                     if dialog_signals.1() {
-                                        let repo = Repository::open(
-                                            //reset
-
-                                            app_state().working_directory.unwrap(),
-                                        )?;
-                                        remove_submodule(&repo, &module)?;
-                                        *RELOAD_TRIGGER.write() += 1;
+                                        let working_dir = {
+                                            let state = app_state();
+                                            state.working_directory.clone()
+                                        };
+                                        if let Some(dir) = working_dir {
+                                            let repo = Repository::open(dir)?;
+                                            remove_submodule(&repo, &module)?;
+                                            *RELOAD_TRIGGER.write() += 1;
+                                        }
                                         dialog_signals.1.set(false);
                                     }
                                     break;
@@ -329,11 +333,7 @@ pub fn Submodule_View(module: String, files: Vec<Node>, dialog_signals: (Signal<
                         }
                     },
                     if hover() {
-                        Icon {
-                            width: ICON_SIZE,
-                            height: ICON_SIZE,
-                            icon: GoTrash,
-                        }
+                        Icon { width: ICON_SIZE, height: ICON_SIZE, icon: GoTrash }
                     }
                 }
             }
@@ -342,28 +342,44 @@ pub fn Submodule_View(module: String, files: Vec<Node>, dialog_signals: (Signal<
                     li {
                         class: "select-none",
                         draggable: true,
-                        ondragstart: move |e| {
-                            e.data_transfer().set_effect_allowed("all");
-                            e.data_transfer().set_drop_effect("move");
-                            app_state.write().set_data_transfer(&item)?;
-                            e.data_transfer()
-                                .set_data("application/x-allow-dnd", "1")
-                                .map_err(|e| anyhow::anyhow!("{e}"))?;
-                            Ok(())
-                        },
-                        Link {
-                            draggable: "false",
-                            to: get_route(&item),
-                            active_class: "font-bold",
-                            class: "cursor-pointer select-none",
-                            div { class: "flex gap-1 items-center",
-                                div {
-                                    class: "flex",
-                                    style: "width: {ICON_SIZE.unwrap()}px; height: {ICON_SIZE.unwrap()}px;",
-                                    img { src: asset!("/assets/CWL.svg") }
+                        ondragstart: {
+                            let mut app_state = app_state;
+                            let item = item.clone();
+                            move |e| {
+                                e.data_transfer().set_effect_allowed("all");
+                                e.data_transfer().set_drop_effect("move");
+                                {
+                                    let mut state = app_state.write();
+                                    state.set_data_transfer(&item)?;
                                 }
-
-                                "{item.name}"
+                                e.data_transfer()
+                                    .set_data("application/x-allow-dnd", "1")
+                                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                                Ok(())
+                            }
+                        },
+                        div { class: "flex gap-1 items-center",
+                            Link {
+                                draggable: "false",
+                                to: get_route(&item),
+                                active_class: "font-bold",
+                                class: "cursor-pointer select-none",
+                                div { class: "flex gap-1 items-center",
+                                    div {
+                                        class: "flex",
+                                        style: "width: {ICON_SIZE.unwrap()}px; height: {ICON_SIZE.unwrap()}px;",
+                                        img { src: asset!("/assets/CWL.svg") }
+                                    }
+                                    "{item.name}"
+                                }
+                            }
+                            LocalRunButton { item: item.clone(), module: module_for_buttons.clone() }
+                            if read_node_type(&item.path) == FileType::Workflow {
+                                RemoteRunButton {
+                                    item: item.clone(),
+                                    show_settings: show_settings,
+                                    module: Some(module_for_buttons.clone())
+                                }
                             }
                         }
                     }
@@ -372,6 +388,145 @@ pub fn Submodule_View(module: String, files: Vec<Node>, dialog_signals: (Signal<
         }
     }
 }
+
+#[component]
+fn RemoteRunButton(item: Node, show_settings: Signal<bool>, module: Option<String>) -> Element {
+    let app_state = use_app_state();
+    rsx! {
+        SmallRoundActionButton {
+            class: "hover:bg-fairagro-mid-500",
+            title: "Execute with REANA",
+            onclick: move |_| {
+                let item = item.clone();
+                let module = module.clone();
+                let show_settings = show_settings;
+                let mut app_state = app_state;
+                spawn(async move {
+                    {
+                        let mut state = app_state.write();
+                        navigator().push(Route::GlobalTerminal);
+                        state.active_tab.set("terminal".to_string());
+                        state.show_terminal_log.set(true);
+                        state.terminal_log.set("Starting remote execution...\n".to_string());
+                        state.terminal_exec_type.set(ExecutionType::Remote);
+                    }
+                    if get_reana_credentials().ok().flatten().is_none() {
+                        {
+                            let mut state = app_state.write();
+                            state.show_manage_reana_modal.set(true);
+                        }
+                        let mut terminal = app_state().terminal_log;
+                        terminal.with_mut(|t| t.push_str("⚠ REANA credentials not configured.\n"));
+                        return;
+                    }
+                    let base_dir = match app_state().working_directory.clone() {
+                        Some(dir) => dir,
+                        None => {
+                            let mut terminal = app_state().terminal_log;
+                            terminal.with_mut(|t| t.push_str("❌ No working directory configured.\n"));
+                            return;
+                        }
+                    };
+                    let workflow_dir = if let Some(module_name) = &module {
+                        resolve_working_dir(base_dir.clone(), &Some(module_name.clone()))
+                    } else {
+                        base_dir.clone()
+                    };
+                    let mut terminal_signal = app_state().terminal_log;
+                    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
+                    spawn(async move {
+                        while let Some(msg) = rx.recv().await {
+                            terminal_signal.with_mut(|t| t.push_str(&msg));
+                        }
+                    });
+                    if let Err(e) = execute_reana_workflow(item, workflow_dir, show_settings, Some(tx)).await {
+                        let mut terminal = app_state().terminal_log;
+                        terminal.with_mut(|t| t.push_str(&format!("\n❌ Execution failed: {e}\n")));
+                    }
+                });
+                Ok(())
+            },
+            Icon { width: 10, height: 10, icon: GoCloud }
+        }
+    }
+}
+
+#[component]
+fn LocalRunButton(item: Node, module: Option<String>) -> Element {
+    let app_state = use_app_state();
+    rsx! {
+        SmallRoundActionButton {
+            class: "hover:bg-fairagro-mid-500",
+            title: "Run locally",
+            onclick: move |_| {
+                let item = item.clone();
+                let module = module.clone();
+                let mut app_state = app_state;
+                spawn(async move {
+                    let Some(base_dir) = app_state().working_directory.clone() else {
+                        eprintln!("❌ No working directory");
+                        return;
+                    };
+                    {
+                        let mut state = app_state.write();
+                        navigator().push(Route::GlobalTerminal);
+                        state.active_tab.set("terminal".to_string());
+                        state.show_terminal_log.set(true);
+                        state.terminal_log.set(String::new());
+                        state.terminal_exec_type.set(ExecutionType::Local);
+                    }
+                    let workflow_dir = if let Some(module_name) = &module {
+                        resolve_working_dir(base_dir.clone(), &Some(module_name.clone()))
+                    } else {
+                        base_dir.clone()
+                    };
+                    let mut terminal = app_state().terminal_log;
+                    terminal.set("🚀 Starting local execution...\n".to_string());
+                    let (tx, mut rx) = mpsc::channel::<String>(64);
+                    spawn_blocking({
+                        let item = item.clone();
+                        let dir = workflow_dir.clone();
+                        let tx = tx.clone();
+                        move || {
+                            let cwl_path = match resolve_safe_cwl_path(&dir, Path::new(&item.path)) {
+                                Ok(p) => p,
+                                Err(msg) => {
+                                    let _ = tx.blocking_send(format!("{msg}\n"));
+                                    return;
+                                }
+                            };
+                            let inputs = dir.join("inputs.yml");
+                            let args = if inputs.exists() {
+                                vec![inputs.to_string_lossy().to_string()]
+                            } else {
+                                Vec::new()
+                            };
+                            let result = execute_cwlfile(&cwl_path, &args, Some(dir));
+                            let _ = match result {
+                                Ok(_) => tx.blocking_send("✅ Local execution completed.\n".to_string()),
+                                Err(e) => tx.blocking_send(format!("❌ Execution failed: {e}\n")),
+                            };
+                        }
+                    });
+                    while let Some(line) = rx.recv().await {
+                        terminal.with_mut(|t| t.push_str(&line));
+                    }
+                });
+                Ok(())
+            },
+            Icon { width: 10, height: 10, icon: GoPlay }
+        }
+    }
+}
+
+fn resolve_working_dir(base: PathBuf, module: &Option<String>) -> PathBuf {
+    if let Some(module) = module {
+        base.join(module)
+    } else {
+        base
+    }
+}
+
 
 pub fn resolve_safe_cwl_path(base_dir: &Path, candidate: &Path) -> Result<PathBuf, String> {
     let base = base_dir
@@ -394,6 +549,5 @@ pub fn resolve_safe_cwl_path(base_dir: &Path, candidate: &Path) -> Result<PathBu
     if !resolved.exists() {
         return Err(format!("❌ CWL file not found: {:?}", resolved));
     }
-
     Ok(resolved)
 }

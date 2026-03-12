@@ -1,18 +1,19 @@
 use crate::{
     ApplicationState,
     components::{
-        CodeViewer, TerminalViewer, ConfirmDialog, ICON_SIZE, NoProject, NoProjectDialog, OkDialog, RoundActionButton, SmallRoundActionButton, ToolAddForm,
+        CodeViewer, ConfirmDialog, ICON_SIZE, NoProject, NoProjectDialog, OkDialog, RoundActionButton, SmallRoundActionButton, ToolAddForm,
         WorkflowAddDialog,
         files::{FilesView, View},
         graph::GraphEditor,
         layout::{Footer, Main, Sidebar, TabContent, TabList, TabTrigger, Tabs},
+        GlobalTerminal,
     },
     last_session_data, open_project, restore_last_session, save_file, use_app_state,
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
-    icons::go_icons::{GoAlert, GoGitCommit, GoPlus, GoRepo, GoSync, GoWorkflow, GoX},
+    icons::go_icons::{GoAlert, GoGitCommit, GoPlus, GoRepo, GoSync, GoWorkflow, GoX, GoTerminal},
 };
 use rfd::AsyncFileDialog;
 use std::{fs, path::PathBuf};
@@ -282,6 +283,11 @@ pub fn Layout() -> Element {
                             onclick: move |_| { show_add_actions.set(!show_add_actions()) },
                             Icon { width: 16, height: 16, icon: GoPlus }
                         }
+                        RoundActionButton {
+                            title: "Open Terminal",
+                            onclick: move |_| { navigator().push(Route::GlobalTerminal); },
+                            Icon { width: 16, height: 16, icon: GoTerminal }
+                        }
                     }
                 }
             }
@@ -310,6 +316,9 @@ pub enum Route {
 
     #[route("/tool_add")]
     ToolAdd,
+
+    #[route("/global_terminal")]
+    GlobalTerminal,
 }
 
 #[component]
@@ -321,16 +330,11 @@ pub fn Empty() -> Element {
 
 #[component]
 pub fn WorkflowView(path: String) -> Element {
-    let mut app_state = use_app_state();
-    use_effect(move || {
-        app_state.write().active_tab.set("editor".to_string());
-    });
-    rsx! {
+    rsx!(
         Tabs { class: "h-full min-h-0", default_value: "editor".to_string(),
             TabList {
                 TabTrigger { index: 0usize, value: "editor".to_string(), "Nodes" }
                 TabTrigger { index: 1usize, value: "code".to_string(), "Code" }
-                TabTrigger { index: 2usize, value: "terminal".to_string(), "Terminal" }
             }
             TabContent {
                 index: 0usize,
@@ -344,27 +348,16 @@ pub fn WorkflowView(path: String) -> Element {
                 value: "code".to_string(),
                 CodeViewer { path: path.clone() }
             }
-            TabContent {
-                index: 2usize,
-                class: "h-full min-h-0",
-                value: "terminal".to_string(),
-                TerminalViewer { exec_type: Some((app_state.read().terminal_exec_type)()) }
-            }
         }
-    }
+    )
 }
 
 #[component]
 pub fn ToolView(path: String) -> Element {
-    let mut app_state = use_app_state();
-    use_effect(move || {
-        app_state.write().active_tab.set("code".to_string());
-    });
     rsx! {
         Tabs { class: "h-full min-h-0", default_value: "code".to_string(),
             TabList {
                 TabTrigger { index: 0usize, value: "code".to_string(), "Code" }
-                TabTrigger { index: 2usize, value: "terminal".to_string(), "Terminal" }
             }
             TabContent {
                 index: 0usize,
@@ -372,15 +365,10 @@ pub fn ToolView(path: String) -> Element {
                 value: "code".to_string(),
                 CodeViewer { path }
             }
-            TabContent {
-                index: 2usize,
-                class: "h-full min-h-0",
-                value: "terminal".to_string(),
-                TerminalViewer { exec_type: Some((app_state.read().terminal_exec_type)()) }
-            }
         }
     }
 }
+
 
 #[component]
 pub fn ToolAdd() -> Element {

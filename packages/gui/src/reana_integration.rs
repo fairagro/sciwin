@@ -174,8 +174,13 @@ pub async fn execute_reana_workflow(
         }
     };
     let input_file = working_dir.join("inputs.yml");
+    let inputs_file_option = if input_file.exists() {
+        Some(input_file)
+    } else {
+        None
+    };
     let cwl_file = item.path.clone();
-    let mut workflow = match reana::parser::generate_workflow_json_from_cwl(&cwl_file, &Some(input_file)) {
+    let mut workflow = match reana::parser::generate_workflow_json_from_cwl(&cwl_file, &inputs_file_option) {
         Ok(wf) => wf,
         Err(e) => {
             log_msg(&log_sender, &format!("❌ Failed to generate workflow JSON: {e}")).await;
