@@ -278,15 +278,19 @@ pub fn Layout() -> Element {
                                 }
                             }
                         }
-                        RoundActionButton {
-                            title: "Add new CWL File",
-                            onclick: move |_| { show_add_actions.set(!show_add_actions()) },
-                            Icon { width: 16, height: 16, icon: GoPlus }
+                        div { class: "flex relative mb-3",
+                            RoundActionButton {
+                                title: "Add new CWL File",
+                                onclick: move |_| { show_add_actions.set(!show_add_actions()) },
+                                Icon { width: 16, height: 16, icon: GoPlus }
+                            }
                         }
-                        RoundActionButton {
-                            title: "Open Terminal",
-                            onclick: move |_| { navigator().push(Route::GlobalTerminal); },
-                            Icon { width: 16, height: 16, icon: GoTerminal }
+                        div { class: "flex relative mb-3",
+                            RoundActionButton {
+                                title: "Open Terminal",
+                                onclick: move |_| { navigator().push(Route::GlobalTerminal); },
+                                Icon { width: 16, height: 16, icon: GoTerminal }
+                            }
                         }
                     }
                 }
