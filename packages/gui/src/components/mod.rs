@@ -7,6 +7,7 @@ pub mod layout;
 mod term;
 mod toast;
 mod tool_add_form;
+mod terminal;
 
 pub use button::*;
 pub use code::*;
@@ -14,6 +15,7 @@ pub use dialog::*;
 pub use term::*;
 pub use toast::*;
 pub use tool_add_form::*;
+pub use terminal::*;
 
 use dioxus::prelude::*;
 use dioxus_free_icons::{Icon, icons::go_icons::GoRocket};

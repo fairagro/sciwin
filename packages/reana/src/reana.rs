@@ -6,14 +6,14 @@ use reqwest::{
 use serde_json::Value;
 use std::{collections::HashMap, fmt::Display};
 
-pub struct Reana<'a> {
-    server: &'a str,
-    token: &'a str,
+pub struct Reana {
+    server: String,
+    token: String,
 }
 
-impl<'a> Reana<'a> {
-    pub fn new(server: &'a str, token: &'a str) -> Self {
-        Reana { server, token }
+impl Reana {
+    pub fn new(server: String, token: String) -> Self {
+        Self { server, token }
     }
 
     fn url(&self, endpoint: &WorkflowEndpoint, params: Option<HashMap<String, String>>) -> String {
@@ -39,7 +39,7 @@ impl<'a> Reana<'a> {
             .parse()?,
         );
 
-        let client = Client::builder().default_headers(headers).danger_accept_invalid_certs(true).build()?;
+        let client = Client::builder().default_headers(headers).build()?;
         let url = self.url(endpoint, params);
         match body {
             Content::Json(json) => client.post(&url).json(&json).send()?.error_for_status(),
@@ -49,7 +49,7 @@ impl<'a> Reana<'a> {
     }
 
     pub fn get(&self, endpoint: &WorkflowEndpoint) -> anyhow::Result<Response> {
-        let client = Client::builder().danger_accept_invalid_certs(true).build()?;
+        let client = Client::builder().build()?;
         let url = self.url(endpoint, None);
         client
             .get(&url)
@@ -60,7 +60,6 @@ impl<'a> Reana<'a> {
     pub fn ping(&self) -> anyhow::Result<Response> {
         let ping_url = format!("{}/api/ping", self.server);
         let client = Client::builder()
-            .danger_accept_invalid_certs(true)
             .build()
             .context("Failed to build HTTP client")?;
 

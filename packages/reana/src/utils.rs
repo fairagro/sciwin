@@ -106,23 +106,36 @@ pub fn file_matches(requested_file: &str, candidate_path: &str) -> bool {
 }
 
 pub fn collect_files_recursive(dir: &Path, files: &mut HashSet<String>) -> Result<()> {
-    let entries = fs::read_dir(dir).with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+    let root = dir
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize directory: {}", dir.display()))?;
 
-    for entry in entries {
-        let entry = entry.with_context(|| format!("Failed to read entry in directory: {}", dir.display()))?;
-        let file_path = entry.path();
+    collect_files_recursive_inner(&root, &root, files)
+}
 
-        if file_path.is_dir() {
-            collect_files_recursive(&file_path, files)
-                .with_context(|| format!("Failed to collect files recursively from: {}", file_path.display()))?;
-        } else if file_path.is_file() {
-            let file_str = file_path
-                .to_str()
-                .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in file path: {}", file_path.display()))?;
-            files.insert(file_str.to_string());
+fn collect_files_recursive_inner(root: &Path, dir: &Path, files: &mut HashSet<String>) -> Result<()> {
+    let canonical_dir = dir
+        .canonicalize()
+        .with_context(|| format!("Failed to canonicalize directory during traversal: {}", dir.display()))?;
+    if !canonical_dir.starts_with(root) {
+        return Err(anyhow!(
+            "Attempted to traverse outside of root directory: {} (root: {})",
+            canonical_dir.display(),
+            root.display()
+        ));
+    }
+    for entry in fs::read_dir(&canonical_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) && name.starts_with('.') {
+                continue;
+            }
+            collect_files_recursive_inner(root, &path, files)?;
+        } else if let Some(path_str) = path.to_str() {
+            files.insert(path_str.to_string());
         }
     }
-
     Ok(())
 }
 

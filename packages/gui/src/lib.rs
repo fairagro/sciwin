@@ -14,6 +14,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
+use crate::components::ExecutionType;
 
 pub mod components;
 pub mod files;
@@ -21,6 +22,7 @@ pub mod graph;
 pub mod layout;
 pub mod types;
 pub mod workflow;
+pub mod reana_integration;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct ApplicationState {
@@ -32,6 +34,16 @@ pub struct ApplicationState {
     pub workflow: VisualWorkflow,
     #[serde(skip)]
     data_transfer: serde_json::Value,
+    #[serde(skip)]
+    pub active_tab: Signal<String>,
+    #[serde(skip)]
+    pub show_terminal_log: Signal<bool>,
+    #[serde(skip)]
+    pub terminal_log: Signal<String>,
+    #[serde(skip)]
+    pub terminal_exec_type: Signal<ExecutionType>,
+    #[serde(skip)]
+    pub show_manage_reana_modal: Signal<bool>,
 }
 
 impl ApplicationState {

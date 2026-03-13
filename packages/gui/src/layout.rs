@@ -6,13 +6,14 @@ use crate::{
         files::{FilesView, View},
         graph::GraphEditor,
         layout::{Footer, Main, Sidebar, TabContent, TabList, TabTrigger, Tabs},
+        GlobalTerminal,
     },
     last_session_data, open_project, restore_last_session, save_file, use_app_state,
 };
 use dioxus::prelude::*;
 use dioxus_free_icons::{
     Icon,
-    icons::go_icons::{GoAlert, GoGitCommit, GoPlus, GoRepo, GoSync, GoWorkflow, GoX},
+    icons::go_icons::{GoAlert, GoGitCommit, GoPlus, GoRepo, GoSync, GoWorkflow, GoX, GoTerminal},
 };
 use rfd::AsyncFileDialog;
 use std::{fs, path::PathBuf};
@@ -277,10 +278,19 @@ pub fn Layout() -> Element {
                                 }
                             }
                         }
-                        RoundActionButton {
-                            title: "Add new CWL File",
-                            onclick: move |_| { show_add_actions.set(!show_add_actions()) },
-                            Icon { width: 16, height: 16, icon: GoPlus }
+                        div { class: "flex relative mb-3",
+                            RoundActionButton {
+                                title: "Add new CWL File",
+                                onclick: move |_| { show_add_actions.set(!show_add_actions()) },
+                                Icon { width: 16, height: 16, icon: GoPlus }
+                            }
+                        }
+                        div { class: "flex relative mb-3",
+                            RoundActionButton {
+                                title: "Open Terminal",
+                                onclick: move |_| { navigator().push(Route::GlobalTerminal); },
+                                Icon { width: 16, height: 16, icon: GoTerminal }
+                            }
                         }
                     }
                 }
@@ -310,6 +320,9 @@ pub enum Route {
 
     #[route("/tool_add")]
     ToolAdd,
+
+    #[route("/global_terminal")]
+    GlobalTerminal,
 }
 
 #[component]
@@ -359,6 +372,7 @@ pub fn ToolView(path: String) -> Element {
         }
     }
 }
+
 
 #[component]
 pub fn ToolAdd() -> Element {

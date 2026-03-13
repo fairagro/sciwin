@@ -3,7 +3,7 @@ use crate::reana::{
     export_rocrate,
     workflow::{analyze_workflow_logs, get_saved_workflows},
 };
-use reana::{api::get_workflow_status, reana::Reana};
+use reana_ext::{api::get_workflow_status, reana::Reana};
 use std::{error::Error, path::PathBuf, thread, time::Duration};
 pub(super) fn status_file_path() -> PathBuf {
     std::env::temp_dir().join("workflow_status_list.json")
@@ -11,7 +11,7 @@ pub(super) fn status_file_path() -> PathBuf {
 
 pub fn check_remote_status(workflow_name: &Option<String>) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance.clone(), reana_token);
 
     if let Some(name) = workflow_name {
         evaluate_workflow_status(&reana, name, true)?;
@@ -27,7 +27,7 @@ pub fn check_remote_status(workflow_name: &Option<String>) -> Result<(), Box<dyn
     Ok(())
 }
 
-fn evaluate_workflow_status(reana: &Reana, name: &str, analyze_logs: bool) -> Result<(), Box<dyn Error>> {
+pub fn evaluate_workflow_status(reana: &Reana, name: &str, analyze_logs: bool) -> Result<String, Box<dyn Error>> {
     let status_response = get_workflow_status(reana, name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
     let status = status_response["status"].as_str().unwrap_or("unknown");
     let created = status_response["created"].as_str().unwrap_or("unknown");
@@ -46,27 +46,27 @@ fn evaluate_workflow_status(reana: &Reana, name: &str, analyze_logs: bool) -> Re
     {
         analyze_workflow_logs(logs_str);
     }
-    Ok(())
+    Ok(status.to_string())
 }
 
 pub fn watch(workflow_name: &str, rocrate: bool) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
-    let reana = Reana::new(&reana_instance, &reana_token);
+    let reana = Reana::new(reana_instance, reana_token);
 
     const POLL_INTERVAL_SECS: u64 = 5;
     const TERMINAL_STATUSES: [&str; 3] = ["finished", "failed", "deleted"];
 
     loop {
-        let status_response = reana::api::get_workflow_status(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
+        let status_response = get_workflow_status(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
         let workflow_status = status_response["status"].as_str().unwrap_or("unknown");
         if TERMINAL_STATUSES.contains(&workflow_status) {
             match workflow_status {
                 "finished" => {
                     eprintln!("✅ Workflow finished successfully.");
-                    if let Err(e) = crate::reana::download_remote_results(workflow_name, None) {
+                    if let Err(e) = crate::reana::download_remote_results(workflow_name, false, None) {
                         eprintln!("Error downloading remote results: {e}");
                     }
-                    if rocrate && let Err(e) = export_rocrate(workflow_name, Some(&"rocrate".to_string())) {
+                    if rocrate && let Err(e) = export_rocrate(workflow_name, Some(&"rocrate".to_string()), None) {
                         eprintln!("Error trying to create a Provenance RO-Crate: {e}");
                     }
                 }
