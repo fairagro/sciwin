@@ -22,6 +22,7 @@
 📖 Read the **[Documentation](https://fairagro.github.io/sciwin/)** to get started or take a look at some [examples](https://github.com/fairagro/m4.4_sciwin_client_examples)! 🚀
 
 🦀 Take a look at our latest publications and talks 👀
+- [SciWIn-Client and SciWIn-Studio: Simplifying FAIR Computational Workflows](https://doi.org/10.5281/zenodo.19060805), FAIRagro Community Summit 2026
 - [FAIR, fast, and frictionless – computational workflows with SciWIn](https://doi.org/10.5281/zenodo.17651648), FDM Niedersachsen DataDays 2025 
 - [FAIRagro Talk: SciWIn – making your workflows work for you](https://fairagro.net/event/fairagro-talk-sciwin-making-your-workflows-work-for-you/), FAIRagro Talk Nov. 2025
 - [Easy creation of reproducible computational workflows with SciWIn-Client](https://doi.org/10.5281/zenodo.17119086), CoRDI 2025
