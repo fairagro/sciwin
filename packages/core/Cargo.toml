@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-commonwl = { path = "../cwl", features = ["execution", "annotation"] }
+commonwl.workspace = true
 repository = { path = "../repository" }
 util = { path = "../util" }
 

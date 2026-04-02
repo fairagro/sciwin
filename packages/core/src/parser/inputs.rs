@@ -1,11 +1,11 @@
 use super::BAD_WORDS;
 use commonwl::{
-    guess_type,
-    inputs::{CommandInputParameter, CommandLineBinding},
-    requirements::Requirement,
-    CWLType, CommandLineTool, DefaultValue, Directory, File,
+    IntegerOrExpression,
+    files::{Directory, File, FileOrDirectory},
+    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
+    types::CWLType,
 };
-use rand::{distr::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use serde_yaml::Value;
 use slugify::slugify;
 
@@ -43,20 +43,22 @@ fn get_positional(current: &str, index: isize) -> CommandInputParameter {
         id = format!("secret_{rnd}");
     }
 
-    CommandInputParameter::default()
-        .with_id(&id)
-        .with_type(cwl_type)
-        .with_default_value(default_value)
-        .with_binding(CommandLineBinding::default().with_position(index))
+    CommandInputParameter::builder()
+        .id(&id)
+        .r#type(cwl_type)
+        .default(default_value)
+        .input_binding(CommandLineBinding::builder().position(IntegerOrExpression::Long(index as i64)).build())
+        .build()
 }
 
 fn get_flag(current: &str) -> CommandInputParameter {
     let id = current.replace('-', "");
-    CommandInputParameter::default()
-        .with_binding(CommandLineBinding::default().with_prefix(current))
-        .with_id(slugify!(&id, separator = "_").as_str())
-        .with_type(CWLType::Boolean)
-        .with_default_value(DefaultValue::Any(Value::Bool(true)))
+    CommandInputParameter::builder()
+        .input_binding(CommandLineBinding::builder().prefix(current).build())
+        .id(slugify!(&id, separator = "_").as_str())
+        .r#type(CWLType::Boolean)
+        .default(DefaultValue::Any(Value::Bool(true)))
+        .build()
 }
 
 fn get_option(current: &str, next: &str) -> CommandInputParameter {
@@ -65,17 +67,18 @@ fn get_option(current: &str, next: &str) -> CommandInputParameter {
     let (next, cwl_type) = parse_input(next);
     let default_value = parse_default_value(next, &cwl_type);
 
-    CommandInputParameter::default()
-        .with_binding(CommandLineBinding::default().with_prefix(current))
-        .with_id(slugify!(&id, separator = "_").as_str())
-        .with_type(cwl_type)
-        .with_default_value(default_value)
+    CommandInputParameter::builder()
+        .input_binding(CommandLineBinding::builder().prefix(current).build())
+        .id(slugify!(&id, separator = "_").as_str())
+        .r#type(cwl_type)
+        .default(default_value)
+        .build()
 }
 
 fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
     match cwl_type {
-        CWLType::File => DefaultValue::File(File::from_location(value)),
-        CWLType::Directory => DefaultValue::Directory(Directory::from_location(value)),
+        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(File::builder().location(value).build())),
+        CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(value).build())),
         CWLType::String => DefaultValue::Any(Value::String(value.to_string())),
         _ => DefaultValue::Any(serde_yaml::from_str(value).unwrap()),
     }
@@ -118,14 +121,14 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
         }
 
         let default = match type_ {
-            CWLType::File => DefaultValue::File(File::from_location(input)),
-            CWLType::Directory => DefaultValue::Directory(Directory::from_location(input)),
+            CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(File::builder().location(input).build())),
+            CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(input).build())),
             _ => DefaultValue::Any(serde_yaml::from_str(input)?),
         };
         let id = slugify!(input, separator = "_");
 
         tool.inputs
-            .push(CommandInputParameter::default().with_id(&id).with_type(type_).with_default_value(default));
+            .push(CommandInputParameter::builder().id(&id).r#type(type_).default(default).build());
     }
 
     Ok(())
@@ -141,31 +144,36 @@ mod tests {
     pub fn test_get_inputs() {
         let inputs = "--argument1 value1 --flag -a value2 positional1 -v 1";
         let expected = vec![
-            CommandInputParameter::default()
-                .with_id("argument1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("--argument1"))
-                .with_default_value(DefaultValue::Any(Value::String("value1".to_string()))),
-            CommandInputParameter::default()
-                .with_id("flag")
-                .with_type(CWLType::Boolean)
-                .with_binding(CommandLineBinding::default().with_prefix("--flag"))
-                .with_default_value(DefaultValue::Any(Value::Bool(true))),
-            CommandInputParameter::default()
-                .with_id("a")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("-a"))
-                .with_default_value(DefaultValue::Any(Value::String("value2".to_string()))),
-            CommandInputParameter::default()
-                .with_id("positional1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_position(5))
-                .with_default_value(DefaultValue::Any(Value::String("positional1".to_string()))),
-            CommandInputParameter::default()
-                .with_id("v")
-                .with_type(CWLType::Int)
-                .with_binding(CommandLineBinding::default().with_prefix("-v"))
-                .with_default_value(DefaultValue::Any(serde_yaml::from_str("1").unwrap())),
+            CommandInputParameter::builder()
+                .id("argument1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("--argument1").build())
+                .default(DefaultValue::Any(Value::String("value1".to_string())))
+                .build(),
+            CommandInputParameter::builder()
+                .id("flag")
+                .r#type(CWLType::Boolean)
+                .input_binding(CommandLineBinding::builder().prefix("--flag").build())
+                .default(DefaultValue::Any(Value::Bool(true)))
+                .build(),
+            CommandInputParameter::builder()
+                .id("a")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("-a").build())
+                .default(DefaultValue::Any(Value::String("value2".to_string())))
+                .build(),
+            CommandInputParameter::builder()
+                .id("positional1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().position(5).build())
+                .default(DefaultValue::Any(Value::String("positional1".to_string())))
+                .build(),
+            CommandInputParameter::builder()
+                .id("v")
+                .r#type(CWLType::Int)
+                .input_binding(CommandLineBinding::builder().prefix("-v").build())
+                .default(DefaultValue::Any(serde_yaml::from_str("1").unwrap()))
+                .build(),
         ];
 
         let inputs_vec = shlex::split(inputs).unwrap();
@@ -179,11 +187,12 @@ mod tests {
     #[test]
     pub fn test_get_default_value_number() {
         let commandline_args = "-v 42";
-        let expected = CommandInputParameter::default()
-            .with_id("v")
-            .with_type(CWLType::Int)
-            .with_binding(CommandLineBinding::default().with_prefix("-v"))
-            .with_default_value(DefaultValue::Any(Value::Number(Number::from(42))));
+        let expected = CommandInputParameter::builder()
+            .id("v")
+            .r#type(CWLType::Int)
+            .input_binding(CommandLineBinding::builder().prefix("-v").build())
+            .default(DefaultValue::Any(Value::Number(Number::from(42))))
+            .build();
 
         let args = shlex::split(commandline_args).unwrap();
         let result = get_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
@@ -194,11 +203,12 @@ mod tests {
     #[test]
     pub fn test_get_default_value_json_str() {
         let arg = "{\"message\": \"Hello World\"}";
-        let expected = CommandInputParameter::default()
-            .with_id("message_hello_world")
-            .with_type(CWLType::String)
-            .with_binding(CommandLineBinding::default().with_position(0))
-            .with_default_value(DefaultValue::Any(Value::String(arg.to_string())));
+        let expected = CommandInputParameter::builder()
+            .id("message_hello_world")
+            .r#type(CWLType::String)
+            .input_binding(CommandLineBinding::builder().position(0).build())
+            .default(DefaultValue::Any(Value::String(arg.to_string())))
+            .build();
         let result = get_inputs(&[arg]);
         assert_eq!(result[0], expected);
     }

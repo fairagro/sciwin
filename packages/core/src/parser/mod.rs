@@ -1,4 +1,4 @@
-use commonwl::{prelude::*, requirements::WorkDirItem};
+use commonwl::{OneOrMany, documents::{CommandLineTool, CommandLineToolBuilder}, files::Directory, inputs::{CommandInputParameter, CommandLineBindingBuilder}, requirements::{InitialWorkDirRequirement, ShellCommandRequirement, ToolRequirements}, types::CWLType};
 use std::{fs, path::Path};
 
 mod inputs;
@@ -18,12 +18,12 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     let base_command = get_base_command(commands);
 
     let remainder = match &base_command {
-        Command::Single(_) => &commands[1..],
-        Command::Multiple(vec) => &commands[vec.len()..],
+       OneOrMany::One(_) => &commands[1..],
+       OneOrMany::Many(vec) => &commands[vec.len()..],
     };
-    let mut tool = CommandLineTool::default().with_base_command(base_command.clone());
+    let tool = CommandLineTool::builder().base_command(base_command.clone());
 
-    if !remainder.is_empty() {
+    let mut tool = if !remainder.is_empty() {
         let (cmd, piped) = split_vec_at(remainder, &"|");
 
         let stdout_pos = cmd.iter().position(|i| *i == ">").unwrap_or(cmd.len());
@@ -37,50 +37,52 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
 
         let args = collect_arguments(&piped, &inputs);
 
-        tool = tool.with_inputs(inputs).with_stdout(stdout).with_stderr(stderr).with_arguments(args);
-    }
+        tool.inputs(inputs).maybe_stdout(stdout).maybe_stderr(stderr).maybe_arguments(args).build()
+    }else {
+        tool.build()
+    };
 
     //add working dir items
     tool = match base_command {
-        Command::Single(cmd) => {
+        OneOrMany::One(cmd) => {
             //if command is an existing file, add to requirements
             if fs::exists(&cmd).unwrap_or_default() {
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(&cmd))]);
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(&cmd)));
             }
             tool
         }
-        Command::Multiple(ref vec) => {
+        OneOrMany::Many(ref vec) => {
             //usual command `pyton script-file.py`
             if fs::exists(&vec[1]).unwrap_or_default() && Path::new(&vec[1]).is_file() {
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
                     &vec[1],
-                ))]);
+                )));
             }
             //command with `R -e script.R`
             if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_file() {
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
+               append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
                     &vec[2],
-                ))]);
+                )));
             }
             //command with `python -m folder`
             if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {
                 let mut tool = tool;
-                tool.inputs.push(CommandInputParameter::default().with_id("module").with_type(CWLType::Directory).with_default_value(DefaultValue::Directory(Directory::from_location(&vec[2]))));
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: vec![WorkDirItem::Expression("$(inputs.module)".to_string())] })]);
+                tool.inputs.push(CommandInputParameter::builder().id("module").r#type(CWLType::Directory).default(DefaultValue::Directory(Directory::builder().location(&vec[2]))).build());
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: vec![WorkDirItem::Expression("$(inputs.module)".to_string())] }));
             }
             tool
         }
     };
 
     if tool.arguments.is_some() {
-        tool = tool.append_requirement(Requirement::ShellCommandRequirement);
+        append_requirement(&mut tool, ToolRequirements::ShellCommandRequirement(ShellCommandRequirement));
     }
     tool
 }
 
-pub(crate) fn get_base_command(command: &[&str]) -> Command {
+pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
     if command.is_empty() {
-        return Command::Single(String::new());
+        return OneOrMany::One(String::new());
     }
 
     let mut base_command = vec![command[0].to_string()];
@@ -95,8 +97,8 @@ pub(crate) fn get_base_command(command: &[&str]) -> Command {
     }
 
     match base_command.len() {
-        1 => Command::Single(command[0].to_string()),
-        _ => Command::Multiple(base_command),
+        1 => OneOrMany::One(command[0].to_string()),
+        _ => OneOrMany::Many(base_command),
     }
 }
 
@@ -145,14 +147,20 @@ fn split_vec_at<T: PartialEq + Clone, C: AsRef<[T]>>(vec: C, split_at: &T) -> (V
     }
 }
 
+fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRequirements)  {
+    if let Some(reqs) = &mut tool.requirements {
+        reqs.push(requirement);
+
+    } else {
+        tool.requirements = Some(vec![requirement]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
     use std::path::Path;
     use super::*;
-    use commonwl::execution::io::copy_dir;
-    use commonwl::execution::{environment::RuntimeEnvironment, runner::command::run_command};
-    use commonwl::{CWLType, DefaultValue};
     use rstest::rstest;
     use serde_yaml::Value;
     use serial_test::serial;
