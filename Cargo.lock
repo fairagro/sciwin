@@ -876,7 +876,7 @@ dependencies = [
 [[package]]
 name = "commonwl"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#8a1bfe35754e9a3f30edb8dcee2360504a4bd1a8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#655fabe543c07436ed417139de907bee0ce7f9f2"
 dependencies = [
  "cwl_core 0.1.2",
 ]
@@ -893,7 +893,7 @@ dependencies = [
 [[package]]
 name = "commonwl_salad"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#8a1bfe35754e9a3f30edb8dcee2360504a4bd1a8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#655fabe543c07436ed417139de907bee0ce7f9f2"
 dependencies = [
  "commonwl_salad_derive",
  "serde",
@@ -903,7 +903,7 @@ dependencies = [
 [[package]]
 name = "commonwl_salad_derive"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#8a1bfe35754e9a3f30edb8dcee2360504a4bd1a8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#655fabe543c07436ed417139de907bee0ce7f9f2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1292,7 +1292,7 @@ dependencies = [
 [[package]]
 name = "cwl_core"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#8a1bfe35754e9a3f30edb8dcee2360504a4bd1a8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#655fabe543c07436ed417139de907bee0ce7f9f2"
 dependencies = [
  "anyhow",
  "bon",

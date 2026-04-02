@@ -8,6 +8,8 @@ pub(crate) use inputs::*;
 pub(crate) use outputs::*;
 pub(crate) use postprocess::post_process_cwl;
 
+use crate::append_requirement;
+
 //TODO complete list
 pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "node"];
 pub static SCRIPT_MODIFIERS: &[&str] = &["-e", "-m"];
@@ -144,15 +146,6 @@ fn split_vec_at<T: PartialEq + Clone, C: AsRef<[T]>>(vec: C, split_at: &T) -> (V
         (lhs, rhs)
     } else {
         (slice.to_vec(), vec![])
-    }
-}
-
-fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRequirements)  {
-    if let Some(reqs) = &mut tool.requirements {
-        reqs.push(requirement);
-
-    } else {
-        tool.requirements = Some(vec![requirement]);
     }
 }
 
