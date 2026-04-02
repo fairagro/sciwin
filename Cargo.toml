@@ -31,7 +31,7 @@ authors = [
 
 [workspace.dependencies]
 anyhow = "1.0.102"
-commonwl = { git = "https://github.com/fairagro/commonwl" }
+commonwl = { git = "https://github.com/fairagro/commonwl", branch = "main" }
 colored = "3.1.1"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
 fancy-regex = "0.17.0"

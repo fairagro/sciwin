@@ -1,4 +1,4 @@
-use commonwl::{OneOrMany, documents::{CommandLineTool, CommandLineToolBuilder}, files::Directory, inputs::{CommandInputParameter, CommandLineBindingBuilder}, requirements::{InitialWorkDirRequirement, ShellCommandRequirement, ToolRequirements}, types::CWLType};
+use commonwl::{OneOrMany, documents::{CommandLineTool}, files::{Directory, Dirent}, inputs::{CommandInputParameter}, requirements::{Include, InitialWorkDirRequirement, ListingItems, ShellCommandRequirement, StringOrInclude, ToolRequirements, WorkDirItems}, types::CWLType};
 use std::{fs, path::Path};
 
 mod inputs;
@@ -47,20 +47,20 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
         OneOrMany::One(cmd) => {
             //if command is an existing file, add to requirements
             if fs::exists(&cmd).unwrap_or_default() {
-                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(&cmd)));
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(&cmd)));
             }
             tool
         }
         OneOrMany::Many(ref vec) => {
             //usual command `pyton script-file.py`
             if fs::exists(&vec[1]).unwrap_or_default() && Path::new(&vec[1]).is_file() {
-                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
                     &vec[1],
                 )));
             }
             //command with `R -e script.R`
             if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_file() {
-               append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
+               append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
                     &vec[2],
                 )));
             }
@@ -68,7 +68,7 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
             if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {
                 let mut tool = tool;
                 tool.inputs.push(CommandInputParameter::builder().id("module").r#type(CWLType::Directory).default(DefaultValue::Directory(Directory::builder().location(&vec[2]))).build());
-                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: vec![WorkDirItem::Expression("$(inputs.module)".to_string())] }));
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: WorkDirItems::Expression("$(inputs.module)".to_string()) }));
             }
             tool
         }
@@ -156,11 +156,33 @@ fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRequirements)
     }
 }
 
+fn iwdr_by_file(filename: &str) -> InitialWorkDirRequirement {
+    InitialWorkDirRequirement::builder()
+    .listing(
+        WorkDirItems::ListingItems(
+            Box::new(
+                OneOrMany::One(
+                    ListingItems::Dirent(
+                        Dirent::builder().
+                        entry(StringOrInclude::Include(
+                            Include{include: filename.to_string()})
+                        )
+                        .entryname(filename)
+                        .build()
+                    )
+                )
+            )
+        )
+    )
+    .build()
+}
+
 #[cfg(test)]
 mod tests {
     use std::env;
     use std::path::Path;
     use super::*;
+    use commonwl::inputs::CommandLineBinding;
     use rstest::rstest;
     use serde_yaml::Value;
     use serial_test::serial;
@@ -186,42 +208,42 @@ mod tests {
     }
 
     #[rstest]
-    #[case("python script.py", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
+    #[case("python script.py", CommandLineTool::builder().
+            base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()])).build()
         )]
-    #[case("Rscript script.R", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["Rscript".to_string(), "script.R".to_string()]))
+    #[case("Rscript script.R", CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["Rscript".to_string(), "script.R".to_string()])).build()
     )]
-    #[case("python script.py --option1 value1", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
-            .with_inputs(vec![CommandInputParameter::default()
-                .with_id("option1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("--option1"))
-                .with_default_value(DefaultValue::Any(Value::String("value1".to_string())))])
+    #[case("python script.py --option1 value1", CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))
+            .inputs(vec![CommandInputParameter::builder()
+                .id("option1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("--option1").build())
+                .default(DefaultValue::Any(Value::String("value1".to_string()))).build()]).build()
     )]
-    #[case("python script.py --option1 \"value with spaces\"", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
-            .with_inputs(vec![CommandInputParameter::default()
-                .with_id("option1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("--option1"))
-                .with_default_value(DefaultValue::Any(Value::String("value with spaces".to_string())))])
+    #[case("python script.py --option1 \"value with spaces\"", CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))
+            .inputs(vec![CommandInputParameter::builder()
+                .id("option1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("--option1").build())
+                .default(DefaultValue::Any(Value::String("value with spaces".to_string()))).build()]).build()
     )]
-    #[case("python script.py positional1 --option1 value1",  CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
-            .with_inputs(vec![
-                CommandInputParameter::default()
-                    .with_id("positional1")
-                    .with_default_value(DefaultValue::Any(Value::String("positional1".to_string())))
-                    .with_type(CWLType::String)
-                    .with_binding(CommandLineBinding::default().with_position(0)),
-                CommandInputParameter::default()
-                    .with_id("option1")
-                    .with_type(CWLType::String)
-                    .with_binding(CommandLineBinding::default().with_prefix("--option1"))
-                    .with_default_value(DefaultValue::Any(Value::String("value1".to_string())))
-            ])
+    #[case("python script.py positional1 --option1 value1",  CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id("positional1")
+                    .default(DefaultValue::Any(Value::String("positional1".to_string())))
+                    .r#type(CWLType::String)
+                    .input_binding(CommandLineBinding::builder().position(0).build()).build(),
+                CommandInputParameter::builder()
+                    .id("option1")
+                    .r#type(CWLType::String)
+                    .input_binding(CommandLineBinding::builder().prefix("--option1").build())
+                    .default(DefaultValue::Any(Value::String("value1".to_string()))).build()
+            ]).build()
             
     )]
     pub fn test_parse_command_line(#[case] input: &str, #[case] expected: CommandLineTool) {
@@ -246,7 +268,7 @@ mod tests {
         let tool = parse_command("df \\| grep --line-buffered tmpfs \\> df.log");
 
         assert!(tool.arguments.is_some());
-        assert!(tool.has_shell_command_requirement());
+        assert!(tool.has_requirement::<ShellCommandRequirement>());
 
         if let Some(args) = tool.arguments {
             if let Argument::Binding(pipe) = &args[0] {
@@ -269,7 +291,7 @@ mod tests {
     #[test]
     pub fn test_badwords() {
         let tool = parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql");
-        assert!(BAD_WORDS.iter().any(|&word| tool.inputs.iter().any(|i| !i.id.contains(word))));
+        assert!(BAD_WORDS.iter().any(|&word| tool.inputs.iter().any(|i| !i.id.as_ref().unwrap().contains(word))));
     }
 
     #[test]

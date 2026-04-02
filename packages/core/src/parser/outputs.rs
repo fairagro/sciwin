@@ -1,6 +1,6 @@
 use crate::io::get_filename_without_extension;
 use commonwl::{
-    CWLType, SingularPlural,
+    OneOrMany,
     outputs::{CommandOutputBinding, CommandOutputParameter},
 };
 use std::path::Path;
@@ -15,13 +15,14 @@ pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
             } else {
                 CWLType::Directory
             };
-            CommandOutputParameter::default()
-                .with_type(output_type)
-                .with_id(&filename)
-                .with_binding(CommandOutputBinding {
-                    glob: Some(SingularPlural::Singular(f.to_string())),
+            CommandOutputParameter::builder()
+                .r#type(output_type)
+                .id(&filename)
+                .output_binding(CommandOutputBinding {
+                    glob: Some(OneOrMany::One(f.to_string())),
                     ..Default::default()
                 })
+                .build()
         })
         .collect()
 }
@@ -34,20 +35,22 @@ mod tests {
     pub fn test_get_outputs() {
         let files = vec!["my-file.txt".to_string(), "archive.tar.gz".to_string()];
         let expected = vec![
-            CommandOutputParameter::default()
-                .with_type(CWLType::File)
-                .with_id("my-file")
-                .with_binding(CommandOutputBinding {
-                    glob: Some(commonwl::SingularPlural::Singular("my-file.txt".to_string())),
+            CommandOutputParameter::builder()
+                .r#type(CWLType::File)
+                .id("my-file")
+                .output_binding(CommandOutputBinding {
+                    glob: Some(OneOrMany::One("my-file.txt".to_string())),
                     ..Default::default()
-                }),
-            CommandOutputParameter::default()
-                .with_type(CWLType::File)
-                .with_id("archive")
-                .with_binding(CommandOutputBinding {
-                    glob: Some(commonwl::SingularPlural::Singular("archive.tar.gz".to_string())),
+                })
+                .build(),
+            CommandOutputParameter::builder()
+                .r#type(CWLType::File)
+                .id("archive")
+                .output_binding(CommandOutputBinding {
+                    glob: Some(OneOrMany::One("archive.tar.gz".to_string())),
                     ..Default::default()
-                }),
+                })
+                .build(),
         ];
 
         let outputs = get_outputs(&files);
