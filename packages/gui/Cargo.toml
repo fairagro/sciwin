@@ -32,14 +32,14 @@ keyring = { version = "3.6.3", features = [
     "windows-native",
 ] }
 
-dioxus = { version = "0.7.3", features = ["router"] }
+dioxus = { version = "0.7.4", features = ["router"] }
 dioxus-free-icons = { version = "0.10.0", features = [
     "octicons",
     "material-design-icons-maps",
 ] }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 
-chrono = "0.4.42"
+chrono = "0.4.44"
 ignore = "0.4.23"
 petgraph = "0.8.3"
 rust-sugiyama = "0.4.0"
