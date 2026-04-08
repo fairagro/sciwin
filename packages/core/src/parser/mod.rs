@@ -1,4 +1,4 @@
-use commonwl::{OneOrMany, documents::{CommandLineTool}, files::{Directory, Dirent}, inputs::{CommandInputParameter}, requirements::{Include, InitialWorkDirRequirement, ListingItems, ShellCommandRequirement, StringOrInclude, ToolRequirements, WorkDirItems}, types::CWLType};
+use commonwl::{IntegerOrExpression, OneOrMany, documents::{Argument, CommandLineTool}, files::{Directory, Dirent, FileOrDirectory}, inputs::{CommandInputParameter, CommandLineBinding, DefaultValue}, requirements::{Include, InitialWorkDirRequirement, ListingItems, ShellCommandRequirement, StringOrInclude, ToolRequirements, WorkDirItems}, types::CWLType};
 use std::{fs, path::Path};
 
 mod inputs;
@@ -67,9 +67,8 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
                 )));
             }
             //command with `python -m folder`
-            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {
-                let mut tool = tool;
-                tool.inputs.push(CommandInputParameter::builder().id("module").r#type(CWLType::Directory).default(DefaultValue::Directory(Directory::builder().location(&vec[2]))).build());
+            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {                
+                tool.inputs.push(CommandInputParameter::builder().id("module").r#type(CWLType::Directory).default(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(&vec[2]).build()))).build());
                 append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: WorkDirItems::Expression("$(inputs.module)".to_string()) }));
             }
             tool
@@ -121,14 +120,14 @@ fn collect_arguments(piped: &[&str], inputs: &[CommandInputParameter]) -> Option
 
     let piped_args = piped.iter().enumerate().map(|(i, &x)| {
         Argument::Binding(CommandLineBinding {
-            position: Some((inputs.len() + i).try_into().unwrap_or_default()),
+            position: Some(IntegerOrExpression::Int((inputs.len() + i).try_into().unwrap())),
             value_from: Some(x.to_string()),
             ..Default::default()
         })
     });
 
     let mut args = vec![Argument::Binding(CommandLineBinding {
-        position: Some(inputs.len().try_into().unwrap_or_default()),
+        position: Some(IntegerOrExpression::Int(inputs.len().try_into().unwrap_or_default())),
         value_from: Some("|".to_string()),
         shell_quote: Some(false),
         ..Default::default()
@@ -188,11 +187,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case("python script.py --arg1 hello", Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))]
-    #[case("echo 'Hello World!'", Command::Single("echo".to_string()))]
-    #[case("Rscript lol.R", Command::Multiple(vec!["Rscript".to_string(), "lol.R".to_string()]))]
-    #[case("", Command::Single(String::new()))]
-    pub fn test_get_base_command(#[case] command: &str, #[case] expected: Command) {
+    #[case("python script.py --arg1 hello", OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))]
+    #[case("echo 'Hello World!'", OneOrMany::One("echo".to_string()))]
+    #[case("Rscript lol.R", OneOrMany::Many(vec!["Rscript".to_string(), "lol.R".to_string()]))]
+    #[case("", OneOrMany::One(String::new()))]
+    pub fn test_get_base_command(#[case] command: &str, #[case] expected: OneOrMany<String>) {
         let args = shlex::split(command).unwrap();
         let args_slice: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
 
@@ -308,7 +307,7 @@ mod tests {
         let result = get_base_command(&args_slice);
         assert_eq!(
             result,
-            Command::Multiple(vec!["python3".to_string(), "-m".to_string(), "my_module".to_string()])
+            OneOrMany::Many(vec!["python3".to_string(), "-m".to_string(), "my_module".to_string()])
         );
     }
  

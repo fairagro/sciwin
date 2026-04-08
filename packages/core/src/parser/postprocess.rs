@@ -2,7 +2,8 @@ use commonwl::{
     OneOrMany,
     documents::{Argument, CommandLineTool},
     files::FileOrDirectory,
-    inputs::{CommandInputArraySchema, CommandInputParameterType, CommandInputSchema, CommandInputType, DefaultValue},
+    inputs::{CommandInputArraySchema, CommandInputParameter, CommandInputParameterType, CommandInputSchema, CommandInputType, DefaultValue},
+    requirements::{InlineJavascriptRequirement, ToolRequirements},
     types::CWLType,
 };
 use std::collections::HashSet;
@@ -52,10 +53,10 @@ fn detect_array_inputs(tool: &mut CommandLineTool) -> anyhow::Result<()> {
 /// Handles translation to CWL Variables like $(inputs.myInput.path) or $(runtime.outdir)
 fn post_process_variables(tool: &mut CommandLineTool) {
     fn process_input(input: &CommandInputParameter) -> String {
-        if input.type_ == CWLType::File || input.type_ == CWLType::Directory {
-            format!("$(inputs.{}.path)", input.id)
+        if input.r#type == CWLType::File.into() || input.r#type == CWLType::Directory.into() {
+            format!("$(inputs.{}.path)", input.id.as_ref().unwrap())
         } else {
-            format!("$(inputs.{})", input.id)
+            format!("$(inputs.{})", input.id.as_ref().unwrap())
         }
     }
 
@@ -109,10 +110,10 @@ fn post_process_variables(tool: &mut CommandLineTool) {
 
     for output in &mut tool.outputs {
         if let Some(binding) = &mut output.output_binding
-            && matches!(binding.glob, Some(SingularPlural::Singular(ref s)) if s == ".")
+            && matches!(binding.glob, Some(OneOrMany::One(ref s)) if s == ".")
         {
             output.id = Some("output_directory".to_string());
-            binding.glob = Some(SingularPlural::Singular("$(runtime.outdir)".to_string()));
+            binding.glob = Some(OneOrMany::One("$(runtime.outdir)".to_string()));
         }
     }
 

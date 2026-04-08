@@ -1,8 +1,12 @@
+use std::path::Path;
+
 use super::BAD_WORDS;
 use commonwl::{
-    IntegerOrExpression,
-    files::{Directory, File, FileOrDirectory},
+    IntegerOrExpression, OneOrMany,
+    documents::CommandLineTool,
+    files::{Directory, Dirent, File, FileOrDirectory},
     inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
+    requirements::{Include, ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
     types::CWLType,
 };
 use rand::{Rng, distr::Alphanumeric};
@@ -112,10 +116,29 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
 
         //todo: add requiement for directory also or add new --mount param and remove block from here
         if matches!(type_, CWLType::File) {
-            for item in &mut tool.requirements {
-                if let Requirement::InitialWorkDirRequirement(req) = item {
-                    req.add_files(inputs);
-                    break;
+            if let Some(requirements) = &mut tool.requirements {
+                for item in requirements {
+                    if let ToolRequirements::InitialWorkDirRequirement(req) = item {
+                        let dirent = Dirent::builder()
+                            .entry(StringOrInclude::Include(Include {
+                                include: get_entry_name(input),
+                            }))
+                            .entryname(input)
+                            .build();
+                        match &mut req.listing {
+                            WorkDirItems::Expression(expr) => {
+                                req.listing = WorkDirItems::ListingItems(Box::new(OneOrMany::Many(vec![
+                                    ListingItems::Dirent(dirent),
+                                    ListingItems::Expression(expr.to_string()),
+                                ])))
+                            }
+                            WorkDirItems::ListingItems(items) => match &mut **items {
+                                OneOrMany::One(item) => *items = Box::new(OneOrMany::Many(vec![item.clone(), ListingItems::Dirent(dirent)])),
+                                OneOrMany::Many(items) => items.push(ListingItems::Dirent(dirent)),
+                            },
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -134,11 +157,50 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
     Ok(())
 }
 
+fn get_entry_name(input: &str) -> String {
+    let i = input
+        .trim_start_matches(|c: char| !c.is_alphabetic())
+        .to_string()
+        .replace(['.', '/'], "_");
+    format!("$(inputs.{})", i.to_lowercase()).to_string()
+}
+
+/// Tries to guess the CWLType of a given value
+pub fn guess_type(value: &str) -> CWLType {
+    let path = Path::new(value);
+    if path.exists() {
+        if path.is_file() {
+            return CWLType::File;
+        }
+        if path.is_dir() {
+            return CWLType::Directory;
+        }
+    }
+    if value.starts_with("http://") || value.starts_with("https://") {
+        return CWLType::File;
+    }
+
+    //we do not have to check for files that do not exist yet, as CWLTool would run into a failure
+    let yaml_value: Value = serde_yaml::from_str(value).unwrap();
+    match yaml_value {
+        Value::Null => CWLType::Null,
+        Value::Bool(_) => CWLType::Boolean,
+        Value::Number(number) => {
+            if number.is_f64() {
+                CWLType::Float
+            } else {
+                CWLType::Int
+            }
+        }
+        Value::String(_) => CWLType::String,
+        _ => CWLType::String,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use serde_yaml::Number;
-
     use super::*;
+    use serde_yaml::Number;
 
     #[test]
     pub fn test_get_inputs() {
@@ -211,5 +273,23 @@ mod tests {
             .build();
         let result = get_inputs(&[arg]);
         assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    pub fn test_guess_type() {
+        let inputs = &[
+            ("../../README.md", CWLType::File),
+            ("/some/path/that/does/not/exist.txt", CWLType::String),
+            ("src/", CWLType::Directory),
+            ("--option", CWLType::String),
+            ("2", CWLType::Int),
+            ("1.5", CWLType::Float),
+            ("https://some_url", CWLType::File), //urls are files!
+        ];
+
+        for input in inputs {
+            let t = guess_type(input.0);
+            assert_eq!(t, input.1);
+        }
     }
 }

@@ -2,6 +2,7 @@ use crate::io::get_filename_without_extension;
 use commonwl::{
     OneOrMany,
     outputs::{CommandOutputBinding, CommandOutputParameter},
+    types::CWLType,
 };
 use std::path::Path;
 

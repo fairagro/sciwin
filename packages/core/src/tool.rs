@@ -5,10 +5,20 @@ use crate::{
 };
 use anyhow::{Result, anyhow};
 use commonwl::{
-    documents::CommandLineTool,
+    BoolOrExpression, OneOrMany,
+    documents::{CWLDocument, CommandLineTool},
+    engine::{ContainerEngine, InputObject, LocalBackend, create_execution_request_from_document, execute_commandline_tool},
+    files::{Directory, FileOrDirectory},
     format::format_cwl,
-    requirements::{EnvVarRequirement, EnvironmentDef, ToolRequirements},
+    inputs::DefaultValue,
+    outputs::{CommandOutputBinding, CommandOutputParameter},
+    requirements::{
+        DockerRequirement, EnvVarRequirement, EnvironmentDef, Include, InitialWorkDirRequirement, ListingItems, NetworkAccess, StringOrInclude,
+        ToolRequirements, WorkDirItems,
+    },
+    types::CWLType,
 };
+use cwl_engine_storage::{StorageBackend, StoragePath};
 use repository::{self, Repository};
 use std::{
     collections::HashMap,
@@ -16,7 +26,9 @@ use std::{
     fs::{self, remove_file},
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
+    sync::Arc,
 };
+use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub struct ContainerInfo<'a> {
@@ -51,7 +63,7 @@ pub fn create_tool(options: &ToolCreationOptions, name: Option<String>, save: bo
         //if run_container is some requirements are already set in create_tool_base()
         //just the docker requirements needs to be altered in case of sif file
         if let Some(reqs) = &mut cwl.requirements {
-            reqs.retain(|req| !matches!(req, Requirement::DockerRequirement(_)));
+            reqs.retain(|req| !matches!(req, ToolRequirements::DockerRequirement(_)));
         }
 
         let mut modified_container = container.clone();
@@ -59,7 +71,7 @@ pub fn create_tool(options: &ToolCreationOptions, name: Option<String>, save: bo
         cwl = append_container_requirement(cwl, Some(&modified_container));
     }
     // Finalize CWL
-    let path = io::get_qualified_filename(&cwl.base_command.unwrap(), name);
+    let path = io::get_qualified_filename(&cwl.base_command.as_ref().unwrap(), name);
     let yaml = finalize_tool(&mut cwl, &path)?;
 
     if save {
@@ -71,7 +83,9 @@ pub fn create_tool(options: &ToolCreationOptions, name: Option<String>, save: bo
 }
 
 fn save_tool_to_disk(yaml: &str, path: &String, repo: &Repository, commit: bool) -> Result<()> {
-    match create_and_write_file(path, yaml) {
+    let parent = Path::new(path).parent().unwrap();
+    fs::create_dir_all(parent).map_err(|e| anyhow::anyhow!("Failed to create directories for {parent:?}: {e}"))?;
+    match fs::write(path, yaml) {
         Ok(()) => {
             if commit {
                 repository::stage_file(repo, path)?;
@@ -91,7 +105,6 @@ fn create_tool_base(options: &ToolCreationOptions) -> Result<CommandLineTool> {
     let cleanup: bool = options.cleanup;
     let commit: bool = options.commit;
     let clear_defaults: bool = options.clear_defaults;
-    let env: Option<&Path> = options.env;
     let run_container = options.run_container;
 
     let command = command.iter().map(String::as_str).collect::<Vec<_>>();
@@ -114,26 +127,31 @@ fn create_tool_base(options: &ToolCreationOptions) -> Result<CommandLineTool> {
     }
 
     if !no_run {
-        let mut environment = RuntimeEnvironment::default();
-        if let Some(env_file) = env {
-            environment = environment.with_environment(read_env(env_file)?);
-        }
+        let storage = Arc::new(StorageBackend::new());
+        let backend = Arc::new(LocalBackend::new(
+            run_container.unwrap_or(ContainerEngine::Docker),
+            storage,
+            StoragePath::from_local(Path::new("/tmp")),
+        ));
 
-        if let Some(engine) = &run_container {
-            match engine {
-                ContainerEngine::Singularity | ContainerEngine::Apptainer => {
-                    set_container_engine(ContainerEngine::Singularity);
-                }
-                _ => {
-                    set_container_engine(*engine);
-                }
-            }
-            cwl = add_tool_requirements(cwl, options.container.as_ref(), options.enable_network, options.mounts, options.env)?;
-            command::run_command(&cwl, &mut environment).map_err(|e| anyhow::anyhow!("Failed to run tool: {e}"))?;
-        } else {
-            command::run_command(&cwl, &mut environment)
-                .map_err(|e| anyhow::anyhow!("Could not execute command: `{}`: {}!", command.join(" "), e))?;
-        }
+        cwl = add_tool_requirements(cwl, options.container.as_ref(), options.enable_network, options.mounts, options.env)?;
+        cwl.outputs.push(
+            CommandOutputParameter::builder()
+                .id("all")
+                .output_binding(CommandOutputBinding::builder().glob(commonwl::OneOrMany::One("*".to_string())).build())
+                .r#type(CWLType::Directory)
+                .build(),
+        );
+
+        let job = create_execution_request_from_document(
+            CWLDocument::CommandLineTool(cwl.clone()),
+            InputObject::default(),
+            env::current_dir().unwrap(),
+            Some(&env::current_dir().unwrap()),
+            None,
+        )?;
+        let cancellation_token = CancellationToken::new();
+        tokio::runtime::Handle::current().block_on(execute_commandline_tool(backend, &job, cancellation_token))?;
 
         // Handle modified files
         let mut files = repository::get_modified_files(&repo);
@@ -188,7 +206,12 @@ fn add_tool_requirements(
     cwl = append_container_requirement(cwl, container);
 
     if enable_network {
-        append_requirement(&mut cwl, ToolRequirements::NetworkAccess(NetworkAccess { network_access: true }));
+        append_requirement(
+            &mut cwl,
+            ToolRequirements::NetworkAccess(NetworkAccess {
+                network_access: BoolOrExpression::Bool(true),
+            }),
+        );
     }
 
     if let Some(env) = env {
@@ -210,7 +233,9 @@ fn add_tool_requirements(
     if !mounts.is_empty() {
         let entries = mounts.iter().filter_map(|m| {
             if m.is_dir() {
-                Some(WorkDirItem::FileOrDirectory(Box::new(DefaultValue::Directory(Directory::from_path(m)))))
+                Some(FileOrDirectory::Directory(
+                    Directory::builder().location(m.to_string_lossy().into_owned()).build(),
+                ))
             } else {
                 eprintln!("{} is not a directory and has been skipped!", m.display());
                 None
@@ -218,24 +243,46 @@ fn add_tool_requirements(
         });
 
         if let Some(iwdr) = cwl.get_requirement_mut::<InitialWorkDirRequirement>() {
-            iwdr.listing.extend(entries);
+            match &mut iwdr.listing {
+                WorkDirItems::Expression(s) => {
+                    let mut items: Vec<ListingItems> = entries.map(ListingItems::FileOrDirectory).collect();
+                    items.push(ListingItems::Expression(s.clone()));
+                    iwdr.listing = WorkDirItems::ListingItems(Box::new(commonwl::OneOrMany::Many(items)));
+                }
+                WorkDirItems::ListingItems(one_or_many) => match &mut **one_or_many {
+                    OneOrMany::One(item) => {
+                        *one_or_many = Box::new(OneOrMany::Many(
+                            vec![item.clone()].into_iter().chain(entries.map(ListingItems::FileOrDirectory)).collect(),
+                        ))
+                    }
+                    OneOrMany::Many(items) => items.extend(entries.map(ListingItems::FileOrDirectory)),
+                },
+            }
         } else {
-            let iwdr = InitialWorkDirRequirement { listing: entries.collect() };
-            if !iwdr.listing.is_empty() {
-                append_requirement(&mut cwl, Requirement::InitialWorkDirRequirement(iwdr));
+            let items: Vec<ListingItems> = entries.map(ListingItems::FileOrDirectory).collect();
+            if !items.is_empty() {
+                let iwdr = InitialWorkDirRequirement {
+                    listing: WorkDirItems::ListingItems(Box::new(OneOrMany::Many(items))),
+                };
+                append_requirement(&mut cwl, ToolRequirements::InitialWorkDirRequirement(iwdr));
             }
         }
     }
     Ok(cwl)
 }
 
-fn append_container_requirement(cwl: CommandLineTool, container: Option<&ContainerInfo>) -> CommandLineTool {
+fn append_container_requirement(mut cwl: CommandLineTool, container: Option<&ContainerInfo>) -> CommandLineTool {
     if let Some(container) = &container {
         let requirement = if container.image.contains("Dockerfile") {
             let image_id = container.tag.unwrap_or("sciwin-container");
-            Requirement::DockerRequirement(DockerRequirement::from_file(container.image, image_id))
+            ToolRequirements::DockerRequirement(
+                DockerRequirement::builder()
+                    .docker_file(StringOrInclude::Include(Include::builder().include(container.image.to_owned()).build()))
+                    .docker_image_id(image_id)
+                    .build(),
+            )
         } else {
-            Requirement::DockerRequirement(DockerRequirement::from_pull(container.image))
+            ToolRequirements::DockerRequirement(DockerRequirement::builder().docker_pull(container.image).build())
         };
 
         append_requirement(&mut cwl, requirement)
@@ -253,25 +300,40 @@ fn finalize_tool(cwl: &mut CommandLineTool, path: &str) -> Result<String> {
 fn prepare_save(tool: &mut CommandLineTool, path: &str) -> Result<String, serde_yaml::Error> {
     //rewire paths to new location
     for input in &mut tool.inputs {
-        if let Some(DefaultValue::File(value)) = &mut input.default {
-            value.location = Some(resolve_path(value.get_location(), path));
+        if let Some(DefaultValue::FileOrDirectory(FileOrDirectory::File(value))) = &mut input.default {
+            value.location = Some(resolve_path(value.location.as_ref().unwrap(), path));
         }
-        if let Some(DefaultValue::Directory(value)) = &mut input.default {
-            value.location = Some(resolve_path(value.get_location(), path));
+        if let Some(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(value))) = &mut input.default {
+            value.location = Some(resolve_path(value.location.as_ref().unwrap(), path));
         }
     }
 
-    for requirement in &mut tool.requirements {
-        if let Requirement::DockerRequirement(docker) = requirement {
-            if let Some(Entry::Include(include)) = &mut docker.docker_file {
-                include.include = resolve_path(&include.include, path);
-            }
-        } else if let Requirement::InitialWorkDirRequirement(iwdr) = requirement {
-            for listing in &mut iwdr.listing {
-                if let WorkDirItem::Dirent(dirent) = listing
-                    && let Entry::Include(include) = &mut dirent.entry
-                {
+    if let Some(requirements) = &mut tool.requirements {
+        for requirement in requirements {
+            if let ToolRequirements::DockerRequirement(docker) = requirement {
+                if let Some(StringOrInclude::Include(include)) = &mut docker.docker_file {
                     include.include = resolve_path(&include.include, path);
+                }
+            } else if let ToolRequirements::InitialWorkDirRequirement(iwdr) = requirement {
+                if let WorkDirItems::ListingItems(listing) = &mut iwdr.listing {
+                    match &mut **listing {
+                        OneOrMany::One(item) => {
+                            if let ListingItems::Dirent(dirent) = item
+                                && let StringOrInclude::Include(include) = &mut dirent.entry
+                            {
+                                include.include = resolve_path(&include.include, path);
+                            }
+                        }
+                        OneOrMany::Many(items) => {
+                            for item in items {
+                                if let ListingItems::Dirent(dirent) = item
+                                    && let StringOrInclude::Include(include) = &mut dirent.entry
+                                {
+                                    include.include = resolve_path(&include.include, path);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -299,7 +361,8 @@ mod tests {
         OneOrMany,
         files::{Dirent, File, FileOrDirectory},
         inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
-        requirements::{DockerRequirement, InitialWorkDirRequirement, StringOrInclude, WorkDirItems},
+        requirements::{DockerRequirement, Include, InitialWorkDirRequirement, ListingItems, StringOrInclude, WorkDirItems},
+        types::CWLType,
     };
     use serde_yaml::Value;
     use test_utils::os_path;
@@ -312,12 +375,12 @@ mod tests {
                 .default(DefaultValue::FileOrDirectory(FileOrDirectory::File(
                     File::builder().location("testdata/input.txt").build(),
                 )))
-                .r#type(CWLType::String.into())
+                .r#type(CWLType::String)
                 .input_binding(CommandLineBinding::builder().position(0).build())
                 .build(),
             CommandInputParameter::builder()
                 .id("option1")
-                .r#type(CWLType::String.into())
+                .r#type(CWLType::String)
                 .input_binding(CommandLineBinding::builder().prefix("--option1").build())
                 .default(DefaultValue::Any(Value::String("value1".to_string())))
                 .build(),
@@ -329,7 +392,7 @@ mod tests {
                 ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement {
                     listing: WorkDirItems::ListingItems(Box::new(OneOrMany::One(ListingItems::Dirent(
                         Dirent::builder()
-                            .entry(StringOrInclude::Include(Include::builder().include(&os_path("test/script.py")).build()))
+                            .entry(StringOrInclude::Include(Include::builder().include(os_path("test/script.py")).build()))
                             .entryname("test/script.py".to_string())
                             .build(),
                     )))),
@@ -337,11 +400,9 @@ mod tests {
                 ToolRequirements::DockerRequirement(
                     DockerRequirement::builder()
                         .docker_file(StringOrInclude::Include(
-                            Include::builder()
-                                .include(&os_path("test/data/Dockerfile"))
-                                .docker_image_id("test")
-                                .build(),
+                            Include::builder().include(os_path("test/data/Dockerfile")).build(),
                         ))
+                        .docker_image_id("test")
                         .build(),
                 ),
             ])
@@ -366,7 +427,7 @@ mod tests {
                 listing: WorkDirItems::ListingItems(Box::new(OneOrMany::One(ListingItems::Dirent(
                     Dirent::builder()
                         .entry(StringOrInclude::Include(
-                            Include::builder().include(&os_path("../../test/script.py")).build()
+                            Include::builder().include(os_path("../../test/script.py")).build()
                         ))
                         .entryname("test/script.py".to_string())
                         .build()
@@ -378,7 +439,7 @@ mod tests {
             ToolRequirements::DockerRequirement(
                 DockerRequirement::builder()
                     .docker_file(StringOrInclude::Include(
-                        Include::builder().include(&os_path("../../test/data/Dockerfile")).build()
+                        Include::builder().include(os_path("../../test/data/Dockerfile")).build()
                     ))
                     .docker_image_id("test".to_string())
                     .build()

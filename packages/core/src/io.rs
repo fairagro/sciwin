@@ -1,6 +1,6 @@
 use crate::parser::{SCRIPT_EXECUTORS, SCRIPT_MODIFIERS};
-use std::path::Path;
 use commonwl::OneOrMany;
+use std::path::Path;
 use util::is_cwl_file;
 
 pub fn get_workflows_folder() -> String {
@@ -98,16 +98,16 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Command::Multiple(vec!["python".to_string(), "test/data/script.py".to_string()]), "workflows/script/script.cwl")]
-    #[case(Command::Single("echo".to_string()), "workflows/echo/echo.cwl")]
-    fn test_get_qualified_filename(#[case] command: Command, #[case] expected: &str) {
+    #[case(OneOrMany::Many(vec!["python".to_string(), "test/data/script.py".to_string()]), "workflows/script/script.cwl")]
+    #[case(OneOrMany::One("echo".to_string()), "workflows/echo/echo.cwl")]
+    fn test_get_qualified_filename(#[case] command: OneOrMany<String>, #[case] expected: &str) {
         assert_eq!(get_qualified_filename(&command, None), expected);
     }
 
     #[test]
     fn test_get_qualified_filename_with_name() {
         assert_eq!(
-            get_qualified_filename(&Command::Single("echo".to_string()), Some("hello".to_string())),
+            get_qualified_filename(&OneOrMany::One("echo".to_string()), Some("hello".to_string())),
             "workflows/hello/hello.cwl"
         );
     }
