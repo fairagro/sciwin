@@ -21,8 +21,12 @@ pub(crate) fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRe
 
 pub fn default_to_string(default: &DefaultValue) -> String {
     match default {
-        DefaultValue::FileOrDirectory(FileOrDirectory::File(f)) => f.path.clone().unwrap(),
-        DefaultValue::FileOrDirectory(FileOrDirectory::Directory(d)) => d.path.clone().unwrap(),
+        DefaultValue::FileOrDirectory(FileOrDirectory::File(f)) => {
+            f.location.clone().unwrap_or(f.path.clone().unwrap())
+        }
+        DefaultValue::FileOrDirectory(FileOrDirectory::Directory(d)) => {
+            d.location.clone().unwrap_or(d.path.clone().unwrap())
+        }
         DefaultValue::Any(value) => value.as_str().unwrap_or_default().to_string(), //??
     }
 }

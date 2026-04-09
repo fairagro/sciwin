@@ -14,7 +14,10 @@ use commonwl::{
     files::{Directory, FileOrDirectory},
     format::format_cwl,
     inputs::DefaultValue,
-    outputs::{CommandOutputBinding, CommandOutputParameter},
+    outputs::{
+        CommandOutputArraySchema, CommandOutputBinding, CommandOutputParameter,
+        CommandOutputSchema, CommandOutputType,
+    },
     requirements::{
         DockerRequirement, EnvVarRequirement, EnvironmentDef, Include, InitialWorkDirRequirement,
         ListingItems, NetworkAccess, StringOrInclude, ToolRequirements, WorkDirItems,
@@ -160,13 +163,23 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
         )?;
         cwl.outputs.push(
             CommandOutputParameter::builder()
-                .id("all")
+                .id("catch_all")
                 .output_binding(
                     CommandOutputBinding::builder()
                         .glob(commonwl::OneOrMany::One("*".to_string()))
                         .build(),
                 )
-                .r#type(CWLType::Directory)
+                .r#type(CommandOutputType::CommandOutputSchema(Box::new(
+                    CommandOutputSchema::Array(
+                        CommandOutputArraySchema::builder()
+                            .items(OneOrMany::Many(vec![
+                                CommandOutputType::CWLType(CWLType::Null),
+                                CommandOutputType::CWLType(CWLType::File),
+                                CommandOutputType::CWLType(CWLType::Directory),
+                            ]))
+                            .build(),
+                    ),
+                )))
                 .build(),
         );
 

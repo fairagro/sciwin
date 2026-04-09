@@ -1586,7 +1586,7 @@ dependencies = [
 [[package]]
 name = "commonwl"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#c95c0c6fb938e08b0bcdeec19586cad25abe4215"
+source = "git+https://github.com/fairagro/commonwl?branch=main#9fe2d08902125079a252de5a9f6a17251b1ffc0e"
 dependencies = [
  "cwl_core 0.1.2",
  "cwl_engine",
@@ -1604,7 +1604,7 @@ dependencies = [
 [[package]]
 name = "commonwl_salad"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#c95c0c6fb938e08b0bcdeec19586cad25abe4215"
+source = "git+https://github.com/fairagro/commonwl?branch=main#9fe2d08902125079a252de5a9f6a17251b1ffc0e"
 dependencies = [
  "commonwl_salad_derive",
  "serde",
@@ -1614,7 +1614,7 @@ dependencies = [
 [[package]]
 name = "commonwl_salad_derive"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#c95c0c6fb938e08b0bcdeec19586cad25abe4215"
+source = "git+https://github.com/fairagro/commonwl?branch=main#9fe2d08902125079a252de5a9f6a17251b1ffc0e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2227,7 +2227,7 @@ dependencies = [
 [[package]]
 name = "cwl_core"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#c95c0c6fb938e08b0bcdeec19586cad25abe4215"
+source = "git+https://github.com/fairagro/commonwl?branch=main#9fe2d08902125079a252de5a9f6a17251b1ffc0e"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -2256,7 +2256,7 @@ dependencies = [
 [[package]]
 name = "cwl_engine"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#c95c0c6fb938e08b0bcdeec19586cad25abe4215"
+source = "git+https://github.com/fairagro/commonwl?branch=main#9fe2d08902125079a252de5a9f6a17251b1ffc0e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2296,7 +2296,7 @@ dependencies = [
 [[package]]
 name = "cwl_engine_storage"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#c95c0c6fb938e08b0bcdeec19586cad25abe4215"
+source = "git+https://github.com/fairagro/commonwl?branch=main#9fe2d08902125079a252de5a9f6a17251b1ffc0e"
 dependencies = [
  "anyhow",
  "async-trait",
