@@ -4,7 +4,7 @@ use std::{fs, path::Path};
 mod inputs;
 mod outputs;
 mod postprocess;
-pub(crate) use inputs::*;
+pub use inputs::*;
 pub(crate) use outputs::*;
 pub(crate) use postprocess::post_process_cwl;
 

@@ -7876,6 +7876,7 @@ dependencies = [
  "clap_complete",
  "colored",
  "commonwl 0.1.2",
+ "cwl_engine_storage",
  "dialoguer",
  "fstest",
  "ignore",
@@ -7885,6 +7886,7 @@ dependencies = [
  "repository",
  "reqwest 0.13.2",
  "s4n_core",
+ "serde_json",
  "serde_yaml",
  "serial_test",
  "shlex",
@@ -7893,6 +7895,7 @@ dependencies = [
  "tempfile",
  "test_utils",
  "tokio",
+ "tokio-util",
  "util",
 ]
 

@@ -179,7 +179,7 @@ fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
         };
 
         table.add_row(Row::new(vec![
-            Cell::new(&input.id.as_ref().unwrap()),
+            Cell::new(input.id.as_ref().unwrap()),
             Cell::new(&format!("{:?}", input.r#type)),
             Cell::new(&binding),
             Cell::new(
