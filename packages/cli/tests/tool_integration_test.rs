@@ -292,7 +292,6 @@ pub async fn tool_create_test_container_image() {
     let cwl_file = Path::new("workflows/echo/echo.cwl");
     let cwl_contents = read_to_string(cwl_file).expect("Could not read CWL File");
     let cwl: CommandLineTool = serde_yaml::from_str(&cwl_contents).expect("Could not convert CWL");
-
     assert_eq!(cwl.requirements.as_ref().unwrap().len(), 2);
 
     let Some(dr) = cwl.get_requirement::<DockerRequirement>() else {

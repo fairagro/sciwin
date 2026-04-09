@@ -1,4 +1,8 @@
-use commonwl::{IntegerOrExpression, OneOrMany, documents::{Argument, CommandLineTool}, files::{Directory, Dirent, FileOrDirectory}, inputs::{CommandInputParameter, CommandLineBinding, DefaultValue}, requirements::{Include, InitialWorkDirRequirement, ListingItems, ShellCommandRequirement, StringOrInclude, ToolRequirements, WorkDirItems}, types::CWLType};
+use commonwl::{IntegerOrExpression, OneOrMany, documents::{Argument, CommandLineTool}, 
+    files::{Directory, Dirent, FileOrDirectory}, 
+    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue}, 
+    requirements::{Include, InitialWorkDirRequirement, ListingItems, ShellCommandRequirement, StringOrInclude, ToolRequirements, WorkDirItems}, 
+    types::CWLType};
 use std::{fs, path::Path};
 
 mod inputs;

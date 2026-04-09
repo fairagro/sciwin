@@ -154,14 +154,17 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
             StoragePath::from_local(Path::new("/tmp")),
         ));
 
-        cwl = add_tool_requirements(
-            cwl,
-            options.container.as_ref(),
-            options.enable_network,
-            options.mounts,
-            options.env,
-        )?;
-        cwl.outputs.push(
+        if run_container.is_some() {
+            cwl = add_tool_requirements(
+                cwl,
+                options.container.as_ref(),
+                options.enable_network,
+                options.mounts,
+                options.env,
+            )?;
+        }
+        let mut clone_cwl = cwl.clone();
+        clone_cwl.outputs.push(
             CommandOutputParameter::builder()
                 .id("catch_all")
                 .output_binding(
@@ -184,7 +187,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
         );
 
         let job = create_execution_request_from_document(
-            CWLDocument::CommandLineTool(cwl.clone()),
+            CWLDocument::CommandLineTool(clone_cwl),
             InputObject::default(),
             env::current_dir().unwrap(),
             Some(&env::current_dir().unwrap()),
