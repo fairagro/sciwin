@@ -2,7 +2,7 @@ use clap::Args;
 use colored::Colorize;
 use commonwl::{
     Identifiable, docstring,
-    documents::{CWLDocument, CommandLineTool, ExpressionTool, Workflow},
+    documents::{CWLDocument, CommandLineTool, ExpressionTool, StringOrDocument, Workflow},
     load_cwl_file,
     requirements::DockerRequirement,
 };
@@ -105,11 +105,11 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
                 let file_path = entry.path();
                 let folder = entry.path().parent().unwrap_or_else(|| Path::new("."));
                 // Parse content
-                if let Ok(doc) = load_doc(file_path) {
+                if let Ok(doc) = load_cwl_file(file_path, true) {
                     if detailed {
                         // Extract inputs
-                        for input in &doc.inputs {
-                            inputs_list.push(format!("{tool_name}/{}", input.id));
+                        for input in &doc.get_inputs() {
+                            inputs_list.push(format!("{tool_name}/{}", input.id.as_ref().unwrap()));
                         }
                         // Extract outputs
                         for id in doc.get_output_ids() {
@@ -118,7 +118,7 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
 
                         // add row to the table
                         table.add_row(Row::new(vec![
-                            Cell::new(&format!("{} ({})", tool_name, doc.class)).style_spec("bFg"),
+                            Cell::new(&format!("{} ({})", tool_name, doc.get_class())).style_spec("bFg"),
                             Cell::new(&inputs_list.join(", ")),
                             Cell::new(&outputs_list.join(", ")),
                         ]));
@@ -127,7 +127,7 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
                         info!(
                             "📄 {} ({}) in {}",
                             tool_name.green().bold(),
-                            doc.class,
+                            doc.get_class(),
                             folder.to_string_lossy()
                         );
                     }
@@ -342,12 +342,16 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
         .inputs
         .iter()
         .map(|input| {
-            if wf.has_step_input(&input.id) {
-                format!("✅    {}", input.id)
+            if wf
+                .steps
+                .iter()
+                .any(|step| step.r#in.iter().any(|i| i.id == input.id))
+            {
+                format!("✅    {}", input.id.as_ref().unwrap())
             } else if input.default.is_some() {
-                format!("🔘    {}", input.id)
+                format!("🔘    {}", input.id.as_ref().unwrap())
             } else {
-                format!("❌    {}", input.id)
+                format!("❌    {}", input.id.as_ref().unwrap())
             }
         })
         .collect::<Vec<_>>()
@@ -358,10 +362,29 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
         .outputs
         .iter()
         .map(|output| {
-            if wf.has_step_output(&output.output_source.clone().unwrap_or_default()) {
-                format!("✅    {}", output.id)
+            let is_used = output
+                .output_source
+                .as_ref()
+                .into_iter()
+                .flat_map(|sources| sources.as_many())
+                .any(|src| {
+                    wf.steps.iter().any(|step| {
+                        let step_id = match &step.id {
+                            Some(id) => id,
+                            None => return false,
+                        };
+
+                        step.out.iter().any(|o| {
+                            let full = format!("{}/{}", step_id, o.id());
+                            full == src
+                        })
+                    })
+                });
+
+            if is_used {
+                format!("✅    {}", output.id.as_deref().unwrap_or("<no id>"))
             } else {
-                format!("❌    {}", output.id)
+                format!("❌    {}", output.id.as_deref().unwrap_or("<no id>"))
             }
         })
         .collect::<Vec<_>>()
@@ -372,8 +395,19 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
 
     for step in &wf.steps {
         let tool = match &step.run {
-            StringOrDocument::String(run) => load_tool(path.join(run))
-                .map_err(|e| anyhow::anyhow!("Could not load tool {:?}: {e}", path.join(run)))?,
+            StringOrDocument::String(run) => {
+                let CWLDocument::CommandLineTool(tool) = load_cwl_file(path.join(run), true)
+                    .map_err(|e| {
+                        anyhow::anyhow!("Could not load tool {:?}: {e}", path.join(run))
+                    })?
+                else {
+                    anyhow::bail!(
+                        "Expected CommandLineTool, but got something else for step {}",
+                        step.id.as_deref().unwrap_or("<no id>")
+                    );
+                };
+                tool
+            }
             StringOrDocument::Document(boxed_doc) => match &**boxed_doc {
                 CWLDocument::CommandLineTool(doc) => doc.clone(),
                 _ => unreachable!(), //see #95
@@ -383,12 +417,12 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
             .inputs
             .iter()
             .map(|input| {
-                if step.in_.iter().any(|i| i.id == input.id) {
-                    format!("✅    {}", input.id)
+                if step.r#in.iter().any(|i| i.id == input.id) {
+                    format!("✅    {}", input.id.as_ref().unwrap())
                 } else if input.default.is_some() {
-                    format!("🔘    {}", input.id)
+                    format!("🔘    {}", input.id.as_ref().unwrap())
                 } else {
-                    format!("❌    {}", input.id)
+                    format!("❌    {}", input.id.as_ref().unwrap())
                 }
             })
             .collect::<Vec<_>>()
@@ -398,19 +432,30 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
             .outputs
             .iter()
             .map(|output| {
-                if wf.steps.iter().any(|s| {
-                    s.in_
-                        .clone()
-                        .iter()
-                        .any(|v| v.source == Some(format!("{}/{}", step.id, output.id)))
-                }) || wf
-                    .outputs
-                    .iter()
-                    .any(|o| o.output_source == Some(format!("{}/{}", step.id, output.id)))
-                {
-                    format!("✅    {}", output.id)
+                let target = format!("{}/{}", step.id.as_ref().unwrap(), output.id.as_ref().unwrap());
+
+                let used_in_steps = wf.steps.iter().any(|s| {
+                    s.r#in.iter().any(|v| {
+                        v.source
+                            .as_ref()
+                            .into_iter()
+                            .flat_map(|s| s.as_many())
+                            .any(|src| src == target)
+                    })
+                });
+
+                let used_in_outputs = wf.outputs.iter().any(|o| {
+                    o.output_source
+                        .as_ref()
+                        .into_iter()
+                        .flat_map(|s| s.as_many())
+                        .any(|src| src == target)
+                });
+
+                if used_in_steps || used_in_outputs {
+                    format!("✅    {}", output.id.as_ref().unwrap())
                 } else {
-                    format!("❌    {}", output.id)
+                    format!("❌    {}", output.id.as_ref().unwrap())
                 }
             })
             .collect::<Vec<_>>()

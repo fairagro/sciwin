@@ -1,4 +1,4 @@
-use commonwl::documents::Workflow;
+use commonwl::documents::{CWLDocument, Workflow};
 use dialoguer::{Select, theme::ColorfulTheme};
 use log::info;
 use repository::Repository;

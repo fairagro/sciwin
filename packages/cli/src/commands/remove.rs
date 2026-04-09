@@ -1,6 +1,7 @@
 use crate::cwl::resolve_filename;
 use clap::Args;
 use commonwl::documents::CWLDocument;
+use commonwl::documents::Workflow;
 use commonwl::load_cwl_file;
 use dialoguer::Confirm;
 use ignore::WalkBuilder;
