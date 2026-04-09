@@ -1,10 +1,11 @@
 use crate::cwl::resolve_filename;
 use clap::Args;
-use commonwl::{Workflow, load_workflow};
+use commonwl::documents::CWLDocument;
+use commonwl::load_cwl_file;
 use dialoguer::Confirm;
-use repository::Repository;
 use ignore::WalkBuilder;
 use log::{info, warn};
+use repository::Repository;
 use repository::commit;
 use std::{env, fs, path::Path};
 
@@ -17,7 +18,8 @@ pub fn handle_remove_command(args: &RemoveCWLArgs) -> anyhow::Result<()> {
     let filename = if Path::new(&args.file).exists() {
         args.file.to_string()
     } else {
-        resolve_filename(&args.file).map_err(|e| anyhow::anyhow!("Could not resolve CWL File: {}", e))?
+        resolve_filename(&args.file)
+            .map_err(|e| anyhow::anyhow!("Could not resolve CWL File: {}", e))?
     };
     remove_cwl_file(&filename)
 }
@@ -29,7 +31,10 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> anyhow::Result<()> {
 
     if filename.exists() && filename.is_file() && filename.extension().is_some_and(|e| e == "cwl") {
         let folder = filename.parent().expect("Can not get parent dir");
-        let tool_name = filename.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        let tool_name = filename
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
         let workflows = check_tool_usage_in_workflows(&cwd, tool_name)?;
         if !workflows.is_empty() {
             warn!("Tool '{tool_name}' is used in the following workflows:");
@@ -56,12 +61,21 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> anyhow::Result<()> {
         commit(&repo, &message)?;
         Ok(())
     } else {
-        warn!("File {} does not exist or is not a CWL file.", filename.display());
-        anyhow::bail!("File does not exist or is not a CWL file: {}", filename.display());
+        warn!(
+            "File {} does not exist or is not a CWL file.",
+            filename.display()
+        );
+        anyhow::bail!(
+            "File does not exist or is not a CWL file: {}",
+            filename.display()
+        );
     }
 }
 
-pub fn check_tool_usage_in_workflows(cwd: impl AsRef<Path>, tool: &str) -> anyhow::Result<Vec<String>> {
+pub fn check_tool_usage_in_workflows(
+    cwd: impl AsRef<Path>,
+    tool: &str,
+) -> anyhow::Result<Vec<String>> {
     let mut workflows = Vec::new();
     let tool_name = tool.strip_suffix(".cwl").unwrap_or(tool);
     for entry in WalkBuilder::new(cwd)
@@ -75,12 +89,20 @@ pub fn check_tool_usage_in_workflows(cwd: impl AsRef<Path>, tool: &str) -> anyho
     {
         let path = entry.path();
         if path.extension().is_some_and(|ext| ext == "cwl") {
-            let workflow: Workflow = match load_workflow(path) {
-                Ok(wf) => wf,
-                Err(_) => continue,
+            let workflow: Workflow = match load_cwl_file(path, true) {
+                Ok(CWLDocument::Workflow(wf)) => wf,
+                _ => continue,
             };
-            if workflow.steps.iter().any(|step| step.id == tool_name) {
-                workflows.push(format!("{} ({})", entry.file_name().to_string_lossy(), path.display(),));
+            if workflow
+                .steps
+                .iter()
+                .any(|step| step.id == Some(tool_name.to_string()))
+            {
+                workflows.push(format!(
+                    "{} ({})",
+                    entry.file_name().to_string_lossy(),
+                    path.display(),
+                ));
             }
         }
     }

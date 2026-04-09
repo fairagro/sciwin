@@ -1586,7 +1586,7 @@ dependencies = [
 [[package]]
 name = "commonwl"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#828a5720b72e86d944f7cd62c3f7437a7d3e1a23"
+source = "git+https://github.com/fairagro/commonwl?branch=main#472d890f26a87a9db9638a72d98dde4d2c8b7f31"
 dependencies = [
  "cwl_core 0.1.2",
  "cwl_engine",
@@ -1604,7 +1604,7 @@ dependencies = [
 [[package]]
 name = "commonwl_salad"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#828a5720b72e86d944f7cd62c3f7437a7d3e1a23"
+source = "git+https://github.com/fairagro/commonwl?branch=main#472d890f26a87a9db9638a72d98dde4d2c8b7f31"
 dependencies = [
  "commonwl_salad_derive",
  "serde",
@@ -1614,7 +1614,7 @@ dependencies = [
 [[package]]
 name = "commonwl_salad_derive"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#828a5720b72e86d944f7cd62c3f7437a7d3e1a23"
+source = "git+https://github.com/fairagro/commonwl?branch=main#472d890f26a87a9db9638a72d98dde4d2c8b7f31"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2227,7 +2227,7 @@ dependencies = [
 [[package]]
 name = "cwl_core"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#828a5720b72e86d944f7cd62c3f7437a7d3e1a23"
+source = "git+https://github.com/fairagro/commonwl?branch=main#472d890f26a87a9db9638a72d98dde4d2c8b7f31"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -2256,7 +2256,7 @@ dependencies = [
 [[package]]
 name = "cwl_engine"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#828a5720b72e86d944f7cd62c3f7437a7d3e1a23"
+source = "git+https://github.com/fairagro/commonwl?branch=main#472d890f26a87a9db9638a72d98dde4d2c8b7f31"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2296,7 +2296,7 @@ dependencies = [
 [[package]]
 name = "cwl_engine_storage"
 version = "0.1.2"
-source = "git+https://github.com/fairagro/commonwl?branch=main#828a5720b72e86d944f7cd62c3f7437a7d3e1a23"
+source = "git+https://github.com/fairagro/commonwl?branch=main#472d890f26a87a9db9638a72d98dde4d2c8b7f31"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7875,7 +7875,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "colored",
- "commonwl 1.2.0",
+ "commonwl 0.1.2",
  "dialoguer",
  "fstest",
  "ignore",
@@ -9520,9 +9520,9 @@ dependencies = [
 
 [[package]]
 name = "thin-vec"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "144f754d318415ac792f9d69fc87abbbfc043ce2ef041c60f16ad828f638717d"
+checksum = "da322882471314edc77fa5232c587bcb87c9df52bfd0d7d4826f8868ead61899"
 
 [[package]]
 name = "thiserror"
