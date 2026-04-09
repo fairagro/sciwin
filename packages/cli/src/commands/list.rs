@@ -118,7 +118,8 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
 
                         // add row to the table
                         table.add_row(Row::new(vec![
-                            Cell::new(&format!("{} ({})", tool_name, doc.get_class())).style_spec("bFg"),
+                            Cell::new(&format!("{} ({})", tool_name, doc.get_class()))
+                                .style_spec("bFg"),
                             Cell::new(&inputs_list.join(", ")),
                             Cell::new(&outputs_list.join(", ")),
                         ]));
@@ -186,7 +187,7 @@ fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
                 &input
                     .default
                     .as_ref()
-                    .map_or("None".to_string(), |d| default_to_string(d)),
+                    .map_or("None".to_string(), default_to_string),
             ),
         ]));
     }
@@ -209,7 +210,7 @@ fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
             "No glob".into()
         };
         table.add_row(Row::new(vec![
-            Cell::new(&output.id.as_ref().unwrap()),
+            Cell::new(output.id.as_ref().unwrap()),
             Cell::new(&format!("{:?}", output.r#type)),
             Cell::new(&binding),
         ]));
@@ -241,13 +242,13 @@ fn list_et(et: &ExpressionTool, filename: &Path) -> anyhow::Result<()> {
 
     for input in &et.inputs {
         table.add_row(Row::new(vec![
-            Cell::new(&input.id.as_ref().unwrap()),
+            Cell::new(input.id.as_ref().unwrap()),
             Cell::new(&format!("{:?}", input.r#type)),
             Cell::new(
                 &input
                     .default
                     .as_ref()
-                    .map_or("None".to_string(), |d| default_to_string(d)),
+                    .map_or("None".to_string(), default_to_string),
             ),
         ]));
     }
@@ -262,7 +263,7 @@ fn list_et(et: &ExpressionTool, filename: &Path) -> anyhow::Result<()> {
 
     for output in &et.outputs {
         table.add_row(Row::new(vec![
-            Cell::new(&output.id.as_ref().unwrap()),
+            Cell::new(output.id.as_ref().unwrap()),
             Cell::new(&format!("{:?}", output.r#type)),
         ]));
     }
@@ -369,9 +370,8 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
                 .flat_map(|sources| sources.as_many())
                 .any(|src| {
                     wf.steps.iter().any(|step| {
-                        let step_id = match &step.id {
-                            Some(id) => id,
-                            None => return false,
+                        let Some(step_id) = &step.id else {
+                            return false;
                         };
 
                         step.out.iter().any(|o| {
@@ -432,7 +432,11 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
             .outputs
             .iter()
             .map(|output| {
-                let target = format!("{}/{}", step.id.as_ref().unwrap(), output.id.as_ref().unwrap());
+                let target = format!(
+                    "{}/{}",
+                    step.id.as_ref().unwrap(),
+                    output.id.as_ref().unwrap()
+                );
 
                 let used_in_steps = wf.steps.iter().any(|s| {
                     s.r#in.iter().any(|v| {

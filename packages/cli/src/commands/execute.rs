@@ -155,6 +155,7 @@ pub enum RemoteSubcommands {
     Logout,
 }
 
+#[allow(clippy::disallowed_macros)]
 pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error> {
     if args.is_quiet {
         log::set_max_level(log::LevelFilter::Error);
