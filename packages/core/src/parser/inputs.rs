@@ -51,7 +51,7 @@ fn get_positional(current: &str, index: isize) -> CommandInputParameter {
         .id(&id)
         .r#type(cwl_type)
         .default(default_value)
-        .input_binding(CommandLineBinding::builder().position(IntegerOrExpression::Long(index as i64)).build())
+        .input_binding(CommandLineBinding::builder().position(IntegerOrExpression::Int(index as i32)).build())
         .build()
 }
 

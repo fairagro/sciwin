@@ -2,7 +2,10 @@ use crate::default_to_string;
 use commonwl::{
     OneOrMany,
     documents::{Argument, CommandLineTool},
-    inputs::{CommandInputArraySchema, CommandInputParameter, CommandInputParameterType, CommandInputSchema, CommandInputType, DefaultValue},
+    inputs::{
+        CommandInputArraySchema, CommandInputParameter, CommandInputParameterType,
+        CommandInputSchema, CommandInputType, DefaultValue,
+    },
     requirements::{InlineJavascriptRequirement, ToolRequirements},
     types::CWLType,
 };
@@ -25,21 +28,26 @@ fn detect_array_inputs(tool: &mut CommandLineTool) -> anyhow::Result<()> {
         let key = (input.id.clone(), input.r#type.clone());
         if seen.insert(key.clone()) {
             inputs.push(input);
-        } else if let Some(existing) = inputs.iter_mut().find(|i| i.id == key.0) 
+        } else if let Some(existing) = inputs.iter_mut().find(|i| i.id == key.0) {
             // Convert to array type if not already
-            && !matches!(&existing.r#type, CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(schema))) if matches!(&**schema, CommandInputSchema::Array(_)) )
+            if !matches!(&existing.r#type, CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(schema))) if matches!(&**schema, CommandInputSchema::Array(_)) )
+                && let CommandInputParameterType::CommandInputType(in_ty) = input.r#type
             {
-                if let CommandInputParameterType::CommandInputType(in_ty) = input.r#type {
-                    existing.r#type = CommandInputSchema::Array(CommandInputArraySchema::builder().items(in_ty).build()).into();
+                existing.r#type = CommandInputSchema::Array(
+                    CommandInputArraySchema::builder().items(in_ty).build(),
+                )
+                .into();
 
-                    if let Some(default) = &existing.default {
-                        existing.default = Some(DefaultValue::Any(serde_yaml::to_value(vec![default.clone()])?));
-                    }
+                if let Some(default) = &existing.default {
+                    existing.default = Some(DefaultValue::Any(serde_yaml::to_value(vec![
+                        default.clone(),
+                    ])?));
                 }
-            
+            }
 
             // Append additional default value if present
-            if let Some(DefaultValue::Any(serde_yaml::Value::Sequence(defaults))) = &mut existing.default
+            if let Some(DefaultValue::Any(serde_yaml::Value::Sequence(defaults))) =
+                &mut existing.default
                 && let Some(default) = input.default
             {
                 defaults.push(serde_yaml::to_value(default.clone())?);
@@ -118,13 +126,19 @@ fn post_process_variables(tool: &mut CommandLineTool) {
     }
 
     if processed_once && let Some(reqs) = &mut tool.requirements {
-        reqs.push(ToolRequirements::InlineJavascriptRequirement(InlineJavascriptRequirement::default()));
+        reqs.push(ToolRequirements::InlineJavascriptRequirement(
+            InlineJavascriptRequirement::default(),
+        ));
     }
 }
 
 /// Post-processes output IDs to ensure they do not conflict with input IDs
 fn post_process_ids(tool: &mut CommandLineTool) {
-    let input_ids = tool.inputs.iter().map(|i| i.id.clone()).collect::<HashSet<_>>();
+    let input_ids = tool
+        .inputs
+        .iter()
+        .map(|i| i.id.clone())
+        .collect::<HashSet<_>>();
     for output in &mut tool.outputs {
         if input_ids.contains(&output.id) {
             output.id = Some(format!("o_{}", output.id.as_ref().unwrap()));
@@ -172,11 +186,13 @@ mod tests {
         let of_interest = tool.inputs.first().unwrap();
         assert_eq!(
             of_interest.r#type,
-            CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(Box::new(CommandInputSchema::Array(
-                CommandInputArraySchema::builder()
-                    .items(OneOrMany::One(CommandInputType::CWLType(CWLType::String)))
-                    .build()
-            )))))
+            CommandInputParameterType::CommandInputType(OneOrMany::One(
+                CommandInputType::CommandInputSchema(Box::new(CommandInputSchema::Array(
+                    CommandInputArraySchema::builder()
+                        .items(OneOrMany::One(CommandInputType::CWLType(CWLType::String)))
+                        .build()
+                )))
+            ))
         );
         assert_eq!(
             of_interest.default,
