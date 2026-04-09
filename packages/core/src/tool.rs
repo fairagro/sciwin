@@ -407,7 +407,7 @@ fn prepare_save(tool: &mut CommandLineTool, path: &str) -> Result<String, serde_
             }
         }
     }
-    serde_yaml::to_string(tool)
+    serde_yaml::to_string(&CWLDocument::CommandLineTool(tool.clone()))
 }
 
 fn read_env(path: &Path) -> Result<HashMap<String, String>> {
