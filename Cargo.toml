@@ -69,7 +69,7 @@ uuid = { version = "1.21.0", features = ["v4"] }
 # dev dependencies
 test_utils = { path = "packages/test_utils" }
 rstest = "0.26.1"
-fstest = "0.3.0"
+fstest = "0.4.0"
 serial_test = "3.4.0"
 
 [workspace.lints.clippy]

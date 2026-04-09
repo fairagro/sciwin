@@ -44,7 +44,7 @@ pub async fn test_wrapping_echo() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     let tool_path = dir.path().join("workflows/echo/echo.cwl");
     assert!(fs::exists(&tool_path).unwrap());
@@ -81,7 +81,7 @@ pub async fn test_wrapping_echo_2() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -126,7 +126,7 @@ pub async fn test_wrapping_python_script() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -169,7 +169,7 @@ pub async fn test_wrapping_a_long_running_script() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -214,7 +214,7 @@ pub async fn test_wrapping_a_long_running_script2() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -260,7 +260,7 @@ pub async fn test_implicit_inputs_hardcoded_files() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -314,7 +314,7 @@ pub async fn test_piping() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -371,7 +371,7 @@ pub async fn test_pulling_containers() {
     unsafe {
         env::set_var("PATH", newpath);
     }
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     //restore path
     unsafe {
@@ -436,7 +436,7 @@ pub async fn test_building_custom_containers() {
         env::set_var("PATH", newpath);
     }
 
-    assert!(create_tool(args).is_ok());
+    assert!(create_tool(args).await.is_ok());
 
     //restore path
     unsafe {
@@ -517,6 +517,7 @@ pub async fn test_example_project() {
         container_image: Some("pandas/pandas:pip-all".to_string()),
         ..Default::default()
     })
+    .await
     .expect("Could not create calculation tool");
     assert!(fs::exists("workflows/calculation/calculation.cwl").unwrap());
 
@@ -533,6 +534,7 @@ pub async fn test_example_project() {
         container_tag: Some("matplotlib".to_string()),
         ..Default::default()
     })
+    .await
     .expect("Could not create plot tool");
     assert!(fs::exists("workflows/plot/plot.cwl").unwrap());
 

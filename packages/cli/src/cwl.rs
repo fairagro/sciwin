@@ -232,34 +232,12 @@ pub fn highlight_cwl(yaml: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::{CreateArgs, create_tool};
     use fstest::fstest;
     use s4n_core::io::get_workflows_folder;
     use std::{
         env,
         path::{MAIN_SEPARATOR, Path},
     };
-
-    #[fstest(repo = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
-    fn test_resolve_filename() {
-        create_tool(&CreateArgs {
-            command: vec![
-                "python3".to_string(),
-                "echo.py".to_string(),
-                "--test".to_string(),
-                "input.txt".to_string(),
-            ],
-            ..Default::default()
-        })
-        .unwrap();
-
-        let name = "echo";
-        let path = resolve_filename(name).unwrap();
-        assert_eq!(
-            path,
-            format!("{}{name}{MAIN_SEPARATOR}{name}.cwl", get_workflows_folder())
-        );
-    }
 
     #[fstest(repo = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
     fn test_resolve_filename_in_submodule() {

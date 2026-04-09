@@ -51,7 +51,7 @@ async fn run() -> anyhow::Result<()> {
         Commands::Completions { shell } => generate_completions(*shell, &mut Cli::command()),
         Commands::List(args) => handle_list_command(args),
         Commands::Remove(args) => handle_remove_command(args),
-        Commands::Create(args) => handle_create_command(args),
+        Commands::Create(args) => handle_create_command(args).await,
         Commands::Connect(args) => connect_workflow_nodes(args),
         Commands::Disconnect(args) => disconnect_workflow_nodes(args),
         Commands::Visualize(args) => visualize(&args.filename, &args.renderer, args.no_defaults),

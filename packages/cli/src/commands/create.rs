@@ -10,14 +10,14 @@ use s4n_core::{
 };
 use std::{path::PathBuf, str::FromStr};
 
-pub fn handle_create_command(args: &CreateArgs) -> anyhow::Result<()> {
+pub async fn handle_create_command(args: &CreateArgs) -> anyhow::Result<()> {
     if args.command.is_empty() && args.name.is_some() {
         info!(
             "ℹ️  Workflow creation is optional. Creation will be triggered by adding the first connection, too!"
         );
         create_workflow(args)
     } else {
-        create_tool(args)
+        create_tool(args).await
     }
 }
 
@@ -157,7 +157,7 @@ pub fn create_workflow(args: &CreateArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
+pub async fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
     if args.command.is_empty() {
         bail!("❌ Command is required to create a tool");
     }
@@ -165,20 +165,14 @@ pub fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
         warn!("User requested no execution, could not determine outputs!");
     }
 
-    let yaml = s4n_core::tool::create_tool(&args.into(), args.name.clone(), !args.is_raw)?;
+    let yaml = s4n_core::tool::create_tool(&args.into(), args.name.clone(), !args.is_raw).await?;
     let cwl: CommandLineTool = serde_yaml::from_str(&yaml)?;
 
     info!("Found outputs:");
     let string_outputs: Vec<String> = cwl
         .outputs
         .iter()
-        .filter_map(|o| {
-            o.output_binding
-                .as_ref()?
-                .glob
-                .clone()
-                .map(|g| g.as_many())
-        })
+        .filter_map(|o| o.output_binding.as_ref()?.glob.clone().map(|g| g.as_many()))
         .flatten()
         .collect();
 

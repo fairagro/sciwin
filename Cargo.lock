@@ -3926,9 +3926,9 @@ dependencies = [
 
 [[package]]
 name = "fstest"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8e5cee68af44af4323eecf6996d038280f3dffe4c986b65a94c2bd2c6bc8119"
+checksum = "f7df26654850049f639e99ea1a9c3a04c17a94efde8799a2b1af9b4d402386b2"
 dependencies = [
  "fstest_macro",
  "git2",
@@ -3938,9 +3938,9 @@ dependencies = [
 
 [[package]]
 name = "fstest_macro"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32eccdf889a09ea834fabe684fda450c1607f04b89a822dee17b2f072d2c2f61"
+checksum = "99cae5b137cf3b9c9a2c171f3243fc210ccabbe41f03aece170d78555dac5354"
 dependencies = [
  "proc-macro2",
  "quote",
