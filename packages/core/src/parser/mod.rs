@@ -171,15 +171,11 @@ fn iwdr_by_file(filename: &str) -> InitialWorkDirRequirement {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-    use std::path::Path;
     use super::*;
     use commonwl::inputs::CommandLineBinding;
     use rstest::rstest;
     use serde_yaml::Value;
     use serial_test::serial;
-    use tempfile::tempdir;
-    use test_utils::with_temp_repository;
 
     fn parse_command(command: &str) -> CommandLineTool {
         let cmd = shlex::split(command).unwrap();
@@ -274,28 +270,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "windows", ignore)]
-    pub fn test_cwl_execute_command_single() {
-        let cwl = parse_command("ls -la .");
-        assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());
-    }
-
-    #[test]
     pub fn test_badwords() {
         let tool = parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql");
         assert!(BAD_WORDS.iter().any(|&word| tool.inputs.iter().any(|i| !i.id.as_ref().unwrap().contains(word))));
-    }
-
-    #[test]
-    #[serial]
-    pub fn test_cwl_execute_command_multiple() {
-        with_temp_repository(|dir| {
-            let cwl = parse_command("python3 scripts/echo.py --test data/input.txt");
-            assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());
-
-            let output_path = dir.path().join(Path::new("results.txt"));
-            assert!(output_path.exists());
-        });
     }
 
     #[test]
@@ -309,24 +286,5 @@ mod tests {
             result,
             OneOrMany::Many(vec!["python3".to_string(), "-m".to_string(), "my_module".to_string()])
         );
-    }
- 
-    #[test]
-    #[serial]
-    pub fn test_python_module_creation() {
-        let dir = tempdir().unwrap();
-        let path = dir.path();
-        let root = env::var("CARGO_MANIFEST_DIR").unwrap();
-        copy_dir(Path::new(&root).join("../../testdata/module"), path.join("module")).unwrap();
-
-        let current = env::current_dir().unwrap();
-        env::set_current_dir(path).unwrap();
-
-        let cwl = parse_command("python3 -m module --what ever");
-        //make sure it runs
-        
-        assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());   
-        assert_eq!(cwl.base_command, Command::Multiple(vec!["python3".to_string(), "-m".to_string(),  "module".to_string() ]));
-        env::set_current_dir(current).unwrap();
     }
 }

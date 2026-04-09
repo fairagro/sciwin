@@ -1,7 +1,7 @@
+use crate::default_to_string;
 use commonwl::{
     OneOrMany,
     documents::{Argument, CommandLineTool},
-    files::FileOrDirectory,
     inputs::{CommandInputArraySchema, CommandInputParameter, CommandInputParameterType, CommandInputSchema, CommandInputType, DefaultValue},
     requirements::{InlineJavascriptRequirement, ToolRequirements},
     types::CWLType,
@@ -25,9 +25,9 @@ fn detect_array_inputs(tool: &mut CommandLineTool) -> anyhow::Result<()> {
         let key = (input.id.clone(), input.r#type.clone());
         if seen.insert(key.clone()) {
             inputs.push(input);
-        } else if let Some(existing) = inputs.iter_mut().find(|i| i.id == key.0) {
+        } else if let Some(existing) = inputs.iter_mut().find(|i| i.id == key.0) 
             // Convert to array type if not already
-            if !matches!(&existing.r#type, CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(schema))) if matches!(&**schema, CommandInputSchema::Array(_)) )
+            && !matches!(&existing.r#type, CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(schema))) if matches!(&**schema, CommandInputSchema::Array(_)) )
             {
                 if let CommandInputParameterType::CommandInputType(in_ty) = input.r#type {
                     existing.r#type = CommandInputSchema::Array(CommandInputArraySchema::builder().items(in_ty).build()).into();
@@ -36,7 +36,7 @@ fn detect_array_inputs(tool: &mut CommandLineTool) -> anyhow::Result<()> {
                         existing.default = Some(DefaultValue::Any(serde_yaml::to_value(vec![default.clone()])?));
                     }
                 }
-            }
+            
 
             // Append additional default value if present
             if let Some(DefaultValue::Any(serde_yaml::Value::Sequence(defaults))) = &mut existing.default
@@ -66,20 +66,20 @@ fn post_process_variables(tool: &mut CommandLineTool) {
         if let Some(default) = &input.default {
             for output in &mut tool.outputs {
                 if let Some(binding) = &mut output.output_binding
-                    && binding.glob == Some(OneOrMany::One(default_string(default)))
+                    && binding.glob == Some(OneOrMany::One(default_to_string(default)))
                 {
                     binding.glob = Some(OneOrMany::One(process_input(input)));
                     processed_once = true;
                 }
             }
             if let Some(stdout) = &tool.stdout
-                && *stdout == default_string(default)
+                && *stdout == default_to_string(default)
             {
                 tool.stdout = Some(process_input(input));
                 processed_once = true;
             }
             if let Some(stderr) = &tool.stderr
-                && *stderr == default_string(default)
+                && *stderr == default_to_string(default)
             {
                 tool.stderr = Some(process_input(input));
                 processed_once = true;
@@ -89,14 +89,14 @@ fn post_process_variables(tool: &mut CommandLineTool) {
                 for argument in arguments.iter_mut() {
                     match argument {
                         Argument::String(s) => {
-                            if *s == default_string(default) {
+                            if *s == default_to_string(default) {
                                 *s = process_input(input);
                                 processed_once = true;
                             }
                         }
                         Argument::Binding(binding) => {
                             if let Some(from) = &mut binding.value_from
-                                && *from == default_string(default)
+                                && *from == default_to_string(default)
                             {
                                 *from = process_input(input);
                                 processed_once = true;
@@ -129,14 +129,6 @@ fn post_process_ids(tool: &mut CommandLineTool) {
         if input_ids.contains(&output.id) {
             output.id = Some(format!("o_{}", output.id.as_ref().unwrap()));
         }
-    }
-}
-
-fn default_string(default: &DefaultValue) -> String {
-    match default {
-        DefaultValue::FileOrDirectory(FileOrDirectory::File(f)) => f.path.clone().unwrap(),
-        DefaultValue::FileOrDirectory(FileOrDirectory::Directory(d)) => d.path.clone().unwrap(),
-        DefaultValue::Any(value) => value.as_str().unwrap_or_default().to_string(), //??
     }
 }
 
@@ -174,7 +166,7 @@ mod tests {
             .build();
 
         assert_eq!(tool.inputs.len(), 4);
-        detect_array_inputs(&mut tool);
+        detect_array_inputs(&mut tool).unwrap();
         assert_eq!(tool.inputs.len(), 2);
 
         let of_interest = tool.inputs.first().unwrap();

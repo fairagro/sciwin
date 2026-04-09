@@ -1,4 +1,4 @@
-use commonwl::{documents::CommandLineTool, requirements::ToolRequirements};
+use commonwl::{documents::CommandLineTool, files::FileOrDirectory, inputs::DefaultValue, requirements::ToolRequirements};
 
 pub mod config;
 pub mod io;
@@ -13,5 +13,13 @@ pub(crate) fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRe
         reqs.push(requirement);
     } else {
         tool.requirements = Some(vec![requirement]);
+    }
+}
+
+pub(crate) fn default_to_string(default: &DefaultValue) -> String {
+    match default {
+        DefaultValue::FileOrDirectory(FileOrDirectory::File(f)) => f.path.clone().unwrap(),
+        DefaultValue::FileOrDirectory(FileOrDirectory::Directory(d)) => d.path.clone().unwrap(),
+        DefaultValue::Any(value) => value.as_str().unwrap_or_default().to_string(), //??
     }
 }

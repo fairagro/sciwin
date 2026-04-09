@@ -119,22 +119,22 @@ pub fn add_workflow_output_connection(
             .outputs
             .iter()
             .find(|i| i.id == Some(from_slot_id.to_owned()))
-            .and_then(|i| Some(i.r#type.clone())),
+            .map(|i| i.r#type.clone()),
         CWLDocument::ExpressionTool(et) => et
             .outputs
             .iter()
             .find(|i| i.id == Some(from_slot_id.to_owned()))
-            .and_then(|i| Some(i.r#type.clone().into())),
+            .map(|i| i.r#type.clone().into()),
         CWLDocument::Operation(op) => op
             .outputs
             .iter()
             .find(|i| i.id == Some(from_slot_id.to_owned()))
-            .and_then(|i| Some(i.r#type.clone().into())),
+            .map(|i| i.r#type.clone().into()),
         CWLDocument::Workflow(wf) => wf
             .outputs
             .iter()
             .find(|i| i.id == Some(from_slot_id.to_owned()))
-            .and_then(|i| Some(i.r#type.clone().into())),
+            .map(|i| i.r#type.clone()),
     }
     .expect("No slot");
     add_workflow_step(workflow, from_name, from_filename, &from_cwl);

@@ -71,7 +71,7 @@ pub fn create_tool(options: &ToolCreationOptions, name: Option<String>, save: bo
         cwl = append_container_requirement(cwl, Some(&modified_container));
     }
     // Finalize CWL
-    let path = io::get_qualified_filename(&cwl.base_command.as_ref().unwrap(), name);
+    let path = io::get_qualified_filename(cwl.base_command.as_ref().unwrap(), name);
     let yaml = finalize_tool(&mut cwl, &path)?;
 
     if save {
@@ -251,9 +251,7 @@ fn add_tool_requirements(
                 }
                 WorkDirItems::ListingItems(one_or_many) => match &mut **one_or_many {
                     OneOrMany::One(item) => {
-                        *one_or_many = Box::new(OneOrMany::Many(
-                            vec![item.clone()].into_iter().chain(entries.map(ListingItems::FileOrDirectory)).collect(),
-                        ))
+                        **one_or_many = OneOrMany::Many(vec![item.clone()].into_iter().chain(entries.map(ListingItems::FileOrDirectory)).collect());
                     }
                     OneOrMany::Many(items) => items.extend(entries.map(ListingItems::FileOrDirectory)),
                 },
@@ -285,13 +283,13 @@ fn append_container_requirement(mut cwl: CommandLineTool, container: Option<&Con
             ToolRequirements::DockerRequirement(DockerRequirement::builder().docker_pull(container.image).build())
         };
 
-        append_requirement(&mut cwl, requirement)
+        append_requirement(&mut cwl, requirement);
     }
     cwl
 }
 
 fn finalize_tool(cwl: &mut CommandLineTool, path: &str) -> Result<String> {
-    parser::post_process_cwl(cwl);
+    parser::post_process_cwl(cwl)?;
     let mut yaml = prepare_save(cwl, path)?;
     yaml = format_cwl(&yaml).map_err(|e| anyhow::anyhow!("Failed to format CWL: {e}"))?;
     Ok(yaml)
@@ -314,23 +312,23 @@ fn prepare_save(tool: &mut CommandLineTool, path: &str) -> Result<String, serde_
                 if let Some(StringOrInclude::Include(include)) = &mut docker.docker_file {
                     include.include = resolve_path(&include.include, path);
                 }
-            } else if let ToolRequirements::InitialWorkDirRequirement(iwdr) = requirement {
-                if let WorkDirItems::ListingItems(listing) = &mut iwdr.listing {
-                    match &mut **listing {
-                        OneOrMany::One(item) => {
+            } else if let ToolRequirements::InitialWorkDirRequirement(iwdr) = requirement
+                && let WorkDirItems::ListingItems(listing) = &mut iwdr.listing
+            {
+                match &mut **listing {
+                    OneOrMany::One(item) => {
+                        if let ListingItems::Dirent(dirent) = item
+                            && let StringOrInclude::Include(include) = &mut dirent.entry
+                        {
+                            include.include = resolve_path(&include.include, path);
+                        }
+                    }
+                    OneOrMany::Many(items) => {
+                        for item in items {
                             if let ListingItems::Dirent(dirent) = item
                                 && let StringOrInclude::Include(include) = &mut dirent.entry
                             {
                                 include.include = resolve_path(&include.include, path);
-                            }
-                        }
-                        OneOrMany::Many(items) => {
-                            for item in items {
-                                if let ListingItems::Dirent(dirent) = item
-                                    && let StringOrInclude::Include(include) = &mut dirent.entry
-                                {
-                                    include.include = resolve_path(&include.include, path);
-                                }
                             }
                         }
                     }
@@ -408,14 +406,14 @@ mod tests {
             ])
             .build();
 
-        prepare_save(&mut clt, "workflows/tool/tool.cwl");
+        prepare_save(&mut clt, "workflows/tool/tool.cwl").unwrap();
 
         //check if paths are rewritten upon tool saving
 
         assert_eq!(
             clt.inputs[0].default,
             Some(DefaultValue::FileOrDirectory(FileOrDirectory::File(
-                File::builder().location(&os_path("../../testdata/input.txt")).build()
+                File::builder().location(os_path("../../testdata/input.txt")).build()
             )))
         );
         let requirements = clt.requirements.as_ref().unwrap();

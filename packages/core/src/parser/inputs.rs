@@ -115,30 +115,30 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
         let (input, type_) = parse_input(input);
 
         //todo: add requiement for directory also or add new --mount param and remove block from here
-        if matches!(type_, CWLType::File) {
-            if let Some(requirements) = &mut tool.requirements {
-                for item in requirements {
-                    if let ToolRequirements::InitialWorkDirRequirement(req) = item {
-                        let dirent = Dirent::builder()
-                            .entry(StringOrInclude::Include(Include {
-                                include: get_entry_name(input),
-                            }))
-                            .entryname(input)
-                            .build();
-                        match &mut req.listing {
-                            WorkDirItems::Expression(expr) => {
-                                req.listing = WorkDirItems::ListingItems(Box::new(OneOrMany::Many(vec![
-                                    ListingItems::Dirent(dirent),
-                                    ListingItems::Expression(expr.to_string()),
-                                ])))
-                            }
-                            WorkDirItems::ListingItems(items) => match &mut **items {
-                                OneOrMany::One(item) => *items = Box::new(OneOrMany::Many(vec![item.clone(), ListingItems::Dirent(dirent)])),
-                                OneOrMany::Many(items) => items.push(ListingItems::Dirent(dirent)),
-                            },
+        if matches!(type_, CWLType::File)
+            && let Some(requirements) = &mut tool.requirements
+        {
+            for item in requirements {
+                if let ToolRequirements::InitialWorkDirRequirement(req) = item {
+                    let dirent = Dirent::builder()
+                        .entry(StringOrInclude::Include(Include {
+                            include: get_entry_name(input),
+                        }))
+                        .entryname(input)
+                        .build();
+                    match &mut req.listing {
+                        WorkDirItems::Expression(expr) => {
+                            req.listing = WorkDirItems::ListingItems(Box::new(OneOrMany::Many(vec![
+                                ListingItems::Dirent(dirent),
+                                ListingItems::Expression(expr.to_string()),
+                            ])));
                         }
-                        break;
+                        WorkDirItems::ListingItems(items) => match &mut **items {
+                            OneOrMany::One(item) => **items = OneOrMany::Many(vec![item.clone(), ListingItems::Dirent(dirent)]),
+                            OneOrMany::Many(items) => items.push(ListingItems::Dirent(dirent)),
+                        },
                     }
+                    break;
                 }
             }
         }
