@@ -7878,6 +7878,7 @@ dependencies = [
  "commonwl 0.1.2",
  "cwl_engine_storage",
  "dialoguer",
+ "dircpy",
  "fstest",
  "ignore",
  "log",

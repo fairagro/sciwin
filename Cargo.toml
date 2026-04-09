@@ -37,6 +37,7 @@ commonwl = { git = "https://github.com/fairagro/commonwl", branch = "main", feat
 cwl_engine_storage = { git = "https://github.com/fairagro/commonwl", branch = "main" }
 colored = "3.1.1"
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
+dircpy = "0.3.20"
 fancy-regex = "0.17.0"
 git2 = { version = "0.20.4", features = ["vendored-openssl"] }
 keyring = { version = "3.6.3", features = [
