@@ -1,0 +1,34 @@
+[package]
+name = "rocrate"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+util = { path = "../util" }
+cwl_core = { path = "../cwl_core"}
+cwl_annotation = {path = "../cwl_annotation"}
+anyhow.workspace = true
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+tempfile = { workspace = true }
+urlencoding = { workspace = true }
+uuid = { workspace = true }
+toml_edit = { workspace = true }
+walkdir = "2.5.0"
+ro-crate-rs = "0.5.0"
+regex = {version = "1.12.3"}
+zip = "8.5.1"
+fancy-regex = { workspace = true }
+keyring = { workspace = true }
+thiserror = "2.0.18"
+chrono = { version = "0.4.42" }
+clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
+clap_complete = "4.5.61"
+
+[lints]
+workspace = true

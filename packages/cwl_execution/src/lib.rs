@@ -3,7 +3,7 @@ pub mod error;
 pub mod io;
 pub mod runner;
 pub mod docker;
-mod expression;
+mod expression; 
 mod inputs;
 mod outputs;
 mod preprocess;
@@ -15,8 +15,8 @@ pub use docker::{ContainerEngine, container_engine, set_container_engine};
 
 use crate::error::{ExecutionError, FileSystemError, YAMLDeserializationError};
 use cwl_core::{
-    CWLDocument, CWLType, DefaultValue, Directory, File, PathItem, guess_type,
-    packed::{PackedCWL, unpack_workflow},
+    CWLDocument, CWLType, DefaultValue, Directory, File, PathItem, guess_type, load_doc,
+    packed::{PackedCWL, unpack_workflow, pack_workflow},
     requirements::{FromRequirement, Requirement},
 };
 use io::preprocess_path_join;
@@ -24,13 +24,16 @@ use preprocess::preprocess_cwl;
 use runner::{tool::run_tool, workflow::run_workflow};
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
-use std::{collections::HashMap, error::Error, fs, path::Path, process::Command, sync::LazyLock};
+use std::{collections::HashMap, fs, path::Path, process::Command, sync::LazyLock};
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, System};
+use anyhow::anyhow;
+use std::fmt::Debug;
+use rocrate::{export_rocrate, RocrateArgs};
 
 pub type Result<T> = std::result::Result<T, ExecutionError>;
 
 #[allow(clippy::disallowed_macros)]
-pub fn execute_cwlfile(cwlfile: impl AsRef<Path>, raw_inputs: &[String], outdir: Option<impl AsRef<Path>>) -> Result<()> {
+pub async fn execute_cwlfile(cwlfile: impl AsRef<Path> + Debug, raw_inputs: &[String], outdir: Option<impl AsRef<Path>>, rocrate_args: &Option<RocrateArgs>) -> Result<()> {
     //gather inputs
     let mut input_values = if raw_inputs.len() == 1 && !raw_inputs[0].starts_with('-') {
         let yaml = fs::read_to_string(&raw_inputs[0])?;
@@ -94,37 +97,58 @@ pub fn execute_cwlfile(cwlfile: impl AsRef<Path>, raw_inputs: &[String], outdir:
             _ => (),
         }
     }
+    if let Some(rocrate_args) = rocrate_args && rocrate_args.workflow_name.is_some() {
+            let doc = load_doc(&cwlfile)?;
+            let CWLDocument::Workflow(workflow) = doc else {
+                return Err(ExecutionError::CWLVersionMismatch(format!(
+                    "CWL document is not a Workflow: {:?}",
+                    cwlfile.as_ref()
+            )));
+        };
+        let packed = pack_workflow(&workflow, &cwlfile, None)?;
+        let packed_json = serde_json::to_value(&packed)?;
+        std::fs::write("packed.cwl", serde_json::to_string_pretty(&packed)?)?;
 
-    let output_values = execute(cwlfile, &input_values, outdir, None)?;
-    let json = serde_json::to_string_pretty(&output_values)?;
-    println!("{json}");
+        let working_dir = std::env::current_dir()?;
+        let graph_json = packed_json.get("$graph").and_then(serde_json::Value::as_array).ok_or_else(|| anyhow!("Missing or invalid '$graph' field"))?;
+        execute(&cwlfile, &input_values, outdir, None).await?;
+        export_rocrate(
+            rocrate_args.output_dir.as_ref(),
+            Some(&working_dir.to_string_lossy().to_string()),
+            cwlfile.as_ref().to_str().unwrap(),
+            rocrate_args.run_type,
+            Some("local"),
+            graph_json,
+            None
+        ).await?;
+    }
+    else {
+   
+        let output_values = execute(cwlfile, &input_values, outdir, None).await?;
+        let _json = serde_json::to_string_pretty(&output_values)?;
+    }
 
     Ok(())
 }
 
-pub fn execute(
+pub async fn execute(
     cwlfile: impl AsRef<Path>,
     input_values: &InputObject,
     outdir: Option<impl AsRef<Path>>,
     cwl_doc: Option<&CWLDocument>,
 ) -> Result<HashMap<String, DefaultValue>> {
-    //load cwl
+    // Load CWL document
     let mut doc: CWLDocument = if let Some(doc) = cwl_doc {
         doc.clone()
     } else if is_packed(&cwlfile)? {
-        //if file_name does not exist we have more serious problems than this unwrap call :D
         let path = cwlfile.as_ref().to_string_lossy();
         let (real_path, id) = path.split_once('#').unwrap_or((path.as_ref(), "main"));
-        
         let contents = fs::read_to_string(real_path)?;
-        //we need to do preprocess here but we can not,yet
         let packed: PackedCWL = serde_yaml::from_str(&contents).map_err(|e| YAMLDeserializationError::new(Path::new(real_path), e))?;
         if id != "main" {
-            packed
-                .graph
-                .into_iter()
+            packed.graph.into_iter()
                 .find(|i| i.id == Some(id.to_string()))
-                .ok_or_else(|| Box::<dyn Error>::from(format!("Could not find document {id}")))?
+                .ok_or_else(|| ExecutionError::Any(anyhow::anyhow!("Document not found: {id}")))? 
         } else {
             CWLDocument::Workflow(unpack_workflow(&packed)?)
         }
@@ -140,13 +164,18 @@ pub fn execute(
             input_values,
             &cwlfile.as_ref().to_path_buf(),
             outdir.map(|d| d.as_ref().to_string_lossy().into_owned()),
-        ),
-        CWLDocument::Workflow(mut workflow) => run_workflow(
-            &mut workflow,
-            input_values,
-            &cwlfile.as_ref().to_path_buf(),
-            outdir.map(|d| d.as_ref().to_string_lossy().into_owned()),
-        ),
+        ).await,
+        CWLDocument::Workflow(mut workflow) => {
+            let cwl_path = cwlfile.as_ref().to_path_buf();
+            let out_dir = outdir.map(|d| d.as_ref().to_string_lossy().into_owned());
+            let future = Box::pin(run_workflow(
+                &mut workflow,
+                input_values,
+                &cwl_path,
+                out_dir,
+            ));
+            future.await
+        }
     }
 }
 

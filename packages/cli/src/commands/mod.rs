@@ -12,6 +12,7 @@ mod packages;
 mod remove;
 mod save;
 mod visualize;
+mod rocrate;
 
 pub use annotate::*;
 pub use connect::*;
@@ -23,6 +24,7 @@ pub use packages::*;
 pub use remove::*;
 pub use save::*;
 pub use visualize::*;
+pub use rocrate::*;
 
 pub fn check_git_config() -> anyhow::Result<()> {
     let mut config = Config::open_default()?;

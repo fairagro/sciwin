@@ -285,7 +285,7 @@ pub fn Layout() -> Element {
                                 Icon { width: 16, height: 16, icon: GoPlus }
                             }
                         }
-                        div { class: "flex relative mb-3",
+                        div { 
                             RoundActionButton {
                                 title: "Open Terminal",
                                 onclick: move |_| { navigator().push(Route::GlobalTerminal); },

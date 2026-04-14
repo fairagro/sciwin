@@ -6,7 +6,7 @@ use s4n::{
     commands::{
         check_git_config, connect_workflow_nodes, disconnect_workflow_nodes, handle_annotation_command, handle_create_command,
         handle_execute_commands, handle_init_command, handle_list_command, handle_remove_command, install_package, remove_package, save_workflow,
-        visualize,
+        visualize, handle_rocrate_command,
     },
     logger::LOGGER,
 };
@@ -29,13 +29,14 @@ fn main() {
     exit(0);
 }
 
-fn run() -> anyhow::Result<()> {
+#[tokio::main]
+async fn run() -> anyhow::Result<()> {
     let args = Cli::parse();
     check_git_config()?;
     match &args.command {
         Commands::Init(args) => Ok(handle_init_command(args)?),
         Commands::Execute { command } => {
-            handle_execute_commands(command).map_err(|e| anyhow::anyhow!("{e:#}"))?;
+            handle_execute_commands(command).await.map_err(|e| anyhow::anyhow!("{e:#}"))?;
             Ok(())
         }
         Commands::Install(args) => Ok(install_package(&args.identifier, &args.branch)?),
@@ -52,5 +53,6 @@ fn run() -> anyhow::Result<()> {
         Commands::Disconnect(args) => Ok(disconnect_workflow_nodes(args)?),
         Commands::Visualize(args) => Ok(visualize(&args.filename, &args.renderer, args.no_defaults)?),
         Commands::Save(name) => Ok(save_workflow(name)?),
+        Commands::Rocrate(args) => Ok(handle_rocrate_command(args.clone()).await?),
     }
 }

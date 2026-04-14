@@ -11,9 +11,9 @@ use std::{
 use tempfile::tempdir;
 use test_utils::repository;
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local() {
+pub async fn test_execute_local() {
     let dir = tempdir().unwrap();
     let current = repository(dir.path())
         .copy_file("testdata/echo.cwl", "echo.cwl")
@@ -27,7 +27,7 @@ pub fn test_execute_local() {
         ..Default::default()
     };
 
-    execute_local(&args).expect("Could not execute CommandLineTool");
+    execute_local(&args).await.expect("Could not execute CommandLineTool");
 
     let file = Path::new("results.txt");
     assert!(file.exists());
@@ -40,9 +40,9 @@ pub fn test_execute_local() {
     env::set_current_dir(current).unwrap();
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_with_args() {
+pub async fn test_execute_local_with_args() {
     let dir = tempdir().unwrap();
     let current = repository(dir.path())
         .copy_file("testdata/echo.cwl", "echo.cwl")
@@ -57,7 +57,7 @@ pub fn test_execute_local_with_args() {
         ..Default::default()
     };
 
-    execute_local(&args).expect("Could not execute CommandLineTool");
+    execute_local(&args).await.expect("Could not execute CommandLineTool");
 
     let file = Path::new("results.txt");
     assert!(file.exists());
@@ -70,9 +70,9 @@ pub fn test_execute_local_with_args() {
     env::set_current_dir(current).unwrap();
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_with_file() {
+pub async fn test_execute_local_with_file() {
     let dir = tempdir().unwrap();
     let current = repository(dir.path())
         .copy_file("testdata/echo.cwl", "echo.cwl")
@@ -88,7 +88,7 @@ pub fn test_execute_local_with_file() {
         ..Default::default()
     };
 
-    execute_local(&args).expect("Could not execute CommandLineTool");
+    execute_local(&args).await.expect("Could not execute CommandLineTool");
 
     let file = Path::new("results.txt");
     assert!(file.exists());
@@ -101,9 +101,9 @@ pub fn test_execute_local_with_file() {
     env::set_current_dir(current).unwrap();
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_outdir() {
+pub async fn test_execute_local_outdir() {
     let dir = tempdir().unwrap();
     let current = repository(dir.path())
         .copy_file("testdata/echo.cwl", "echo.cwl")
@@ -119,7 +119,7 @@ pub fn test_execute_local_outdir() {
         ..Default::default()
     };
 
-    execute_local(&args).expect("Could not execute CommandLineTool");
+    execute_local(&args).await.expect("Could not execute CommandLineTool");
 
     let file = dir.path().join("results.txt");
 
@@ -127,9 +127,9 @@ pub fn test_execute_local_outdir() {
     env::set_current_dir(current).unwrap();
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_is_quiet() {
+pub async fn test_execute_local_is_quiet() {
     let dir = tempdir().unwrap();
     let current = repository(dir.path())
         .copy_file("testdata/echo.cwl", "echo.cwl")
@@ -145,7 +145,7 @@ pub fn test_execute_local_is_quiet() {
         ..Default::default()
     };
 
-    execute_local(&args).expect("Could not execute CommandLineTool");
+    execute_local(&args).await.expect("Could not execute CommandLineTool");
 
     let file = Path::new("results.txt");
 
@@ -153,11 +153,11 @@ pub fn test_execute_local_is_quiet() {
     env::set_current_dir(current).unwrap();
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 //docker not working on MacOS Github Actions
 #[cfg_attr(target_os = "macos", ignore)]
-pub fn test_execute_local_workflow() {
+pub async fn test_execute_local_workflow() {
     let folder = "../../testdata/hello_world";
 
     let dir = tempdir().unwrap();
@@ -172,7 +172,7 @@ pub fn test_execute_local_workflow() {
         args: vec!["inputs.yml".to_string()],
         ..Default::default()
     };
-    let result = execute_local(&args);
+    let result = execute_local(&args).await;
     println!("{result:#?}");
     assert!(result.is_ok());
 
@@ -184,10 +184,10 @@ pub fn test_execute_local_workflow() {
     env::set_current_dir(current_dir).unwrap();
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 #[cfg(not(target_os = "windows"))] //file system issues with windows
-pub fn test_execute_local_tool_default_cwl() {
+pub async fn test_execute_local_tool_default_cwl() {
     let path = PathBuf::from("../../testdata/default.cwl");
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
@@ -209,20 +209,20 @@ pub fn test_execute_local_tool_default_cwl() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).is_ok());
+    assert!(execute_local(&args).await.is_ok());
     assert!(fs::exists(&out_file).unwrap());
     let contents = fs::read_to_string(&out_file).unwrap();
     assert_eq!(contents, "File".to_string());
     
-    assert!(execute_local(&args_override).is_ok());
+    assert!(execute_local(&args_override).await.is_ok());
     assert!(fs::exists(&out_file).unwrap());
     let contents = fs::read_to_string(&out_file).unwrap();
     assert_eq!(contents, "Hello fellow CWL-enjoyers!".to_string());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_workflow_no_steps() {
+pub async fn test_execute_local_workflow_no_steps() {
     //has no steps, do not complain!
     let path = PathBuf::from("../../testdata/wf_inout.cwl");
     let dir = tempdir().unwrap();
@@ -235,13 +235,13 @@ pub fn test_execute_local_workflow_no_steps() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).is_ok());
+    assert!(execute_local(&args).await.is_ok());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 #[cfg(not(target_os = "windows"))] //file system issues with windows
-pub fn test_execute_local_workflow_in_param() {
+pub async fn test_execute_local_workflow_in_param() {
     let path = PathBuf::from("../../testdata/test-wf_features.cwl");
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
@@ -258,15 +258,15 @@ pub fn test_execute_local_workflow_in_param() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).is_ok());
+    assert!(execute_local(&args).await.is_ok());
     assert!(fs::exists(&out_file).unwrap());
     let contents = fs::read_to_string(&out_file).unwrap();
     assert_eq!(contents, "Hello fellow CWL-enjoyers!".to_string());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_workflow_dir_out() {
+pub async fn test_execute_local_workflow_dir_out() {
     //has no steps, do not complain!
     let path = PathBuf::from("../../testdata/wf_inout_dir.cwl");
     let dir = tempdir().unwrap();
@@ -280,14 +280,14 @@ pub fn test_execute_local_workflow_dir_out() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).is_ok());
+    assert!(execute_local(&args).await.is_ok());
     assert!(fs::exists(format!("{out_path}/file.txt")).unwrap());
     assert!(fs::exists(format!("{out_path}/input.txt")).unwrap());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_workflow_file_out() {
+pub async fn test_execute_local_workflow_file_out() {
     //has no steps, do not complain!
     let path = PathBuf::from("../../testdata/wf_inout_file.cwl");
     let dir = tempdir().unwrap();
@@ -301,13 +301,13 @@ pub fn test_execute_local_workflow_file_out() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).is_ok());
+    assert!(execute_local(&args).await.is_ok());
     assert!(fs::exists(out_path).unwrap());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_workflow_directory_out() {
+pub async fn test_execute_local_workflow_directory_out() {
     let path = PathBuf::from("../../testdata/mkdir_wf.cwl");
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
@@ -320,12 +320,12 @@ pub fn test_execute_local_workflow_directory_out() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).is_ok());
+    assert!(execute_local(&args).await.is_ok());
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_execute_local_with_binary_input() {
+pub async fn test_execute_local_with_binary_input() {
     let path = PathBuf::from("../../testdata/read_bin.cwl");
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
@@ -338,7 +338,7 @@ pub fn test_execute_local_with_binary_input() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).is_ok());
+    assert!(execute_local(&args).await.is_ok());
     assert!(fs::exists(&out_path).unwrap());
     let contents = fs::read_to_string(&out_path).unwrap();
     assert_eq!(contents, "69420".to_string());

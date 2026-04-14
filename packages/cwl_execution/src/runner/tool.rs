@@ -17,8 +17,9 @@ use std::{
     time::Instant,
 };
 use tempfile::tempdir;
+use tokio::task::spawn_blocking;
 
-pub fn run_tool(
+pub async fn run_tool(
     tool: &mut CWLDocument,
     input_values: &InputObject,
     cwl_path: &PathBuf,
@@ -90,38 +91,78 @@ pub fn run_tool(
     runtime.environment = collect_environment(&input_values);
 
     // run expression engine
-    prepare_expression_engine(&runtime)?;
+   let value = runtime.clone();
+    spawn_blocking(move || -> Result<(), ExecutionError> {
+        prepare_expression_engine(&value)?;
+        Ok(())
+    })
+    .await??;
     if let Some(ijr) = input_values.get_requirement::<InlineJavascriptRequirement>() {
         if let Some(expression_lib) = &ijr.expression_lib {
             for lib in expression_lib {
                 if let StringOrInclude::Include(lib_include) = lib {
-                    load_lib(tool_path.join(&lib_include.include))?;
+                    let lib_include = lib_include.clone();
+                    let tool_path = tool_path.to_path_buf();
+                    let include = lib_include.include.clone();
+                    spawn_blocking(move || -> Result<(), ExecutionError> {
+                        load_lib(tool_path.join(include))?;
+                        Ok(())
+                    })
+                    .await??;
                 } else if let StringOrInclude::String(lib_string) = lib {
-                    eval(lib_string)?;
+                    let lib_string = lib_string.clone();
+                    let code = lib_string.clone();
+
+                    spawn_blocking(move || -> Result<(), ExecutionError> {
+                        eval(&code)?;
+                        Ok(())
+                    })
+                    .await??;
                 }
             }
         }
         process_expressions(tool, &mut input_values)?;
     }
     //stage files listed in input default values, input values or initial work dir requirements
-    stage_required_files(tool, &input_values, &mut runtime, tool_path, dir.path(), output_directory)?;
-
+    stage_required_files(tool, &input_values, &mut runtime, tool_path, dir.path(), output_directory).await?;
     //change working directory to tmp folder, we will execute tool from root here
     env::set_current_dir(dir.path())?;
 
     //run the tool
     let mut result_value: Option<serde_yaml::Value> = None;
     if let CWLDocument::CommandLineTool(clt) = tool {
-        run_command(clt, &mut runtime)?;
+    let clt = clt.clone();
+    let mut value = runtime.clone();
+
+    spawn_blocking(move || -> Result<(), ExecutionError> {
+        run_command(&clt, &mut value)?;
+        Ok(())
+    }).await??;
     } else if let CWLDocument::ExpressionTool(et) = tool {
-        prepare_expression_engine(&runtime)?;
+        //prepare_expression_engine(&runtime)?;
+        let value = runtime.clone();
+        spawn_blocking(move || -> Result<(), ExecutionError> {
+            prepare_expression_engine(&value)?;
+            Ok(())
+        })
+        .await??;
         let expressions = parse_expressions(&et.expression);
         result_value = Some(eval_tool::<serde_yaml::Value>(&expressions[0].expression())?);
+        //reset_expression_engine()?;
+        spawn_blocking(move || -> Result<(), ExecutionError> {
         reset_expression_engine()?;
+        Ok(())
+    }).await??;
     }
 
     //evaluate output files
-    prepare_expression_engine(&runtime)?;
+   let value = runtime.clone();
+   spawn_blocking(move || -> Result<(), ExecutionError> {
+            prepare_expression_engine(&value)?;
+            Ok(())
+        })
+    .await??;
+
     let outputs = if let CWLDocument::CommandLineTool(clt) = &tool {
         evaluate_command_outputs(clt, output_directory)?
     } else if let CWLDocument::ExpressionTool(et) = &tool {
@@ -133,7 +174,11 @@ pub fn run_tool(
     } else {
         unreachable!()
     };
-    reset_expression_engine()?;
+    spawn_blocking(move || -> Result<(), ExecutionError> {
+        reset_expression_engine()?;
+        Ok(())
+    })
+    .await??;
 
     //come back to original directory
     env::set_current_dir(current)?;

@@ -107,9 +107,11 @@
       "instrument": {
         "@id": "workflow.json#main/calculation"
       },
-      "object": {
+      "object": [
+      {
         "@id": "#fc249806-f814-42a7-b7dc-f6e4103990ad"
       }
+    ]
     },
     {
       "@id": "#fc249806-f814-42a7-b7dc-f6e4103990ad",
@@ -126,9 +128,11 @@
           "@id": "speakers_revised.csv"
         }
       ],
-      "result": {
-        "@id": "results.csv"
-      },
+      "result": [
+        {
+          "@id": "results.csv"
+        }
+      ],
       "startTime": "2025-04-30 08:31:09,301",
       "endTime": "2025-04-30 08:31:14,951",
       "containerImage": {
@@ -180,9 +184,11 @@
       "instrument": {
         "@id": "workflow.json#main/plot"
       },
-      "object": {
+      "object": [
+      {
         "@id": "#411762bf-1187-45bd-89ab-9ea50404fff5"
       }
+    ]
     },
     {
       "@id": "#411762bf-1187-45bd-89ab-9ea50404fff5",
@@ -191,12 +197,16 @@
       "instrument": {
         "@id": "workflow.json#plot.cwl"
       },
-      "object": {
+      "object": [
+      {
         "@id": "results.csv"
-      },
-      "result": {
+      }
+      ],
+      "result": [
+        {
         "@id": "results.svg"
-      },
+        }
+      ],
       "startTime": "2025-04-30 08:31:15,940",
       "endTime": "2025-04-30 08:31:26,291",
       "containerImage": {
@@ -271,16 +281,16 @@
       ],
       "hasPart": [
         {
-          "@id": "population.csv"
+          "@id": "data/population.csv"
+        },
+        {
+          "@id": "data/speakers_revised.csv"
         },
         {
           "@id": "results.csv"
         },
         {
           "@id": "results.svg"
-        },
-        {
-          "@id": "speakers_revised.csv"
         },
         {
           "@id": "workflow.json"
@@ -310,9 +320,11 @@
           "@id": "speakers_revised.csv"
         }
       ],
-      "result": {
-        "@id": "results.svg"
-      },
+      "result": [
+        {
+          "@id": "results.svg"
+        }
+      ],
       "startTime": "2025-04-30 08:31:07,894",
       "endTime": "2025-04-30 08:31:27,511"
     },
@@ -422,9 +434,9 @@
       ]
     },
     {
-      "@id": "population.csv",
+      "@id": "data/population.csv",
       "@type": "File",
-      "alternateName": "population.csv",
+      "alternateName": "data/population.csv",
       "contentSize": "unknown",
       "exampleOfWork": [
         {
@@ -436,9 +448,9 @@
       ]
     },
     {
-      "@id": "speakers_revised.csv",
+      "@id": "data/speakers_revised.csv",
       "@type": "File",
-      "alternateName": "speakers_revised.csv",
+      "alternateName": "data/speakers_revised.csv",
       "contentSize": "unknown",
       "exampleOfWork": [
         {
@@ -478,9 +490,11 @@
           "@id": "#96e8c8e4-ad2a-4066-8bef-4e141ed2660a"
         }
       ],
-      "result": {
+      "result": [
+        {
         "@id": "#a8a329a6-85f3-4062-8fd4-9c8936384cc9"
-      },
+      }
+      ],
       "startTime": "2025-04-30 08:31:07,894",
       "endTime": "2025-04-30 08:31:27,511"
     }

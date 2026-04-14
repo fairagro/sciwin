@@ -11,6 +11,7 @@ reana_ext = { package = "reana", path = "../reana" }
 commonwl = { path = "../cwl" }
 util = { path = "../util" }
 s4n_core = { path = "../core" }
+rocrate_ext = { package = "rocrate", path = "../rocrate" }
 anyhow.workspace = true
 colored.workspace = true
 dialoguer.workspace = true

@@ -34,20 +34,24 @@ fn cleanup(current: PathBuf, dir: TempDir) {
     dir.close().unwrap();
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 #[cfg_attr(target_os = "windows", ignore)]
-///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-echo
-pub fn test_wrapping_echo() {
+pub async fn test_wrapping_echo() {
     let (current, dir) = setup();
 
     let command = &["echo", "\"Hello World\""];
 
-    let args = &CreateArgs {
+    let args = CreateArgs {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     let tool_path = dir.path().join("workflows/echo/echo.cwl");
     assert!(fs::exists(&tool_path).unwrap());
@@ -56,32 +60,35 @@ pub fn test_wrapping_echo() {
     assert_eq!(tool.base_command, Command::Single("echo".to_string()));
     assert_eq!(tool.inputs.len(), 1);
 
-    //test if is executable
     execute_local(&LocalExecuteArgs {
         file: tool_path,
         ..Default::default()
     })
-    .unwrap();
+    .await.unwrap();
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 #[cfg_attr(target_os = "windows", ignore)]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-echo
-pub fn test_wrapping_echo_2() {
+pub async fn test_wrapping_echo_2() {
     let (current, dir) = setup();
 
     let command = &["echo", "\"Hello World\"", ">", "hello.yaml"];
 
     let name = "echo2";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         name: Some(name.to_string()),
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -97,26 +104,30 @@ pub fn test_wrapping_echo_2() {
         file: tool_path,
         ..Default::default()
     })
-    .unwrap();
+    .await.unwrap();
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-a-python-script
-pub fn test_wrapping_python_script() {
+pub async fn test_wrapping_python_script() {
     let (current, dir) = setup();
 
     let command = &["python", "echo.py", "--message", "SciWIn rocks!", "--output-file", "out.txt"];
 
     let name = "echo_python";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         name: Some(name.to_string()),
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -131,26 +142,30 @@ pub fn test_wrapping_python_script() {
         file: tool_path,
         ..Default::default()
     })
-    .unwrap();
+    .await.unwrap();
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-a-long-running-script
-pub fn test_wrapping_a_long_running_script() {
+pub async fn test_wrapping_a_long_running_script() {
     let (current, dir) = setup();
 
     let command = &["python", "sleep.py"];
 
     let name = "sleep";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         no_run: true,
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -165,28 +180,32 @@ pub fn test_wrapping_a_long_running_script() {
         file: tool_path,
         ..Default::default()
     })
-    .unwrap();
+    .await.unwrap();
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-a-long-running-script
-pub fn test_wrapping_a_long_running_script2() {
+pub async fn test_wrapping_a_long_running_script2() {
     let (current, dir) = setup();
 
     let command = &["python", "sleep.py"];
 
     let name = "sleep2";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         name: Some(name.to_string()),
         no_run: true,
         outputs: Some(vec!["sleep.txt".to_string()]),
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -202,28 +221,32 @@ pub fn test_wrapping_a_long_running_script2() {
             file: tool_path,
             ..Default::default()
         })
-        .unwrap();
+        .await.unwrap();
     }
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#implicit-inputs-hardcoded-files
-pub fn test_implicit_inputs_hardcoded_files() {
+pub async fn test_implicit_inputs_hardcoded_files() {
     let (current, dir) = setup();
 
     let command = &["python", "load.py"];
 
     let name = "load";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         inputs: Some(vec!["file.txt".to_string()]),
         outputs: Some(vec!["out.txt".to_string()]),
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -256,27 +279,31 @@ pub fn test_implicit_inputs_hardcoded_files() {
             file: tool_path,
             ..Default::default()
         })
-        .unwrap();
+        .await.unwrap();
     }
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 #[cfg_attr(target_os = "windows", ignore)]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#piping
-pub fn test_piping() {
+pub async fn test_piping() {
     let (current, dir) = setup();
 
     let command = &["cat", "speakers.csv", "|", "head", "-n", "5", ">", "speakers_5.csv"];
 
     let name = "cat";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
@@ -294,16 +321,16 @@ pub fn test_piping() {
             file: tool_path,
             ..Default::default()
         })
-        .unwrap();
+        .await.unwrap();
     }
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#pulling-containers
-pub fn test_pulling_containers() {
+pub async fn test_pulling_containers() {
     let (current, dir) = setup();
 
     let command = &[
@@ -316,7 +343,7 @@ pub fn test_pulling_containers() {
     ];
 
     let name = "calculation";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         container_image: Some("pandas/pandas:pip-all".to_string()),
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
@@ -327,7 +354,11 @@ pub fn test_pulling_containers() {
     unsafe {
         env::set_var("PATH", newpath);
     }
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     //restore path
     unsafe {
@@ -351,16 +382,16 @@ pub fn test_pulling_containers() {
             file: tool_path,
             ..Default::default()
         })
-        .unwrap();
+        .await.unwrap();
     }
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#building-custom-containers
-pub fn test_building_custom_containers() {
+pub async fn test_building_custom_containers() {
     let (current, dir) = setup();
 
     let command = &[
@@ -373,7 +404,7 @@ pub fn test_building_custom_containers() {
     ];
 
     let name = "calculation";
-    let args = &CreateArgs {
+    let args = CreateArgs {
         container_image: Some("Dockerfile".to_string()),
         container_tag: Some("my-docker".to_string()),
         command: command.iter().map(|&s| s.to_string()).collect(),
@@ -386,7 +417,11 @@ pub fn test_building_custom_containers() {
         env::set_var("PATH", newpath);
     }
 
-    assert!(create_tool(args).is_ok());
+    tokio::task::spawn_blocking(move || {
+        assert!(create_tool(&args).is_ok());
+    })
+    .await
+    .unwrap();
 
     //restore path
     unsafe {
@@ -410,18 +445,18 @@ pub fn test_building_custom_containers() {
             file: tool_path,
             ..Default::default()
         })
-        .unwrap();
+        .await.unwrap();
     }
 
     cleanup(current, dir);
 }
 
-#[test]
+#[tokio::test]
 #[serial]
 /// see https://fairagro.github.io/sciwin/getting-started/example/
 //docker not working on MacOS Github Actions
 #[cfg_attr(target_os = "macos", ignore)]
-pub fn test_example_project() {
+pub async fn test_example_project() {
     //set up environment
     let dir = tempdir().unwrap();
     let dir_str = &dir.path().to_string_lossy();
@@ -446,26 +481,30 @@ pub fn test_example_project() {
 
     //init project
     initialize_project(dir.path(), false).expect("Could not init s4n");
-
-    //create calculation tool
-    create_tool(&CreateArgs {
-        command: [
-            "python".to_string(),
-            "workflows/calculation/calculation.py".to_string(),
-            "--speakers".to_string(),
-            "data/speakers_revised.csv".to_string(),
-            "--population".to_string(),
-            "data/population.csv".to_string(),
-        ]
-        .to_vec(),
-        container_image: Some("pandas/pandas:pip-all".to_string()),
-        ..Default::default()
+    tokio::task::spawn_blocking(move || {
+        create_tool(&CreateArgs {
+            command: [
+                "python".to_string(),
+                "workflows/calculation/calculation.py".to_string(),
+                "--speakers".to_string(),
+                "data/speakers_revised.csv".to_string(),
+                "--population".to_string(),
+                "data/population.csv".to_string(),
+            ]
+            .to_vec(),
+            container_image: Some("pandas/pandas:pip-all".to_string()),
+            ..Default::default()
+        })
+        .expect("Could not create calculation tool");
     })
-    .expect("Could not create calculation tool");
+    .await
+    .unwrap();
+  
     assert!(fs::exists("workflows/calculation/calculation.cwl").unwrap());
 
     //create calculation tool
-    create_tool(&CreateArgs {
+     tokio::task::spawn_blocking(move || {
+         create_tool(&CreateArgs {
         command: [
             "python".to_string(),
             "workflows/plot/plot.py".to_string(),
@@ -478,6 +517,10 @@ pub fn test_example_project() {
         ..Default::default()
     })
     .expect("Could not create plot tool");
+     })
+     .await
+     .unwrap();
+
     assert!(fs::exists("workflows/plot/plot.cwl").unwrap());
 
     //list files
@@ -561,7 +604,7 @@ pub fn test_example_project() {
         args: vec!["inputs.yml".to_string()],
         ..Default::default()
     })
-    .expect("Could not execute Workflow");
+    .await.expect("Could not execute Workflow");
 
     //check that only svg file is there now!
     assert!(!fs::exists("results.csv").unwrap());

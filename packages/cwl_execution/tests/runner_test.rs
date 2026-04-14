@@ -135,9 +135,9 @@ message:
     });
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_run_commandlinetool() {
+pub async fn test_run_commandlinetool() {
     let cwl = r"
 #!/usr/bin/env cwl-runner
 
@@ -172,7 +172,9 @@ baseCommand:
 ";
 
     let mut tool: CWLDocument = serde_yaml::from_str(cwl).expect("Tool parsing failed");
-    let result = run_tool(&mut tool, &Default::default(), &PathBuf::default(), None);
+    let def = Default::default();
+    let p = &PathBuf::default();
+    let result = run_tool(&mut tool, &def, &p, None).await;
     assert!(result.is_ok());
     //delete results.txt
     let _ = fs::remove_file("results.txt");
@@ -182,9 +184,9 @@ baseCommand:
     }
 }
 
-#[test]
+#[tokio::test]
 #[serial]
-pub fn test_run_commandlinetool_array_glob() {
+pub async fn test_run_commandlinetool_array_glob() {
     let dir = tempdir().unwrap();
     let mut tool = CWLDocument::CommandLineTool(load_tool("../../testdata/array_test.cwl").expect("Tool parsing failed"));
     let result = run_tool(
@@ -192,6 +194,6 @@ pub fn test_run_commandlinetool_array_glob() {
         &Default::default(),
         &PathBuf::default(),
         Some(dir.path().to_string_lossy().into_owned()),
-    );
+    ).await;
     assert!(result.is_ok(), "{result:?}");
 }

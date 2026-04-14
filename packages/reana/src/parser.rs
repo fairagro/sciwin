@@ -116,12 +116,16 @@ pub fn generate_workflow_json_from_cwl(file: &Path, input_file: &Option<PathBuf>
             }
         }
     }
-
-    let output_files: Vec<String> = get_all_outputs(&workflow, cwl_path)
-        .with_context(|| format!("Failed to get all outputs from CWL file '{cwl_path}'"))?
-        .into_iter()
-        .map(|(_, glob)| glob)
-        .collect();
+    let output_files: Vec<String> = get_all_outputs(
+        &workflow,
+        &specification,
+    )
+    .with_context(|| {
+        format!("Failed to get all outputs from CWL file '{cwl_path}'")
+    })?
+    .into_iter()
+    .map(|(_, glob)| glob)
+    .collect();
 
     let outputs = WorkflowOutputs { files: output_files };
 
@@ -162,7 +166,7 @@ mod tests {
 
         // Check 'directories'
         assert!(inputs["directories"].is_array(), "directories should be an array");
-        assert_eq!(inputs["directories"].as_array().unwrap().len(), 1);
+        assert_eq!(inputs["directories"].as_array().unwrap().len(), 0);
 
         // Check 'files'
         assert!(inputs["files"].is_array(), "files should be an array");

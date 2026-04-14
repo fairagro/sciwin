@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use crate::components::files::Node;
 use dioxus::prelude::*;
 use tokio::sync::mpsc::Sender;
-use tokio::task::spawn_blocking;
 use std::sync::Arc;
 use std::path::Path;
 use remote_execution::{get_saved_workflows, save_workflow_name};
@@ -103,52 +102,49 @@ async fn log_msg(sender: &Option<Sender<String>>, message: &str) {
 pub async fn run_reana_async(
     reana: reana::reana::Reana,
     workflow_name: String,
-    workflow_json: serde_json::Value,
+    workflow_json: Value,
     working_dir: PathBuf,
     file_name: PathBuf,
     log_sender: Option<Sender<String>>,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let reana = Arc::new(reana);
     let creds = get_reana_credentials()?;
-    let instance_url = if let Some((instance, _token)) = creds {
-        instance
-    } else {
-        return Err(anyhow::anyhow!("No REANA credentials found"));
-    };
+    let instance_url = creds
+        .as_ref()
+        .map(|(instance, _)| instance.clone())
+        .ok_or_else(|| anyhow::anyhow!("No REANA credentials found"))?;
     log_msg(&log_sender, "🚀 Starting REANA workflow setup...").await;
     log_msg(&log_sender, "📁 Creating workflow...").await;
-
-    let workflow_name_str = {
-        let reana = reana.clone();
-        let workflow_json = workflow_json.clone();
-        let workflow_name = workflow_name.clone();
-        spawn_blocking(move || -> anyhow::Result<String> {
-            let create_response = reana::api::create_workflow(&reana, &workflow_json, Some(&workflow_name))
-                .map_err(|e| anyhow::anyhow!("Create workflow failed: {e}"))?;
-
-            let workflow_name_str = create_response["workflow_name"]
-                .as_str()
-                .ok_or_else(|| anyhow::anyhow!("Missing workflow_name in response"))?;
-
-            Ok(workflow_name_str.to_string())
-        })
-        .await??
-    };
+    // Create workflow
+    let create_response = reana::api::create_workflow(&reana, &workflow_json, Some(&workflow_name)).await
+        .map_err(|e| anyhow::anyhow!("Create workflow failed: {e}"))?;
+    let workflow_name_str = create_response["workflow_name"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("Missing workflow_name in response"))?
+        .to_string();
     log_msg(&log_sender, &format!("Created workflow '{}'", workflow_name_str)).await;
     save_workflow_name(&instance_url, &workflow_name_str).await
         .map_err(|e| anyhow::anyhow!("Saving workflow failed: {e}"))?;
     log_msg(&log_sender, "📤 Uploading input files...").await;
-    reana::api::upload_files_parallel(reana.clone(), &None, &file_name, &workflow_name, &workflow_json, Some(&working_dir))
-    .await
-    .map_err(|e| anyhow::anyhow!("Upload files failed: {e}"))?;
-    let yaml: serde_yaml::Value = serde_json::from_value(workflow_json)
+    reana::api::upload_files_parallel(
+        reana.clone(),
+        &None,
+        &file_name,
+        &workflow_name,
+        &workflow_json,
+        Some(&working_dir),
+    ).await.map_err(|e| anyhow::anyhow!("Upload files failed: {e}"))?;
+    let yaml: serde_yaml::Value = serde_json::from_value(workflow_json.clone())
         .map_err(|e| anyhow::anyhow!("JSON to YAML conversion failed: {e}"))?;
-    log_msg(&log_sender, &format!("▶️ Starting workflow execution for '{}'", workflow_name_str)).await;
-    spawn_blocking(move || {
-        reana::api::start_workflow(&reana, &workflow_name, None, None, false, &yaml)
-            .map_err(|e| anyhow::anyhow!("Start workflow failed: {e}"))
-    })
-    .await??;
+    log_msg(
+        &log_sender,
+        &format!("▶️ Starting workflow execution for '{}'", workflow_name_str),
+    )
+    .await;
+    // Start workflow
+    reana::api::start_workflow(&reana, &workflow_name, None, None, false, &yaml)
+        .await
+        .map_err(|e| anyhow::anyhow!("Start workflow failed: {e}"))?;
     log_msg(&log_sender, "✅ Workflow started successfully!").await;
 
     Ok(())

@@ -1,11 +1,12 @@
 use anyhow::Context;
 use reqwest::{
-    blocking::{Client, Response},
+    {Client, Response},
     header::{CONTENT_TYPE, HeaderMap},
 };
 use serde_json::Value;
 use std::{collections::HashMap, fmt::Display};
 
+#[derive(PartialEq)]
 pub struct Reana {
     server: String,
     token: String,
@@ -27,9 +28,8 @@ impl Reana {
         url
     }
 
-    pub fn post(&self, endpoint: &WorkflowEndpoint, body: Content, params: Option<HashMap<String, String>>) -> anyhow::Result<Response> {
+    pub async fn post(&self, endpoint: &WorkflowEndpoint<'_>, body: Content, params: Option<HashMap<String, String>>) -> anyhow::Result<Response> {
         let mut headers = HeaderMap::new();
-
         headers.insert(
             CONTENT_TYPE,
             match body {
@@ -38,35 +38,39 @@ impl Reana {
             }
             .parse()?,
         );
-
         let client = Client::builder().default_headers(headers).build()?;
         let url = self.url(endpoint, params);
         match body {
-            Content::Json(json) => client.post(&url).json(&json).send()?.error_for_status(),
-            Content::OctetStream(file) => client.post(&url).body(file).send()?.error_for_status(),
+            Content::Json(json) => client.post(&url).json(&json).send().await?.error_for_status(),
+            Content::OctetStream(file) => client.post(&url).body(file).send().await?.error_for_status(),
         }
         .with_context(|| format!("❌ Failed to send POST request to URL: {url}"))
     }
 
-    pub fn get(&self, endpoint: &WorkflowEndpoint) -> anyhow::Result<Response> {
-        let client = Client::builder().build()?;
+    pub async fn get(&self, endpoint: &WorkflowEndpoint<'_>) -> anyhow::Result<Response> {
+        let client = reqwest::Client::new();
         let url = self.url(endpoint, None);
         client
             .get(&url)
             .send()
+            .await
             .with_context(|| format!("❌ Failed to send GET request to URL: {url}"))
     }
 
-    pub fn ping(&self) -> anyhow::Result<Response> {
+    pub async fn ping(&self) -> anyhow::Result<Response> {
         let ping_url = format!("{}/api/ping", self.server);
-        let client = Client::builder()
-            .build()
-            .context("Failed to build HTTP client")?;
-
+        let client = reqwest::Client::new();
         client
             .get(&ping_url)
             .send()
+            .await
             .with_context(|| format!("❌ Failed to send GET request to URL: {ping_url}"))
+    }
+    pub fn server(&self) -> &str {
+        &self.server
+    }
+    pub fn token(&self) -> &str {
+        &self.token
     }
 }
 

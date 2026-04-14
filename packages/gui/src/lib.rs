@@ -44,6 +44,8 @@ pub struct ApplicationState {
     pub terminal_exec_type: Signal<ExecutionType>,
     #[serde(skip)]
     pub show_manage_reana_modal: Signal<bool>,
+    #[serde(skip)]
+    pub last_local_execution_file: Signal<Option<std::path::PathBuf>>,
 }
 
 impl ApplicationState {

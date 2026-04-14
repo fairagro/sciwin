@@ -2,32 +2,30 @@ use std::path::{PathBuf, Path};
 use reana_ext::parser::WorkflowJson;
 use anyhow::Result;
 mod reana;
-use anyhow::anyhow;
 use tokio::sync::mpsc::Sender;
+use rocrate_ext::{RocrateArgs};
 
-pub fn schedule_run(file: &Path, input_file: &Option<PathBuf>) -> Result<String> {
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| anyhow!("Failed to create tokio runtime: {e}"))?;
-    rt.block_on(reana::execute_remote_start(file, input_file))
+pub async fn schedule_run(file: &Path, input_file: &Option<PathBuf>) -> Result<String> {
+    reana::execute_remote_start(file, input_file).await
 }
-pub fn check_status(workflow_name: &Option<String>) -> Result<(), Box<dyn std::error::Error>> {
-    reana::check_remote_status(workflow_name)
-}
-
-pub fn download_results(workflow_name: &str, all: bool, output_dir: Option<&String>) -> Result<(), Box<dyn std::error::Error>> {
-    reana::download_remote_results(workflow_name, all, output_dir)
+pub async fn check_status(workflow_name: &Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    reana::check_remote_status(workflow_name).await
 }
 
-pub fn export_rocrate(workflow_name: &str, output_dir: Option<&String>, working_dir: Option<&String>) -> Result<(), Box<dyn std::error::Error>> {
-    reana::export_rocrate(workflow_name, output_dir, working_dir)
+pub async fn download_results(workflow_name: &str, all: bool, output_dir: Option<&String>) -> Result<(), Box<dyn std::error::Error>> {
+    reana::download_remote_results(workflow_name, all, output_dir).await
 }
 
 pub fn logout() -> Result<(), Box<dyn std::error::Error>> {
     reana::logout_reana()
 }
 
-pub fn watch(workflow_name: &str, rocrate: bool) -> Result<(), Box<dyn std::error::Error>> {
-    reana::watch(workflow_name, rocrate)
+pub fn reana_login() -> Result<(String, String), Box<dyn std::error::Error>> {
+    reana::login_reana()
+}
+
+pub async fn watch(workflow_name: &str, rocrate_args: &Option<RocrateArgs>) -> Result<(), Box<dyn std::error::Error>> {
+    reana::watch(workflow_name, rocrate_args).await
 }
 
 pub async fn compatibility_adjustments(workflow_json: &mut WorkflowJson, log_sender: Option<Sender<String>>) -> anyhow::Result<()> {

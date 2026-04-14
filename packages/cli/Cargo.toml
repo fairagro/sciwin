@@ -18,6 +18,8 @@ repository = { path = "../repository" }
 commonwl = { path = "../cwl", features = ["execution", "annotation"] }
 remote_execution = { path = "../remote_execution" }
 util = { path = "../util" }
+rocrate_ext = { package = "rocrate", path = "../rocrate" }
+reana = { path = "../reana"}
 
 anyhow = { workspace = true }
 colored = { workspace = true }
@@ -27,6 +29,7 @@ reqwest = { workspace = true }
 serde_yaml = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+serde_json = { workspace = true }
 
 clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
 clap_complete = "4.5.61"

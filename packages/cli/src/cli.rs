@@ -1,9 +1,10 @@
 use crate::commands::{
-    AnnotateCommands, ConnectWorkflowArgs, CreateArgs, ExecuteCommands, InitArgs, InstallPackageArgs, ListCWLArgs, PackageArgs, RemoveCWLArgs, SaveArgs, VisualizeWorkflowArgs
+    AnnotateCommands, ConnectWorkflowArgs, CreateArgs, ExecuteCommands, InitArgs, InstallPackageArgs, ListCWLArgs, PackageArgs, RemoveCWLArgs, SaveArgs, VisualizeWorkflowArgs,
 };
 use clap::{Command, Parser, Subcommand};
 use clap_complete::{Generator, Shell, generate};
 use std::io;
+use rocrate_ext::RocrateArgs;
 
 #[derive(Parser, Debug)]
 #[command(name="s4n", about=format!(r#"
@@ -63,6 +64,8 @@ pub enum Commands {
         #[arg()]
         shell: Shell,
     },
+    #[command(about = "Generate RO-Crate for a workflow")]
+    Rocrate(RocrateArgs),
 }
 
 pub fn generate_completions<G: Generator>(generator: G, cmd: &mut Command) -> anyhow::Result<()> {

@@ -5,18 +5,18 @@ use reana_ext::{
 };
 use std::error::Error;
 
-pub fn download_remote_results(workflow_name: &str, all: bool, output_dir: Option<&String>) -> Result<(), Box<dyn Error>> {
+pub async fn download_remote_results(workflow_name: &str, all: bool, output_dir: Option<&String>) -> Result<(), Box<dyn Error>> {
     let (reana_instance, reana_token) = login_reana()?;
     let reana = Reana::new(reana_instance, reana_token);
 
-    let status_response = get_workflow_status(&reana, workflow_name).map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
+    let status_response = get_workflow_status(&reana, workflow_name).await.map_err(|e| format!("Failed to fetch workflow status: {e}"))?;
     let workflow_status = status_response["status"].as_str().unwrap_or("unknown");
     // Get workflow status, only download if finished?
     match workflow_status {
         "finished" => {
             // Download only outputs
             if !all {
-                let workflow_json = get_workflow_specification(&reana, workflow_name)?;
+                let workflow_json = get_workflow_specification(&reana, workflow_name).await.map_err(|e| format!("Failed to fetch workflow specification: {e}"))?;
                 let output_files = workflow_json
                     .get("specification")
                     .and_then(|spec| spec.get("outputs"))
@@ -29,17 +29,17 @@ pub fn download_remote_results(workflow_name: &str, all: bool, output_dir: Optio
                             .collect::<Vec<String>>()
                     })
                     .unwrap_or_default();
-                download_files(&reana, workflow_name, &output_files, output_dir.map(|x| x.as_str()))?;
+                download_files(&reana, workflow_name, &output_files, output_dir.map(|x| x.as_str())).await?;
             }
             // Download all files in workspace
             else {
-                let workspace_json = get_workflow_workspace(&reana, workflow_name)?;
+                let workspace_json = get_workflow_workspace(&reana, workflow_name).await.map_err(|e| format!("Failed to fetch workflow workspace: {e}"))?;
                 let workspace_files: Vec<String> = workspace_json
                     .get("items")
                     .and_then(|items| items.as_array())
                     .map(|array| array.iter().filter_map(|item| item.get("name")?.as_str().map(String::from)).collect())
                     .unwrap_or_default();
-                    download_files(&reana, workflow_name, &workspace_files, output_dir.map(|x| x.as_str()))?;
+                    download_files(&reana, workflow_name, &workspace_files, output_dir.map(|x| x.as_str())).await?;
             }
         }
         "failed" => {

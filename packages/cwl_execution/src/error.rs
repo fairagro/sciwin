@@ -3,6 +3,10 @@ use reqwest::StatusCode;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+pub trait ExitCode {
+    fn exit_code(&self) -> i32;
+}
+
 #[derive(Error, Debug)]
 #[error("{message} (exit code: {exit_code})")]
 pub struct CommandError {
@@ -124,11 +128,25 @@ pub enum ExecutionError {
     ParseIntError(#[from] std::num::ParseIntError),
     RequestError(#[from] reqwest::Error),
 
-    //generic errors
+    // catch-all
+    #[error(transparent)]
     Any(#[from] anyhow::Error),
-    Fallback(#[from] Box<dyn std::error::Error>),
 }
 
-pub trait ExitCode {
-    fn exit_code(&self) -> i32;
+impl From<tokio::task::JoinError> for ExecutionError {
+    fn from(e: tokio::task::JoinError) -> Self {
+        ExecutionError::Any(anyhow::Error::new(e))
+    }
+}
+
+impl From<Box<dyn std::error::Error + Send + Sync>> for ExecutionError {
+    fn from(e: Box<dyn std::error::Error + Send + Sync>) -> Self {
+        ExecutionError::Any(anyhow::anyhow!(e.to_string()))
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for ExecutionError {
+    fn from(e: Box<dyn std::error::Error>) -> Self {
+        ExecutionError::Any(anyhow::Error::msg(e.to_string()))
+    }
 }

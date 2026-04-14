@@ -20,7 +20,7 @@ use std::{
 };
 use urlencoding::decode;
 
-pub(crate) fn stage_required_files<P: AsRef<Path>, Q: AsRef<Path>, R: AsRef<Path>>(
+pub (crate) async fn stage_required_files<P: AsRef<Path>, Q: AsRef<Path>, R: AsRef<Path>>(
     tool: &CWLDocument,
     input_values: &InputObject,
     runtime: &mut RuntimeEnvironment,
@@ -39,7 +39,7 @@ pub(crate) fn stage_required_files<P: AsRef<Path>, Q: AsRef<Path>, R: AsRef<Path
         tool_path.as_ref(),
         path.as_ref(),
         out_dir.as_ref(),
-    )?);
+    ).await?);
     //do not remove file multiple times if input matches InitialWorkDirRequirement filename
     staged_files.sort_unstable();
     staged_files.dedup();
@@ -155,7 +155,7 @@ fn get_iwdr_src(tool_path: &Path, basepath: &String) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn stage_input_files(
+async fn stage_input_files(
     inputs: &[CommandInputParameter],
     runtime: &mut RuntimeEnvironment,
     tool_path: &Path,
@@ -181,13 +181,13 @@ fn stage_input_files(
             //stage array of Files or Dir
             let mut staged_array = vec![];
             for item in vec {
-                staged_array.push(stage_item(item, input, runtime, tool_path, path, out_dir, &mut staged_files)?);
+                staged_array.push(stage_item(item, input, runtime, tool_path, path, out_dir, &mut staged_files).await?);
             }
 
             DefaultValue::Array(staged_array)
         } else {
             //stage singular item
-            stage_item(&mut data, input, runtime, tool_path, path, out_dir, &mut staged_files)?
+            stage_item(&mut data, input, runtime, tool_path, path, out_dir, &mut staged_files).await?
         };
         //insert into runtime
         runtime.inputs.insert(input.id.clone(), staged_data);
@@ -196,7 +196,7 @@ fn stage_input_files(
 }
 
 /// stage single item (dir or file)
-fn stage_item(
+async fn stage_item(
     data: &mut DefaultValue,
     input: &CommandInputParameter,
     runtime: &mut RuntimeEnvironment,
@@ -218,7 +218,7 @@ fn stage_item(
             && (location.starts_with("https://") || location.starts_with("http://"))
         {
             //set updated path:
-            let downloaded_path = download_file(location, runtime)?;
+            let downloaded_path = download_file(location, runtime).await?;
             f.location = Some(downloaded_path.to_string_lossy().into_owned());
         }
     }
@@ -258,30 +258,27 @@ fn create_file_literal(path: &Path, contents: &String) -> Result<PathBuf> {
     Ok(dest)
 }
 
-/// downnloads a file using web client
-fn download_file(location: &str, runtime: &mut RuntimeEnvironment) -> Result<PathBuf> {
-    let client = reqwest::blocking::Client::new();
-    let mut res = client.get(location).send()?;
+async fn download_file(location: &str, runtime: &mut RuntimeEnvironment) -> Result<PathBuf> {
+    let client = reqwest::Client::new();
+    let res = client.get(location).send().await?;
+
     if res.status() != reqwest::StatusCode::OK {
         return Err(ExecutionError::DownloadFileError(location.into(), res.status()));
     }
 
-    //get file name from url
-    if let Some(segment) = res
+    let filename = res
         .url()
         .path_segments()
         .and_then(|mut segments| segments.next_back())
-        .map(|filename| Path::new(&runtime.runtime["tmpdir"].to_string()).join(filename))
-    {
-        let path = Path::new(&runtime.runtime["tmpdir"].to_string()).join(segment);
-        let mut out = fs::File::create(&path)?;
-        io::copy(&mut res, &mut out)?;
+        .ok_or_else(|| anyhow::anyhow!("Could not extract filename from URL."))?;
 
-        //set updated path:
-        Ok(path)
-    } else {
-        Err(anyhow::anyhow!("Could not extract filename from URL.").into())
-    }
+    let path = Path::new(&runtime.runtime["tmpdir"].to_string()).join(filename);
+    let mut out = fs::File::create(&path)?;
+
+    let bytes = res.bytes().await?;
+    io::copy(&mut bytes.as_ref(), &mut out)?;
+
+    Ok(path)
 }
 
 fn compute_staging_path(data: &DefaultValue, runtime: &mut RuntimeEnvironment, path: &Path, tool_path: &Path, out_dir: &Path) -> (PathBuf, PathBuf) {
@@ -443,9 +440,9 @@ mod tests {
         assert_eq!(result, test_contents);
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_stage_input_files_dir() {
+    async fn test_stage_input_files_dir() {
         //create tmp_dir
         let tmp_dir = tempdir().unwrap();
 
@@ -461,16 +458,16 @@ mod tests {
             tmp_dir.path(),
             &PathBuf::from(""),
         )
-        .unwrap();
+        .await.unwrap();
         let expected_path = tmp_dir.path().join(test_dir);
 
         assert_eq!(list.len(), 1);
         assert_eq!(list[0], expected_path.to_string_lossy().into_owned());
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_stage_input_files_file() {
+    async fn test_stage_input_files_file() {
         //create tmp_dir
         let tmp_dir = tempdir().unwrap();
 
@@ -486,7 +483,7 @@ mod tests {
             tmp_dir.path(),
             &PathBuf::from(""),
         )
-        .unwrap();
+        .await.unwrap();
 
         let expected_path = tmp_dir.path().join(test_file);
 
@@ -494,9 +491,9 @@ mod tests {
         assert_eq!(list[0], expected_path.to_string_lossy().into_owned());
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_stage_input_files_file_array() {
+    async fn test_stage_input_files_file_array() {
         //create tmp_dir
         let tmp_dir = tempdir().unwrap();
 
@@ -513,7 +510,7 @@ mod tests {
             tmp_dir.path(),
             &PathBuf::from(""),
         )
-        .unwrap();
+        .await.unwrap();
 
         let expected_path_0 = tmp_dir.path().join(test_files[0]);
         let expected_path_1 = tmp_dir.path().join(test_files[0]);
@@ -541,9 +538,9 @@ mod tests {
         assert!(expected_path.exists());
     }
 
-    #[test]
+    #[tokio::test]
     #[serial]
-    fn test_stage_remote_files() {
+    async fn test_stage_remote_files() {
         //create tmp_dir
         let temp = tempdir().unwrap();
         let working = tempdir().unwrap();
@@ -564,7 +561,7 @@ mod tests {
             working.path(),
             &PathBuf::from(""),
         )
-        .unwrap();
+        .await.unwrap();
 
         let expected_path = working.path().join("README.md");
 

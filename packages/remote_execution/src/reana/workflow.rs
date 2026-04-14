@@ -25,8 +25,7 @@ pub async fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> 
     let reana = Reana::new(reana_instance.clone(), reana_token.clone());
 
     // Ping server
-    let ping_status = ping_reana(&reana)
-        .map_err(|e| anyhow!("Failed to ping REANA server: {e}"))?;
+    let ping_status = ping_reana(&reana).await.map_err(|e| anyhow!("Failed to ping REANA server: {e}"))?;
     if ping_status.get("status").and_then(|s| s.as_str()) != Some("200") {
         return Err(anyhow!("⚠️ Unexpected response from REANA server: {ping_status:?}"));
     }
@@ -44,7 +43,7 @@ pub async fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> 
 
     let workflow_name_clone = workflow_name.clone();
     let create_response = create_workflow(&reana, &workflow_json_value, Some(&workflow_name_clone))
-        .map_err(|e| anyhow!("Failed to create workflow: {e}"))?;
+        .await.map_err(|e| anyhow!("Failed to create workflow: {e}"))?;
     let workflow_name_str = create_response["workflow_name"]
         .as_str()
         .ok_or_else(|| anyhow!("Missing workflow_name in response"))?;
@@ -59,8 +58,7 @@ pub async fn execute_remote_start(file: &Path, input_file: &Option<PathBuf>) -> 
     .map_err(|e| anyhow!("Failed to upload files: {e}"))?;
 
     // Start workflow
-    start_workflow(&reana, workflow_name_str, None, None, false, &converted_yaml)
-        .map_err(|e| anyhow!("Failed to start workflow: {e}"))?;
+    start_workflow(&reana, workflow_name_str, None, None, false, &converted_yaml).await.map_err(|e| anyhow!("Failed to start workflow: {e}"))?;
 
     eprintln!("✅ Started workflow execution of '{workflow_name_str}'.");
     eprintln!("You can check its status using: s4n execute remote status '{workflow_name_str}' or use 's4n execute remote status' to check all workflows.");

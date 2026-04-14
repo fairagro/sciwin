@@ -20,7 +20,7 @@ use std::{
 };
 use tempfile::tempdir;
 
-pub fn run_workflow(
+pub async fn run_workflow(
     workflow: &mut Workflow,
     input_values: &InputObject,
     cwl_path: &PathBuf,
@@ -154,7 +154,7 @@ pub fn run_workflow(
                         sub_inputs.inputs.insert(k, v);
                     }
 
-                    let singular_outputs = execute_step(step, &sub_inputs, &path, workflow_folder, &tmp_path)?;
+                    let singular_outputs = execute_step(step, &sub_inputs, &path, workflow_folder, &tmp_path).await?;
 
                     for (key, value) in singular_outputs {
                         step_outputs.entry(key).or_default().push(value);
@@ -175,7 +175,7 @@ pub fn run_workflow(
                     .map(|(k, v)| (k, DefaultValue::Array(v)))
                     .collect::<HashMap<_, _>>()
             } else {
-                execute_step(step, &input_values, &path, workflow_folder, &tmp_path)?
+                execute_step(step, &input_values, &path, workflow_folder, &tmp_path).await?
             };
 
             for (key, value) in step_outputs {
@@ -253,7 +253,7 @@ pub fn run_workflow(
     Ok(output_values.into_iter().map(|(k, v)| (k.clone(), v)).collect())
 }
 
-fn execute_step(
+async fn execute_step(
     step: &cwl_core::WorkflowStep,
     input_values: &InputObject,
     path: &Option<PathBuf>,
@@ -262,10 +262,10 @@ fn execute_step(
 ) -> Result<HashMap<String, DefaultValue>, Box<dyn Error>> {
     let step_outputs = if let Some(path) = path {
         info!("🚲 Executing Tool {path:?} ...");
-        execute(path, input_values, Some(tmp_path), None)?
+        execute(path, input_values, Some(tmp_path), None).await?
     } else if let StringOrDocument::Document(doc) = &step.run {
         info!("🚲 Executing Tool {} ...", step.id);
-        execute(workflow_folder, input_values, Some(tmp_path), Some(doc))?
+        execute(workflow_folder, input_values, Some(tmp_path), Some(doc)).await?
     } else {
         unreachable!()
     };

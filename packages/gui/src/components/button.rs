@@ -53,10 +53,18 @@ pub fn SmallRoundActionButton(props: ButtonProps) -> Element {
 }
 
 #[component]
-pub fn NonRotatingActionButton(props: ButtonProps) -> Element {
-    base_button(
-        props,
-        "cursor-pointer flex items-center gap-1 px-2 py-1 rounded-md \
-         hover:bg-fairagro-dark-500 transition-colors duration-150",
-    )
+pub fn NonRotatingActionButton(onclick: EventHandler<MouseEvent>, #[props(optional)] disabled: Option<bool>, children: Element,) -> Element {
+    let disabled = disabled.unwrap_or(false);
+    rsx! {
+        button {
+            class: "px-3 py-2 rounded bg-zinc-700 hover:bg-fairagro-dark-500 transition-colors duration-150 disabled:opacity-50",
+            disabled: disabled,
+            onclick: move |e| {
+                if !disabled {
+                    onclick.call(e);
+                }
+            },
+            {children}
+        }
+    }
 }

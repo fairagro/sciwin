@@ -18,7 +18,6 @@ use crate::components::files::{FileType, read_node_type};
 use crate::components::ExecutionType;
 use tokio::sync::mpsc;
 use dioxus::core::spawn;
-use tokio::task::spawn_blocking;
 
 #[component]
 pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<bool>, Signal<bool>)) -> Element {
@@ -131,7 +130,7 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                         move |_| {
                                             let item = item.clone();
                                             let mut app_state = app_state;
-                                            async move {
+                                            spawn(async move {
                                                 {
                                                     let mut state = app_state.write();
                                                     navigator().push(Route::GlobalTerminal);
@@ -139,50 +138,51 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                                     state.show_terminal_log.set(true);
                                                     state.terminal_log.set(String::new());
                                                     state.terminal_exec_type.set(ExecutionType::Local);
+                                                    state.last_local_execution_file.set(Some(item.path.clone()));
                                                 }
                                                 let Some(dir) = app_state().working_directory.clone() else {
                                                     eprintln!("❌ No working directory");
-                                                    return Ok(());
+                                                    return;
                                                 };
                                                 let args = vec![dir.join("inputs.yml").to_string_lossy().to_string()];
                                                 let mut terminal_signal = app_state().terminal_log;
                                                 terminal_signal.set("🚀 Starting local execution...\n".to_string());
                                                 let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
-                                                tokio::task::spawn_blocking({
-                                                    let item = item.clone();
-                                                    let args = args.clone();
-                                                    let dir = dir.clone();
-                                                    let tx = tx.clone();
-                                                    move || {
-                                                        let result = resolve_safe_cwl_path(&dir, Path::new(&item.path));
-                                                        let cwl_path = match result {
-                                                            Ok(path) => path,
-                                                            Err(msg) => {
-                                                                let _ = tx.blocking_send(format!("{msg}\n"));
-                                                                return;
-                                                            }
-                                                        };
-                                                        let inputs_file = dir.join("inputs.yml");
-                                                        if !inputs_file.exists() {
-                                                            let _ = tx.blocking_send(format!("❌ inputs.yml not found: {:?}\n", inputs_file));
+                                                let item_clone = item.clone();
+                                                let dir_clone = dir.clone();
+                                                let args_clone = args.clone();
+                                                let tx_clone = tx.clone();
+                                                spawn(async move {
+                                                    let cwl_path = match resolve_safe_cwl_path(&dir_clone, Path::new(&item_clone.path)) {
+                                                        Ok(p) => p,
+                                                        Err(msg) => {
+                                                            let _ = tx_clone.send(format!("{msg}\n")).await;
                                                             return;
                                                         }
-                                                        let result = execute_cwlfile(&cwl_path, &args, Some(dir));
-                                                        let _ = match result {
-                                                            Ok(_) => tx.blocking_send("✅ Local execution completed.\n".to_string()),
-                                                            Err(e) => tx.blocking_send(format!("❌ Execution failed: {e}\n")),
-                                                        };
+                                                    };
+                                                    let inputs_file = dir_clone.join("inputs.yml");
+                                                    if !inputs_file.exists() {
+                                                        let _ = tx_clone.send(format!("❌ inputs.yml not found: {:?}\n", inputs_file)).await;
+                                                        return;
+                                                    }
+                                                    match execute_cwlfile(&cwl_path, &args_clone, Some(dir_clone), &None).await {
+                                                        Ok(_) => {
+                                                            let _ = tx_clone.send("✅ Local execution completed.\n".to_string()).await;
+                                                        }
+                                                        Err(e) => {
+                                                            let _ = tx_clone.send(format!("❌ Execution failed: {e}\n")).await;
+                                                        }
                                                     }
                                                 });
                                                 while let Some(line) = rx.recv().await {
                                                     terminal_signal.with_mut(|t| t.push_str(&line));
                                                 }
-                                                Ok(())
-                                            }
+                                            });
+                                            Ok(())
                                         }
                                     },
                                     Icon { width: 10, height: 10, icon: GoPlay }
-                                }      
+                                }
                                 // REANA                              
                                 if read_node_type(&item.path) == FileType::Workflow {
                                     SmallRoundActionButton {
@@ -454,6 +454,7 @@ fn RemoteRunButton(item: Node, show_settings: Signal<bool>, module: Option<Strin
 #[component]
 fn LocalRunButton(item: Node, module: Option<String>) -> Element {
     let app_state = use_app_state();
+
     rsx! {
         SmallRoundActionButton {
             class: "hover:bg-fairagro-mid-500",
@@ -474,42 +475,41 @@ fn LocalRunButton(item: Node, module: Option<String>) -> Element {
                         state.show_terminal_log.set(true);
                         state.terminal_log.set(String::new());
                         state.terminal_exec_type.set(ExecutionType::Local);
+                        state.last_local_execution_file.set(Some(item.path.clone()));
                     }
-                    let workflow_dir = if let Some(module_name) = &module {
-                        resolve_working_dir(base_dir.clone(), &Some(module_name.clone()))
-                    } else {
-                        base_dir.clone()
+                    let workflow_dir = module
+                        .as_ref()
+                        .map(|m| resolve_working_dir(base_dir.clone(), &Some(m.clone())))
+                        .unwrap_or(base_dir.clone());
+                    let mut terminal_signal = app_state().terminal_log;
+                    terminal_signal.set("Starting local execution...\n".to_string());
+                    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(64);
+                    let cwl_path = match resolve_safe_cwl_path(&workflow_dir, Path::new(&item.path)) {
+                        Ok(p) => p,
+                        Err(msg) => {
+                            terminal_signal.with_mut(|t| t.push_str(&format!("{msg}\n")));
+                            return;
+                        }
                     };
-                    let mut terminal = app_state().terminal_log;
-                    terminal.set("🚀 Starting local execution...\n".to_string());
-                    let (tx, mut rx) = mpsc::channel::<String>(64);
-                    spawn_blocking({
-                        let item = item.clone();
-                        let dir = workflow_dir.clone();
-                        let tx = tx.clone();
-                        move || {
-                            let cwl_path = match resolve_safe_cwl_path(&dir, Path::new(&item.path)) {
-                                Ok(p) => p,
-                                Err(msg) => {
-                                    let _ = tx.blocking_send(format!("{msg}\n"));
-                                    return;
-                                }
-                            };
-                            let inputs = dir.join("inputs.yml");
-                            let args = if inputs.exists() {
-                                vec![inputs.to_string_lossy().to_string()]
-                            } else {
-                                Vec::new()
-                            };
-                            let result = execute_cwlfile(&cwl_path, &args, Some(dir));
-                            let _ = match result {
-                                Ok(_) => tx.blocking_send("✅ Local execution completed.\n".to_string()),
-                                Err(e) => tx.blocking_send(format!("❌ Execution failed: {e}\n")),
-                            };
+                    let inputs_file = workflow_dir.join("inputs.yml");
+                    let args = if inputs_file.exists() {
+                        vec![inputs_file.to_string_lossy().to_string()]
+                    } else {
+                        Vec::new()
+                    };
+                    let tx_clone = tx.clone();
+                    spawn(async move {
+                        match execute_cwlfile(&cwl_path, &args, Some(workflow_dir.clone()), &None).await {
+                            Ok(_) => {
+                                let _ = tx_clone.send("Local execution completed.\n".to_string()).await;
+                            }
+                            Err(e) => {
+                                let _ = tx_clone.send(format!("Execution failed: {e}\n")).await;
+                            }
                         }
                     });
                     while let Some(line) = rx.recv().await {
-                        terminal.with_mut(|t| t.push_str(&line));
+                        terminal_signal.with_mut(|t| t.push_str(&line));
                     }
                 });
                 Ok(())

@@ -2,7 +2,7 @@ use dialoguer::{Input, theme::ColorfulTheme};
 use keyring::Entry;
 use std::error::Error;
 
-pub(super) fn login_reana() -> Result<(String, String), Box<dyn Error>> {
+pub fn login_reana() -> Result<(String, String), Box<dyn Error>> {
     let reana_instance = get_or_prompt_credential("reana", "instance", "Enter REANA instance URL: ")?;
     let reana_token = get_or_prompt_credential("reana", "token", "Enter REANA access token: ")?;
     Ok((reana_instance, reana_token))
