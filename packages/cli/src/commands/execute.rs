@@ -6,10 +6,11 @@ use remote_execution::{check_status, download_results, logout};
 use serde_yaml::{Number, Value};
 use std::{collections::HashMap, error::Error, fs, path::{PathBuf, Path}, sync::Arc};
 use anyhow::anyhow;
-use rocrate_ext::{unzip_rocrate, RocrateRunType, RocrateArgs, find_cwl_in_rocrate, verify_cwl_references, clone_from_rocrate_or_cwl, find_cwl_and_inputs, export_rocrate};
+use rocrate_ext::{unzip_rocrate, RocrateRunType, RocrateArgs, find_cwl_and_yaml_in_rocrate, verify_cwl_references, clone_from_rocrate_or_cwl, export_rocrate};
 use commonwl::{load_doc, packed::pack_workflow};
 use remote_execution::{reana_login};
 use reana::{api::{get_workflow_logs, get_workflow_specification}, reana::Reana, utils::get_cwl_name};
+use anyhow::Context;
 
 pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> Result<(), Box<dyn Error>> {
     match subcommand {
@@ -230,8 +231,8 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), ExecutionError
 
 async fn execute_cwl_from_rocrate_root(crate_root: &Path, out_dir: Option<PathBuf>,
     ro_crate_meta: &Path, rocrate_args: &Option<RocrateArgs>) -> Result<(), ExecutionError> {
-    let cwl_path = find_cwl_in_rocrate(crate_root)?;
-    if !verify_cwl_references(&cwl_path)? {
+    let (cwl_path, input_yaml) = find_cwl_and_yaml_in_rocrate(crate_root)?;
+       if !verify_cwl_references(&cwl_path).context("Failed to verify CWL references")? || input_yaml.is_none() {
         let (_tmp, cloned_cwl, cloned_inputs) = clone_from_rocrate_or_cwl(ro_crate_meta, &cwl_path)?;
         let cwl_path_to_run = cloned_cwl
             .as_ref()
@@ -242,9 +243,9 @@ async fn execute_cwl_from_rocrate_root(crate_root: &Path, out_dir: Option<PathBu
             .unwrap_or_default();
         return execute_cwlfile(cwl_path_to_run, &inputs, out_dir, rocrate_args).await;
     }
-    let (_cwl_candidate, inputs_candidate) = find_cwl_and_inputs(crate_root, &cwl_path);
-    let inputs: Vec<String> = inputs_candidate.as_ref().map(|p| vec![p.to_string_lossy().to_string()]).unwrap_or_default();
+    let inputs: Vec<String> = input_yaml.as_ref().map(|p| vec![p.to_string_lossy().to_string()]).unwrap_or_default();
     execute_cwlfile(&cwl_path, &inputs, out_dir, rocrate_args).await
+    //execute_cwlfile(&cwl_path, &input_yaml, out_dir, rocrate_args).await
 }
 
 pub async fn schedule_run(file: &Path, input_file: &Option<PathBuf>, rocrate_args: &Option<RocrateArgs>, watch: bool, logout: bool) -> Result<(), Box<dyn Error>> {
