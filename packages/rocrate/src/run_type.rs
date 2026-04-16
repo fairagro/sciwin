@@ -10,6 +10,7 @@ pub struct RocrateArgs {
     pub run_type: RocrateRunType,
 }
 
+//added arc rocrate but if user pushes to datahub it is created automatically anyway, also requires arc
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
 #[clap(rename_all = "PascalCase")]
 pub enum RocrateRunType {
@@ -19,6 +20,8 @@ pub enum RocrateRunType {
     ProcessRun,
     #[clap(name = "Workflow RO-Crate")]
     WorkflowROCrate,
+    #[clap(name = "ARC RO-Crate")]
+    ArcROCrate,
     #[default]
     #[clap(name = "Provenance Run Crate")]
     ProvenanceRun,

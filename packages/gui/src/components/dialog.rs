@@ -244,6 +244,7 @@ pub fn MetadataDialog(
         RocrateRunType::ProvenanceRun => "Provenance Run Crate",
         RocrateRunType::WorkflowRun => "Workflow Run Crate",
         RocrateRunType::ProcessRun => "Process Run Crate",
+        RocrateRunType::ArcROCrate => "ARC RO-Crate",
     };
     rsx! {
         Dialog {
@@ -290,6 +291,7 @@ pub fn MetadataDialog(
                                 ("Provenance Run Crate", RocrateRunType::ProvenanceRun),
                                 ("Workflow Run Crate", RocrateRunType::WorkflowRun),
                                 ("Process Run Crate", RocrateRunType::ProcessRun),
+                                ("ARC RO-Crate", RocrateRunType::ArcROCrate),
                             ] {
                                 div {
                                     class: "px-3 py-2 cursor-pointer hover:bg-green-600",
