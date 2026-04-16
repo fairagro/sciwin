@@ -49,26 +49,27 @@ bibliography: paper.bib
 # Summary
 SciWIn-Client (`s4n`) is a command-line tool developed as part of the Scientific Workflow Infrastructure (SciWIn) of the FAIRagro consortium [@Ewert2023Proposal]. It is designed to streamline the creation, execution and management of reproducible computational workflows using the _Common Workflow Language (CWL)_[@Crusoe2022MethodsIncluded]. By wrapping ordinary command-line commands with a thin layer of tooling, SciWIn-Client automatically generates CWL definitions, allowing scientists to write CWL using the well-known commands rather than hand-authoring verbose specifications.
 Implemented in Rust for high performance and reliability, SciWIn-Client integrates nativly with Git for version control and provenance tracking. It supports both local and remote workflow execution and is interoperable with the Workflow RO-Crate[@??] and Workflow Run RO-Crate[@Leo2024WRRC] standards. Furthermore SciWIn-Client is interoperable with research data management frameworks such as DataPLANT's ARC format [@dataplant2025ARCSpec;@Weil2023PLANTdataHUB].
+
 # Statement of Need
 Automated computational workflows are essential for managing complex, multi-step data analysis across various scientific disciplines. Significant effort has been invested into domain-specific languages that formalize and standardize computational scientific processes, thereby enhancing reproducibility, scalability and efficiency. 
 To harmonize this wild growth of languages, the Common Workflow Language (CWL) was introducted as universal standard [@Crusoe2022MethodsIncluded]. Its design emphasizes flexibility and machine readability but its verbose YAML-based syntax poses a substantial barrier to adoption among researchers unfamiliar with structured data formats. 
 
 CWL therefore is predestined to be written by machines rather than humans, which ultimately motivated the conception of SciWIn-Client. 
 SciWIn-Client provides an intuitive command-line interface that automates CWL generation and management. It translates typical research computing tasks into structured, version-controlled workflow definitions, effectively allowing scientists to “write CWL by doing science.”
+
 # State of the field
+- Fragmented landscape
+- Platforms like Nextflow, Galaxy -> significant adoption, 
+- CWL vendor-neutral, platform agnostic, portable, runs everywhere
+- CWL lacking ecosystem/tooling- lots of runners but only outdated "Generators" like Rabix (now behind vendor lock)
+- Alleinstellungsmerkmale SciWIn:
+  - CWL, offline, niederschwelliger, unabhängiger, Anbindung an ARC-Ökosystem, unabhängiger was (insbesondere lokale) compute-Instanzen angeht. Vertrauliche Daten. Einfacheres Teilen von Skripten. Universeller durch Git-basierte Repräsentation (Benutzung beliebiger Forges).
+  - Arbeitsprozess ist auf **eine** GX-Instanz beschränkt?  
+  - Interop mit Galaxy (wrappen um execution engines zu benutzen),  
+  - Provenance capture, & versioning via git native
+
+
 # Software design
-# Reserach impact statement
-# Acknowledgements 
-We gratefully acknowledge the financial support of the German Research Foundation (DFG) – project number 501899475.
-
-# AI usage disclosure
-All paper content was written manually and reflects the careful thought and input of the authors. SciWIn is an open source project, and as such contributors are free to use any tools, AI or otherwise, to generate code contained in pull requests or commits. All commits and pull requests are reviewed by the core developers and often iterated on multiple times; therefore, all content in the repository represents the effort and judgment of the authors.
-
-# References
-
----
-# OLD
-# Features and Implementation
 SciWIn-Client (short: `s4n`) is implemented in the Rust programming language, chosen for its high performance, strong type safety, and robust error handling — qualities essential in scientific software. Git integration provides built-in version control and interoperability with research data management frameworks such as  DataPLANTs ARC [@dataplant2025ARCSpec][@Weil2023PLANTdataHUB] format which can be viewed as a Git-based implementation of the RO-Crate standard [@SoilandReyes2022ROCrate].
 
 ## Managing CWL Files
@@ -85,14 +86,18 @@ The simplest way to execute a workflow is to run it directly on the machine wher
 When performing high demanding calculations, workflows often need to be dispatched to large compute clusters. For the execution on compute clusters SciWIn-Client is able to communicate with the REST-API of Reana instances [@Simko2019Reana]. Reana is a reproducible research data analysis platform provided by CERN. FAIRagro operates their own Reana Installation in de.NBI Cloud. 
 Structured execution results in form of RO-crates [@SoilandReyes2022ROCrate] more specifically Workflow Run RO-Crates [@Leo2024WRRC] using the Provenance Run Crate profile can be exported. 
 
-# Conclusion and Outlook
-
-![Integration of SciWin-Client into Research Data Management infrastructures](./assets/overview.png)
-
-SciWin-Client is a powerful tool for building, managing and executing complex computational pipelines locally and at scale on Reana instances. The code is hosted in a public GitHub repository (https://github.com/fairagro/m4.4_sciwin_client). 
-Future development will focus of extending SciWIn-Client with the possiblity to publish workflows to workflowhub.eu [@gustafsson_workflowhub_2025] and a graphical user interface to lower the barrier of entry for new users. 
+# Research impact statement
+- lowering technical barrier
+- FAIRagro goals
+- By automating CWL generation from everyday research computing tasks, it enables domain scientists — regardless of their software engineering background — to participate in open, collaborative, and reproducible science.
+- transparent versioning, FAIR, ARC format, DataPLANT, WRRC
+- Future Development: WorkflowHub? DockerGen
+The source code is openly available at https://github.com/fairagro/m4.4_sciwin_client under a permissive license, and the project welcomes community contributions.
 
 # Acknowledgements 
 We gratefully acknowledge the financial support of the German Research Foundation (DFG) – project number 501899475.
+
+# AI usage disclosure
+All paper content was written manually and reflects the careful thought and input of the authors. SciWIn is an open source project, and as such contributors are free to use any tools, AI or otherwise, to generate code contained in pull requests or commits. All commits and pull requests are reviewed by the core developers and often iterated on multiple times; therefore, all content in the repository represents the effort and judgment of the authors.
 
 # References
