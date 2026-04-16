@@ -1,0 +1,17 @@
+{
+  "name": "gui",
+  "version": "1.0.0",
+  "description": "Broker package for tailwind support in dioxus",
+  "scripts": {
+    "watch": "npx @tailwindcss/cli -i ./tailwind.css -o ./assets/tailwind.css --watch",
+    "build": "npx esbuild js/monaco.js --bundle --minify --platform=browser --outfile=./assets/bundle.min.js --loader:.ttf=dataurl"
+  },
+  "dependencies": {
+    "monaco-editor": "^0.55.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.17",
+    "esbuild": "^0.27.0",
+    "tailwindcss": "^4.1.17"
+  }
+}

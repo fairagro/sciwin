@@ -8,7 +8,8 @@ use s4n_core::{
     io::{get_qualified_filename, get_workflows_folder},
     tool::ToolCreationOptions,
 };
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
+use commonwl::execution::docker::ContainerEngine;
 
 pub fn handle_create_command(args: &CreateArgs) -> anyhow::Result<()> {
     if args.command.is_empty() && args.name.is_some() {
@@ -46,6 +47,8 @@ pub struct CreateArgs {
     pub enable_network: bool,
     #[arg(short = 'i', long = "inputs", help = "Force values to be considered as an input.", value_delimiter = ' ')]
     pub inputs: Option<Vec<String>>,
+    #[arg(long = "run-container", help = "Possible container engines: docker, podman, singularity, apptainer")]
+    pub run_container: Option<ContainerEngineArg>,
     #[arg(
         short = 'o',
         long = "outputs",
@@ -83,9 +86,28 @@ impl<'a> From<&'a CreateArgs> for ToolCreationOptions<'a> {
                 tag: args.container_tag.as_deref(),
             }),
             enable_network: args.enable_network,
+            run_container: args.run_container.as_ref().map(|r| r.0),
             mounts: args.mount.as_deref().unwrap_or(&[]),
             env: args.env.as_deref(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ContainerEngineArg(pub ContainerEngine);
+
+impl FromStr for ContainerEngineArg {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let engine = match s.to_lowercase().as_str() {
+            "docker" => ContainerEngine::Docker,
+            "podman" => ContainerEngine::Podman,
+            "singularity" => ContainerEngine::Singularity,
+            "apptainer" => ContainerEngine::Apptainer,
+            other => return Err(anyhow!("Unknown container engine: {other}")),
+        };
+        Ok(ContainerEngineArg(engine))
     }
 }
 

@@ -15,7 +15,7 @@ use std::io;
 \____/  \___||_| \/  \/  \___/|_| |_|  \____/|_||_| \___||_| |_| \__|
 
 Client tool for Scientific Workflow Infrastructure (SciWIn)
-Documentation: https://fairagro.github.io/m4.4_sciwin_client/
+Documentation: https://fairagro.github.io/sciwin/
 
 Version: {}"#, env!("CARGO_PKG_VERSION"))
 , long_about=None, version)]

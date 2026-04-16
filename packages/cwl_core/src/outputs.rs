@@ -93,7 +93,8 @@ pub struct WorkflowOutputParameter {
     #[serde(default)]
     pub id: String,
     pub type_: CWLType,
-    pub output_source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_source: Option<String>,
 }
 
 impl WorkflowOutputParameter {

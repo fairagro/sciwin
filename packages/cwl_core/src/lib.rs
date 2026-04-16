@@ -377,6 +377,7 @@ mod tests {
     #[case("../../testdata/mkdir_wf.cwl")]
     #[case("../../testdata/test-wf.cwl")]
     #[case("../../testdata/test-wf_features.cwl")]
+    #[case("../../testdata/test-wf_features_alt.cwl")]
     #[case("../../testdata/wf_inout.cwl")]
     #[case("../../testdata/wf_inout_dir.cwl")]
     #[case("../../testdata/wf_inout_file.cwl")]

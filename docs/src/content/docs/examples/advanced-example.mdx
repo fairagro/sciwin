@@ -2,19 +2,19 @@
 title: Advanced Example
 ---
 
-A basic Workflow using [SciWIn Client (`s4n`)](https://github.com/fairagro/m4.4_sciwin_client) can be created with the commands hereafter. This guide assumes the usage of unix based operating systems, however Windows should work, too. If not please [open an issue](https://github.com/fairagro/m4.4_sciwin_client/issues/new).
+A basic Workflow using [SciWIn Client (`s4n`)](https://github.com/fairagro/sciwin) can be created with the commands hereafter. This guide assumes the usage of unix based operating systems, however Windows should work, too. If not please [open an issue](https://github.com/fairagro/sciwin/issues/new).
 
 ## Installation
-[![GitHub Release](https://img.shields.io/github/v/release/fairagro/m4.4_sciwin_client)](https://github.com/fairagro/m4.4_sciwin_client/releases/latest)
+[![GitHub Release](https://img.shields.io/github/v/release/fairagro/sciwin)](https://github.com/fairagro/sciwin/releases/latest)
 
 The latest Version of `s4n` can be installed using the following command:
 ```
-curl --proto '=https' --tlsv1.2 -LsSf https://fairagro.github.io/m4.4_sciwin_client/get_s4n.sh | sh 
+curl --proto '=https' --tlsv1.2 -LsSf https://fairagro.github.io/sciwin/get_s4n.sh | sh 
 ```
 
 Specific Versions can be installed with the following command, by replacing the version tag with a version of choice.
 ```
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fairagro/m4.4_sciwin_client/releases/download/v0.6.0/s4n-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/fairagro/sciwin/releases/download/v0.6.0/s4n-installer.sh | sh
 ```
 
 The Installation can be verified using `s4n -V`.
@@ -28,7 +28,7 @@ SciWIn Client comes with a lot of commands. In this demo the `init`, `tool`, `wo
 \____/  \___||_| \/  \/  \___/|_| |_|  \____/|_||_| \___||_| |_| \__|
 
 Client tool for Scientific Workflow Infrastructure (SciWIn)
-Documentation: https://fairagro.github.io/m4.4_sciwin_client/
+Documentation: https://fairagro.github.io/sciwin/
 
 Version: 0.8.0
 
@@ -56,7 +56,7 @@ Options:
 ```
 
 ## Demo Repository
-The [Demo Repository](https://github.com/fairagro/sciwin_client_demo) mainly contains two folders `data` and `code`. The result workflow will  download election data, print election results as `barplot`, convert input data into a `geojson` file, and maps it onto the `geojson` data resulting in a `choropleth` graph. See the images for the final outputs.
+The [Demo Repository](https://github.com/fairagro/m4.4_sciwin_client_demo) mainly contains two folders `data` and `code`. The result workflow will  download election data, print election results as `barplot`, convert input data into a `geojson` file, and maps it onto the `geojson` data resulting in a `choropleth` graph. See the images for the final outputs.
 
 ![result](https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client_demo/refs/heads/complete_run/election.png)
 ![result](https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client_demo/refs/heads/complete_run/plot.png)
@@ -108,7 +108,7 @@ outputs:
 baseCommand: ogr2ogr
 ```
 
-However it may is tedious to write those files by hand. That is where `s4n` comes to the rescue. A Command that would normally happen on the command line just needs to be prefixed with `s4n tool create`. Examples can be found at the [documentation](https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/).
+However it may is tedious to write those files by hand. That is where `s4n` comes to the rescue. A Command that would normally happen on the command line just needs to be prefixed with `s4n tool create`. Examples can be found at the [documentation](https://fairagro.github.io/sciwin/examples/tool-creation/).
 
 To create Tools based of the Python scripts in the `code` Directory a virtual environment needs to be created using 
 ```bash
@@ -120,17 +120,17 @@ pip install plotly pandas kaleido==0.2.1 matplotlib
 The next step is to download election data using a series of API calls for which luckily already a script exists. The script downloads the data from `votemanager.kdo.de` and writes the `csv` to stdout.
 A tool can be created easily be prefixing the python call. However we also need to escape the `>` using a backslash for it to properly work
 ```bash
-s4n create python code/download_election_data.py --ags 03101000 --election "Bundestagswahl 2025" \> data.csv
+s4n create python3 code/download_election_data.py --ags 03101000 --election "Bundestagswahl 2025" \> data.csv
 ```
 
 The written csv file lacks the header information of which party results correspond to which column. Therefore we use the `get_feature_info` script and create a tool as follows:
 ```bash
-s4n create python code/get_feature_info.py --data data.csv
+s4n create python3 code/get_feature_info.py --data data.csv
 ```
 
 With this information the election plot can be outputted. The script `plot_election` does the job and accepts the json file from `get_feature_info` and the aforementioned csv.
 ```bash
-s4n create -c Dockerfile --container-tag pyplot --enable-network python code/plot_election.py --data data.csv --features features.json
+s4n create -c Dockerfile --container-tag pyplot --enable-network python3 code/plot_election.py --data data.csv --features features.json
 ```
 
 ## Combining the Tools into a workflow

@@ -1,6 +1,6 @@
 #![allow(clippy::disallowed_macros)]
 use commonwl::execution::io::copy_dir;
-///This file contains all examples described here: <https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation>/
+///This file contains all examples described here: <https://fairagro.github.io/sciwin/examples/tool-creation>/
 use commonwl::{
     Command, Entry, load_tool, load_workflow,
     requirements::{Requirement, WorkDirItem},
@@ -37,7 +37,7 @@ fn cleanup(current: PathBuf, dir: TempDir) {
 #[test]
 #[serial]
 #[cfg_attr(target_os = "windows", ignore)]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#wrapping-echo
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-echo
 pub fn test_wrapping_echo() {
     let (current, dir) = setup();
 
@@ -69,7 +69,7 @@ pub fn test_wrapping_echo() {
 #[test]
 #[serial]
 #[cfg_attr(target_os = "windows", ignore)]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#wrapping-echo
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-echo
 pub fn test_wrapping_echo_2() {
     let (current, dir) = setup();
 
@@ -104,7 +104,7 @@ pub fn test_wrapping_echo_2() {
 
 #[test]
 #[serial]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#wrapping-a-python-script
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-a-python-script
 pub fn test_wrapping_python_script() {
     let (current, dir) = setup();
 
@@ -138,7 +138,7 @@ pub fn test_wrapping_python_script() {
 
 #[test]
 #[serial]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#wrapping-a-long-running-script
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-a-long-running-script
 pub fn test_wrapping_a_long_running_script() {
     let (current, dir) = setup();
 
@@ -172,7 +172,7 @@ pub fn test_wrapping_a_long_running_script() {
 
 #[test]
 #[serial]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#wrapping-a-long-running-script
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#wrapping-a-long-running-script
 pub fn test_wrapping_a_long_running_script2() {
     let (current, dir) = setup();
 
@@ -210,7 +210,7 @@ pub fn test_wrapping_a_long_running_script2() {
 
 #[test]
 #[serial]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#implicit-inputs-hardcoded-files
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#implicit-inputs-hardcoded-files
 pub fn test_implicit_inputs_hardcoded_files() {
     let (current, dir) = setup();
 
@@ -265,7 +265,7 @@ pub fn test_implicit_inputs_hardcoded_files() {
 #[test]
 #[serial]
 #[cfg_attr(target_os = "windows", ignore)]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#piping
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#piping
 pub fn test_piping() {
     let (current, dir) = setup();
 
@@ -302,7 +302,7 @@ pub fn test_piping() {
 
 #[test]
 #[serial]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#pulling-containers
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#pulling-containers
 pub fn test_pulling_containers() {
     let (current, dir) = setup();
 
@@ -359,7 +359,7 @@ pub fn test_pulling_containers() {
 
 #[test]
 #[serial]
-///see https://fairagro.github.io/m4.4_sciwin_client/examples/tool-creation/#building-custom-containers
+///see https://fairagro.github.io/sciwin/examples/tool-creation/#building-custom-containers
 pub fn test_building_custom_containers() {
     let (current, dir) = setup();
 
@@ -418,7 +418,7 @@ pub fn test_building_custom_containers() {
 
 #[test]
 #[serial]
-/// see https://fairagro.github.io/m4.4_sciwin_client/getting-started/example/
+/// see https://fairagro.github.io/sciwin/getting-started/example/
 //docker not working on MacOS Github Actions
 #[cfg_attr(target_os = "macos", ignore)]
 pub fn test_example_project() {

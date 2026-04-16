@@ -1,6 +1,6 @@
 name: 📎 Clippy
 permissions:
-      contents: read
+  contents: read
 on:
   workflow_call:
 
@@ -23,7 +23,26 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+      - run: |
+          sudo apt-get update 
+          sudo apt-get install -y \
+          libgtk-3-dev \
+          libglib2.0-dev \
+          libwebkit2gtk-4.1-dev \
+          build-essential \
+          curl \
+          wget \
+          file \
+          libxdo-dev \
+          libssl-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev
       - name: Run Clippy
         run: |
           rustup component add clippy
           cargo clippy --all-targets --all-features --workspace
+      - name: Install dx
+        run: |
+          curl -sSL http://dioxus.dev/install.sh | bash -s v0.7.2
+      - name: Run dx check
+        run: dx check -p sciwin

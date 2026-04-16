@@ -1,3 +1,4 @@
+use anyhow::Context;
 use clap::Args;
 use log::info;
 use std::{env, path::PathBuf};
@@ -16,10 +17,11 @@ pub fn handle_init_command(args: &InitArgs) -> anyhow::Result<()> {
         None => env::current_dir()?,
     };
 
-    if let Err(e) = s4n_core::project::initialize_project(&base_dir, args.arc) {
-        s4n_core::project::git_cleanup(args.project.clone())?;
-        anyhow::bail!("Could not initialize Project: {e}");
-    }
+    s4n_core::project::initialize_project(&base_dir, args.arc)
+        .inspect_err(|_| {
+            let _ = s4n_core::project::git_cleanup(args.project.clone());
+        })
+        .with_context(|| format!("Could not initialize project at {:?}", base_dir))?;
     info!("📂 Project Initialization successful");
     Ok(())
 }

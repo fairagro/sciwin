@@ -418,7 +418,7 @@ pub fn test_shell_script() {
 }
 
 #[fstest(repo = true)]
-/// see Issue [#89](https://github.com/fairagro/m4.4_sciwin_client/issues/89)
+/// see Issue [#89](https://github.com/fairagro/sciwin/issues/89)
 pub fn test_tool_uncommitted_no_run() {
     let root = env!("CARGO_MANIFEST_DIR");
     fs::copy(format!("{root}/../../testdata/input.txt"), "input.txt").unwrap(); //repo is not in a clean state now!
@@ -432,7 +432,7 @@ pub fn test_tool_uncommitted_no_run() {
 }
 
 #[fstest(repo = true, files = ["../../testdata/subfolders.py"])]
-/// see Issue [#88](https://github.com/fairagro/m4.4_sciwin_client/issues/88)
+/// see Issue [#88](https://github.com/fairagro/sciwin/issues/88)
 pub fn test_tool_output_subfolders() {
     let args = CreateArgs {
         command: ["python".to_string(), "subfolders.py".to_string()].to_vec(),
@@ -448,7 +448,7 @@ pub fn tool_create_remote_file() {
     let tool_create_args = CreateArgs {
         command: vec![
             "wget".to_string(),
-            "https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client/refs/heads/main/README.md".to_string(),
+            "https://raw.githubusercontent.com/fairagro/sciwin/refs/heads/main/README.md".to_string(),
         ],
         ..Default::default()
     };

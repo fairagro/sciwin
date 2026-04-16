@@ -2,10 +2,10 @@ use crate::{
     io::{self, resolve_path},
     parser,
 };
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use commonwl::{
     Entry, EnviromentDefs, PathItem,
-    execution::{environment::RuntimeEnvironment, io::create_and_write_file, runner::command},
+    execution::{ContainerEngine, environment::RuntimeEnvironment, io::create_and_write_file, runner::command, set_container_engine},
     format::format_cwl,
     prelude::*,
     requirements::WorkDirItem,
@@ -19,11 +19,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Clone)]
 pub struct ContainerInfo<'a> {
     pub image: &'a str,
     pub tag: Option<&'a str>,
 }
 
+#[derive(Default)]
 pub struct ToolCreationOptions<'a> {
     pub command: &'a [String],
     pub outputs: &'a [String],
@@ -36,13 +38,26 @@ pub struct ToolCreationOptions<'a> {
     pub enable_network: bool,
     pub mounts: &'a [PathBuf],
     pub env: Option<&'a Path>,
+    pub run_container: Option<ContainerEngine>,
 }
 
 pub fn create_tool(options: &ToolCreationOptions, name: Option<String>, save: bool) -> Result<String> {
-    let cwl = create_tool_base(options)?;
+    let mut cwl = create_tool_base(options)?;
 
-    // Handle container requirements
-    let mut cwl = add_tool_requirements(cwl, options.container.as_ref(), options.enable_network, options.mounts, options.env)?;
+    if options.run_container.is_none() {
+        cwl = add_tool_requirements(cwl, options.container.as_ref(), options.enable_network, options.mounts, options.env)?;
+    } else if let Some(container) = &options.container
+        && Path::new(container.image).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("sif"))
+    {
+        //if run_container is some requirements are already set in create_tool_base()
+        //just the docker requirements needs to be altered in case of sif file
+        cwl.base.requirements.retain(|req| !matches!(req, Requirement::DockerRequirement(_)));
+
+        let mut modified_container = container.clone();
+        modified_container.image = container.image.trim_end_matches(".sif");
+        cwl = append_container_requirement(cwl, Some(&modified_container));
+    }
+    // Finalize CWL
     let path = io::get_qualified_filename(&cwl.base_command, name);
     let yaml = finalize_tool(&mut cwl, &path)?;
 
@@ -76,6 +91,7 @@ fn create_tool_base(options: &ToolCreationOptions) -> Result<CommandLineTool> {
     let commit: bool = options.commit;
     let clear_defaults: bool = options.clear_defaults;
     let env: Option<&Path> = options.env;
+    let run_container = options.run_container;
 
     let command = command.iter().map(String::as_str).collect::<Vec<_>>();
     let current_working_dir = env::current_dir()?;
@@ -98,14 +114,29 @@ fn create_tool_base(options: &ToolCreationOptions) -> Result<CommandLineTool> {
 
     if !no_run {
         let mut environment = RuntimeEnvironment::default();
-        if let Some(env) = env {
-            environment = environment.with_environment(read_env(env)?);
+        if let Some(env_file) = env {
+            environment = environment.with_environment(read_env(env_file)?);
         }
 
-        // run command and get modified files
-        command::run_command(&cwl, &mut environment).map_err(|e| anyhow::anyhow!("Could not execute command: `{}`: {}!", command.join(" "), e))?;
+        if let Some(engine) = &run_container {
+            match engine {
+                ContainerEngine::Singularity | ContainerEngine::Apptainer => {
+                    set_container_engine(ContainerEngine::Singularity);
+                }
+                _ => {
+                    set_container_engine(*engine);
+                }
+            }
+            cwl = add_tool_requirements(cwl, options.container.as_ref(), options.enable_network, options.mounts, options.env)?;
+            command::run_command(&cwl, &mut environment).map_err(|e| anyhow::anyhow!("Failed to run tool: {e}"))?;
+        } else {
+            command::run_command(&cwl, &mut environment)
+                .map_err(|e| anyhow::anyhow!("Could not execute command: `{}`: {}!", command.join(" "), e))?;
+        }
+
+        // Handle modified files
         let mut files = repository::get_modified_files(&repo);
-        files.retain(|f| !modified.contains(f)); //remove files that were changed before run
+        files.retain(|f| !modified.contains(f));
 
         if cleanup {
             for file in &files {
@@ -113,7 +144,6 @@ fn create_tool_base(options: &ToolCreationOptions) -> Result<CommandLineTool> {
             }
         }
 
-        // stage changed files
         if commit {
             for file in &files {
                 let path = Path::new(file);
@@ -132,17 +162,14 @@ fn create_tool_base(options: &ToolCreationOptions) -> Result<CommandLineTool> {
         }
     }
 
-    //add fixed inputs
     if !inputs.is_empty() {
         parser::add_fixed_inputs(&mut cwl, &inputs.iter().map(String::as_str).collect::<Vec<_>>())
-            .map_err(|e| anyhow::anyhow!("Could not gather fixed inputs: {e}"))?;
+            .map_err(|e| anyhow!("Could not gather fixed inputs: {e}"))?;
     }
-
+    // Clear defaults if requested
     if clear_defaults {
         for input in &mut cwl.inputs {
-            if input.default.is_some() {
-                input.default = None;
-            }
+            input.default = None;
         }
     }
 
@@ -157,16 +184,7 @@ fn add_tool_requirements(
     env: Option<&Path>,
 ) -> Result<CommandLineTool> {
     // Handle container requirements
-    if let Some(container) = &container {
-        let requirement = if container.image.contains("Dockerfile") {
-            let image_id = container.tag.unwrap_or("sciwin-container");
-            Requirement::DockerRequirement(DockerRequirement::from_file(container.image, image_id))
-        } else {
-            Requirement::DockerRequirement(DockerRequirement::from_pull(container.image))
-        };
-
-        cwl = cwl.append_requirement(requirement);
-    }
+    cwl = append_container_requirement(cwl, container);
 
     if enable_network {
         cwl = cwl.append_requirement(Requirement::NetworkAccess(NetworkAccess { network_access: true }));
@@ -199,6 +217,21 @@ fn add_tool_requirements(
         }
     }
     Ok(cwl)
+}
+
+fn append_container_requirement(cwl: CommandLineTool, container: Option<&ContainerInfo>) -> CommandLineTool {
+    if let Some(container) = &container {
+        let requirement = if container.image.contains("Dockerfile") {
+            let image_id = container.tag.unwrap_or("sciwin-container");
+            Requirement::DockerRequirement(DockerRequirement::from_file(container.image, image_id))
+        } else {
+            Requirement::DockerRequirement(DockerRequirement::from_pull(container.image))
+        };
+
+        cwl.append_requirement(requirement)
+    } else {
+        cwl
+    }
 }
 
 fn finalize_tool(cwl: &mut CommandLineTool, path: &str) -> Result<String> {

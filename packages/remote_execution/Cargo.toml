@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-reana = { path = "../reana" }
+reana_ext = { package = "reana", path = "../reana" }
 commonwl = { path = "../cwl" }
 util = { path = "../util" }
 s4n_core = { path = "../core" }
@@ -20,6 +20,8 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 toml.workspace = true
 uuid.workspace = true
+tempfile.workspace = true
+tokio = {version = "1.49.0"}
 
 [lints]
 workspace = true

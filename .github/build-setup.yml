@@ -1,0 +1,16 @@
+- name: Install Systen Packages
+  if: ${{ matrix.runner == 'ubuntu-22.04' }}
+  run: |
+    sudo apt-get update 
+    sudo apt-get install -y \
+    libgtk-3-dev \
+    libglib2.0-dev \
+    libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev

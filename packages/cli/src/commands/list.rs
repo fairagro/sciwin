@@ -267,7 +267,7 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
         .outputs
         .iter()
         .map(|output| {
-            if wf.has_step_output(&output.output_source) {
+            if wf.has_step_output(&output.output_source.clone().unwrap_or_default()) {
                 format!("✅    {}", output.id)
             } else {
                 format!("❌    {}", output.id)
@@ -312,7 +312,7 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
                     .steps
                     .iter()
                     .any(|s| s.in_.clone().iter().any(|v| v.source == Some(format!("{}/{}", step.id, output.id))))
-                    || wf.outputs.iter().any(|o| o.output_source == format!("{}/{}", step.id, output.id))
+                    || wf.outputs.iter().any(|o| o.output_source == Some(format!("{}/{}", step.id, output.id)))
                 {
                     format!("✅    {}", output.id)
                 } else {

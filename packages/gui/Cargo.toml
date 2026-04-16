@@ -1,0 +1,61 @@
+[package]
+name = "sciwin"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+publish = false             # prevent dist from publishing testing version
+
+[package.metadata.dist]
+dist = false
+
+[dependencies]
+anyhow.workspace = true
+pathdiff.workspace = true
+rand.workspace = true
+reqwest = { workspace = true }
+serde.workspace = true
+serde_yaml.workspace = true
+serde_json.workspace = true
+shlex.workspace = true
+toml.workspace = true
+
+commonwl = { path = "../cwl" }
+repository = { path = "../repository" }
+s4n_core = { path = "../core" }
+remote_execution = { path = "../remote_execution" }
+reana = { path = "../reana" }
+keyring = { version = "3.6.3", features = [
+    "apple-native",
+    "linux-native",
+    "windows-native",
+] }
+
+dioxus = { version = "0.7.3", features = ["router"] }
+dioxus-free-icons = { version = "0.10.0", features = [
+    "octicons",
+    "material-design-icons-maps",
+] }
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
+
+chrono = "0.4.42"
+ignore = "0.4.23"
+petgraph = "0.8.3"
+rust-sugiyama = "0.4.0"
+rfd = { version = "0.15.4", default-features = false, features = [
+    "tokio",
+    "xdg-portal",
+] }
+tokio = { version = "1.48.0", features = ["time"] }
+
+[dev-dependencies]
+fstest.workspace = true
+serial_test.workspace = true
+tempfile.workspace = true
+
+[features]
+default = ["desktop"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]

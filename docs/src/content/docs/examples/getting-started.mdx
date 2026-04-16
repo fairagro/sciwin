@@ -19,23 +19,24 @@ s4n -V
 ```
 
 ## Initialization
-To initialize a new project use the `s4n init` command. A project folder can be specifies using the `-p` argument.
+To initialize a new project use the `s4n init` command. A project folder can be specified using the `-p` argument.
 The command will initialize a git repository in this folder if there is none already. Furthermore a `workflows` folder will be created.
 ```bash 
 s4n init -p test_project
-# 📂 s4n project initialisation sucessfully:
-# test_project (Base)
-#   ├── workflows
+# 📂 Project Initialization successful:
 ```
 
 For this example some data needs to be created. To download the data a new folder `data` needs to be created. The raw data files can be downloaded using e.g. `wget`.
+
 ```bash
-wget https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client/refs/heads/main/testdata/hello_world/data/population.csv
-wget https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client/refs/heads/main/testdata/hello_world/data/speakers_revised.csv
+mkdir -p data
+wget -P data https://raw.githubusercontent.com/fairagro/sciwin/refs/heads/main/testdata/hello_world/data/population.csv
+wget -P data https://raw.githubusercontent.com/fairagro/sciwin/refs/heads/main/testdata/hello_world/data/speakers_revised.csv
 ```
 
 ## Creation of Tools
-The keep the demo project organized, the `workflows` folder will also be used to house the scripts used in this demo. The following bash script needs to be created as `workflows/calculation/calculation.py` 
+The keep the demo project organized, the `workflows` folder will also be used to house the scripts used in this demo. The following python script needs to be created as `workflows/calculation/calculation.py`.
+
 ```python
 import argparse
 import csv
@@ -84,11 +85,18 @@ if __name__ == "__main__":
     main()
 ```
 
-To run the tool creation command the changes need to be committed beforehand. The shell script usually would be called with the command `python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv`. To create a CommandLineTool this only needs to be prefixed with `s4n tool create` or `s4n run`. However the `>` operator needs to be escaped using a backslash.
+To run the tool creation command the changes need to be committed beforehand, e.g. via
+
+```bash
+git add .
+git commit -m "add python script"
+```
+
+The python script usually would be called with the command `python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv > results.csv`. To create a CommandLineTool this only needs to be prefixed with `s4n create` or `s4n run`. However the `>` operator needs to be escaped using a backslash.
 ```bash 
-s4n create python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv
+s4n create python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv
 # 📂 The current working directory is /home/ubuntu/test_project
-# ⏳ Executing Command: `python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv`
+# ⏳ Executing Command: `python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv`
 # 📜 Found changes:
 #         - results.csv
 # 
@@ -132,11 +140,14 @@ outputs:
 stdout: results.csv
 
 baseCommand:
-- python
+- python3
 - workflows/calculation/calculation.py
 ```
 
-The `create` command created a description of the script which can be used to build workflows. In this example a second script will be used to have a linear two-step-workflow at the end (`matplotlib` needs to be installed beforehand!)
+The `create` command created a description of the script, which can be used to build workflows. 
+In this example a second script will be used to have a linear two-step-workflow at the end.
+The following python script needs to be created as `workflows/plot/plot.py`.
+Note: `matplotlib` needs to be installed beforehand!
 
 ```python
 import argparse
@@ -180,10 +191,19 @@ if __name__ == "__main__":
 ```
 
 To create the tool for this script the following command can be used to create the CWL definition. SciWIn client automatically determines that `figure.png` shall be listed as an output for this tool.
+
+Again, first make sure to commit the changes:
+
 ```bash
-s4n create python workflows/plot/plot.py --data results.csv
+git add .
+git commit -m "add python plot script"
+```
+
+
+```bash
+s4n create python3 workflows/plot/plot.py --data results.csv
 # 📂 The current working directory is /home/ubuntu/test_project
-# ⏳ Executing Command: `python workflows/plot/plot.py --data results.csv`
+# ⏳ Executing Command: `python3 workflows/plot/plot.py --data results.csv`
 # 📜 Found changes:
 #         - figure.png
 # 
@@ -220,12 +240,13 @@ outputs:
     glob: figure.png
 
 baseCommand:
-- python
+- python3
 - workflows/plot/plot.py
 ```
 
 ## Combining Tools to Workflows
-To check that all has been created correctly the `list` command can be used to visualize tools and their in- and outputs.
+To check that everything has been created correctly, the `list` command can be used to visualize tools and their in- and outputs.
+
 ```bash
 s4n list -a
 # 📂 Scanning for tools in: /home/ubuntu/test_project
@@ -238,13 +259,14 @@ s4n list -a
 # +-------------+----------------------------------------------+---------------------+
 ```
 
-To execute those tools and to really benefit from using CWL a workflow can be created connecting the tools. To create a blank workflow file the 
+To execute those tools and to really benefit from using CWL, a workflow can be created connecting the tools. To create a blank workflow file one can run
 ```bash
 s4n create --name main
 # 📄 Created new Workflow file: workflows/main/main.cwl
 ```
 
-Connections between tools and in- and outputs can be created by the `connect` command. There are the two arguments `--from` and `--to` which creates a line from one node to another. Furthermore a workflow needs inputs and outputs to process its steps. The slot names can be copied from the aforementioned `s4n tool list` command, a connection to in. and outputs needs to be prefixed with `@` and will result in creation of a new in- oder output slot.
+Connections between tools and in- and outputs can be created by the `connect` command. There are the two arguments `--from` and `--to` which create a line from one node to another.
+Furthermore a workflow needs inputs and outputs to process its steps. The slot names can be copied from the aforementioned `s4n tool list` command, a connection to inputs and outputs needs to be prefixed with `@` and will result in creation of a new input or output slot, respectively.
 
 ```bash
 s4n connect main --from @inputs/speakers --to calculation/speakers
@@ -270,7 +292,7 @@ s4n list workflows/main/main.cwl
 # ✅ : connected - 🔘 : tool default - ❌ : no connection
 ```
 
-To connect another input to the `population` slot the above command can be reused with the neccessary adjustments. The stdout will be one line shorter now, as the step will not be created a second time.
+To connect another input to the `population` slot the above command can be reused with the necessary adjustments. The stdout will be one line shorter now, as the step will not be created a second time.
 ```bash
 s4n connect main --from @inputs/population --to calculation/population
 # ➕ Added or updated connection from inputs.population to calculation/population in workflow
@@ -294,7 +316,7 @@ s4n connect main --from plot/figure --to @outputs/image
 
 Running the status command again will show that everything is fine now!
 ```bash
-s4n list main
+s4n list workflows/main/main.cwl
 # Status report for Workflow workflows/main/main.cwl
 # +--------------------------------+------------------+---------------+
 # | Tool                           | Inputs           | Outputs       |

@@ -29,8 +29,8 @@ authors:
     given-names: Harald
     family-names: von Waldow
     affiliation: Johann Heinrich von Thünen Institute
-repository-code: "https://github.com/fairagro/m4.4_sciwin_client"
-url: "https://fairagro.github.io/m4.4_sciwin_client/"
+repository-code: "https://github.com/fairagro/sciwin"
+url: "https://fairagro.github.io/sciwin/"
 abstract: >-
   Computational workflows, which describe complex,
   multi-step procedures for automated execution, are

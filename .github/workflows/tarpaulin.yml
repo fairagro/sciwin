@@ -15,20 +15,33 @@ jobs:
       - run: |
           git config --global user.name "$(git --no-pager log --format=format:'%an' -n 1)"
           git config --global user.email "$(git --no-pager log --format=format:'%ae' -n 1)"
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Cache Cargo
-        uses: actions/cache@v3
+      - name: Disable man-db to make package install and removal faster
+        run: |
+          echo 'set man-db/auto-update false' | sudo debconf-communicate >/dev/null
+          sudo dpkg-reconfigure man-db
+      - name: Free Disk Space (Ubuntu) # Attempting to get around 16gb space limitations when using tarpaulin
+        uses: jlumbroso/free-disk-space@main
         with:
-          path: |
-            ~/.cargo
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          tool-cache: true
+      - run: |
+          sudo apt-get update 
+          sudo apt-get install -y \
+          libgtk-3-dev \
+          libglib2.0-dev \
+          libwebkit2gtk-4.1-dev \
+          build-essential \
+          curl \
+          wget \
+          file \
+          libxdo-dev \
+          libssl-dev \
+          libayatana-appindicator3-dev \
+          librsvg2-dev
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Install Tarpaulin 📈
-        run: cargo install cargo-tarpaulin --force 
+        run: cargo install cargo-tarpaulin --force
       - name: Run coverage
-        run: cargo tarpaulin --workspace --out Xml --skip-clean --exclude-files tests/* tests/**/* packages/**/tests/**/* packages/**/tests/*      
+        run: cargo tarpaulin --workspace --out Xml --exclude-files tests/* tests/**/* packages/**/tests/**/* packages/**/tests/*
       - name: Code Coverage Summary Report
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:

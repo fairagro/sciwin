@@ -6,7 +6,7 @@
 \____/  \___||_| \/  \/  \___/|_| |_|  \____/|_||_| \___||_| |_| \__|
 
 Client tool for Scientific Workflow Infrastructure (SciWIn)
-Documentation: https://fairagro.github.io/m4.4_sciwin_client/
+Documentation: https://fairagro.github.io/sciwin/
 
 Version: 1.0.0
 

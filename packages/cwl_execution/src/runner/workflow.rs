@@ -208,43 +208,44 @@ pub fn run_workflow(
 
     let mut output_values = HashMap::new();
     for output in &workflow.outputs {
-        let source = &output.output_source;
-        if let Some(value) = &outputs.get(source) {
-            let value = match value {
-                DefaultValue::File(file) => DefaultValue::File(output_file(file, &tmp_path, &output_directory)?),
-                DefaultValue::Directory(dir) => DefaultValue::Directory(output_dir(dir, &tmp_path, &output_directory)?),
-                DefaultValue::Any(value) => DefaultValue::Any(value.clone()),
-                DefaultValue::Array(array) => DefaultValue::Array(
-                    array
-                        .iter()
-                        .map(|item| {
-                            Ok(match item {
-                                DefaultValue::File(file) => DefaultValue::File(output_file(file, &tmp_path, &output_directory)?),
-                                DefaultValue::Directory(dir) => DefaultValue::Directory(output_dir(dir, &tmp_path, &output_directory)?),
-                                DefaultValue::Any(value) => DefaultValue::Any(value.clone()),
-                                _ => item.clone(),
+        if let Some(source) = &output.output_source {
+            if let Some(value) = &outputs.get(source) {
+                let value = match value {
+                    DefaultValue::File(file) => DefaultValue::File(output_file(file, &tmp_path, &output_directory)?),
+                    DefaultValue::Directory(dir) => DefaultValue::Directory(output_dir(dir, &tmp_path, &output_directory)?),
+                    DefaultValue::Any(value) => DefaultValue::Any(value.clone()),
+                    DefaultValue::Array(array) => DefaultValue::Array(
+                        array
+                            .iter()
+                            .map(|item| {
+                                Ok(match item {
+                                    DefaultValue::File(file) => DefaultValue::File(output_file(file, &tmp_path, &output_directory)?),
+                                    DefaultValue::Directory(dir) => DefaultValue::Directory(output_dir(dir, &tmp_path, &output_directory)?),
+                                    DefaultValue::Any(value) => DefaultValue::Any(value.clone()),
+                                    _ => item.clone(),
+                                })
                             })
-                        })
-                        .collect::<Result<Vec<_>, Box<dyn Error>>>()?,
-                ),
-            };
-            output_values.insert(&output.id, value.clone());
-        } else if let Some(input) = workflow.inputs.iter().find(|i| i.id == *source) {
-            let result = evaluate_input(input, &input_values.inputs)?;
-            let value = match &result {
-                DefaultValue::File(file) => {
-                    let dest = format!("{}/{}", output_directory, file.get_location());
-                    fs::copy(workflow_folder.join(file.get_location()), &dest)?;
-                    DefaultValue::File(get_file_metadata(Path::new(&dest).to_path_buf(), file.format.clone()))
-                }
-                DefaultValue::Directory(directory) => DefaultValue::Directory(copy_output_dir(
-                    workflow_folder.join(directory.get_location()),
-                    format!("{}/{}", &output_directory, &directory.get_location()),
-                )?),
-                DefaultValue::Any(inner) => DefaultValue::Any(inner.clone()),
-                DefaultValue::Array(inner) => DefaultValue::Array(inner.clone()),
-            };
-            output_values.insert(&output.id, value);
+                            .collect::<Result<Vec<_>, Box<dyn Error>>>()?,
+                    ),
+                };
+                output_values.insert(&output.id, value.clone());
+            } else if let Some(input) = workflow.inputs.iter().find(|i| i.id == *source) {
+                let result = evaluate_input(input, &input_values.inputs)?;
+                let value = match &result {
+                    DefaultValue::File(file) => {
+                        let dest = format!("{}/{}", output_directory, file.get_location());
+                        fs::copy(workflow_folder.join(file.get_location()), &dest)?;
+                        DefaultValue::File(get_file_metadata(Path::new(&dest).to_path_buf(), file.format.clone()))
+                    }
+                    DefaultValue::Directory(directory) => DefaultValue::Directory(copy_output_dir(
+                        workflow_folder.join(directory.get_location()),
+                        format!("{}/{}", &output_directory, &directory.get_location()),
+                    )?),
+                    DefaultValue::Any(inner) => DefaultValue::Any(inner.clone()),
+                    DefaultValue::Array(inner) => DefaultValue::Array(inner.clone()),
+                };
+                output_values.insert(&output.id, value);
+            }
         }
     }
 

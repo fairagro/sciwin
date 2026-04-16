@@ -2,8 +2,7 @@ pub mod environment;
 pub mod error;
 pub mod io;
 pub mod runner;
-
-mod docker;
+pub mod docker;
 mod expression;
 mod inputs;
 mod outputs;

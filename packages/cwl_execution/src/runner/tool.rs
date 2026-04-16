@@ -1,12 +1,12 @@
 use crate::{
-    InputObject,
-    environment::{RuntimeEnvironment, collect_environment},
+    environment::{collect_environment, RuntimeEnvironment},
     error::ExecutionError,
     expression::{eval, eval_tool, load_lib, parse_expressions, prepare_expression_engine, process_expressions, reset_expression_engine},
     outputs::{evaluate_command_outputs, evaluate_expression_outputs},
     runner::command::run_command,
     staging::stage_required_files,
     validate::set_placeholder_values,
+    InputObject,
 };
 use cwl_core::{prelude::*, requirements::StringOrInclude};
 use log::info;
@@ -29,6 +29,45 @@ pub fn run_tool(
     //create staging directory
     let dir = tempdir()?;
     info!("📁 Created staging directory: {:?}", dir.path());
+    fn resolve_image_path(image: &str, _cwl_path: &Path) -> String {
+        let current_dir = env::current_dir().unwrap();
+
+        if Path::new(image).is_absolute() {
+            return image.to_string();
+        }
+
+        let joined = current_dir.join(image);
+
+        match std::fs::canonicalize(&joined) {
+            Ok(p) => p.to_string_lossy().into_owned(),
+            Err(e) => {
+                log::warn!("⚠️ Could not canonicalize {} ({})", joined.display(), e);
+                image.to_string()
+            }
+        }
+    }
+    if let CWLDocument::CommandLineTool(clt) = tool {
+        for req in &mut clt.requirements {
+            if let Requirement::DockerRequirement(docker_req) = req
+                && let Some(pull_val) = docker_req.docker_pull.clone()
+            {
+                let is_dockerfile = pull_val.contains("Dockerfile");
+
+                if Path::new(&pull_val).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("sif")) {
+                    let abs = resolve_image_path(&pull_val, cwl_path);
+                    docker_req.docker_pull = Some(abs);
+                } else if !is_dockerfile {
+                    let maybe_sif = format!("{pull_val}.sif");
+                    let abs = if Path::new(&maybe_sif).exists() {
+                        resolve_image_path(&maybe_sif, cwl_path)
+                    } else {
+                        pull_val
+                    };
+                    docker_req.docker_pull = Some(abs);
+                }
+            }
+        }
+    }
 
     //save reference to current working directory
     let current = env::current_dir()?;
@@ -64,7 +103,6 @@ pub fn run_tool(
         }
         process_expressions(tool, &mut input_values)?;
     }
-
     //stage files listed in input default values, input values or initial work dir requirements
     stage_required_files(tool, &input_values, &mut runtime, tool_path, dir.path(), output_directory)?;
 

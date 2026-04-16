@@ -10,9 +10,8 @@ use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
     fs::{self},
-    path::Path,
+    path::{MAIN_SEPARATOR_STR, Path},
 };
-use url::Url;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -166,9 +165,7 @@ fn pack_input(input: &mut CommandInputParameter, root_id: &str, doc_dir: impl As
         && !location.starts_with("file://")
     {
         if Path::new(location).is_absolute() {
-            *location = Url::from_file_path(&location)
-                .map_err(|_| "Could not get url from file_path")?
-                .to_string();
+            *location = url_from_path(&mut *location);
         } else {
             let path = doc_dir.as_ref().join(&location);
             let path = if path.exists() {
@@ -176,7 +173,7 @@ fn pack_input(input: &mut CommandInputParameter, root_id: &str, doc_dir: impl As
             } else {
                 normalize_path(&path).unwrap_or(path).to_string_lossy().into_owned()
             };
-            *location = Url::from_file_path(path).map_err(|_| "Could not get url from file_path")?.to_string();
+            *location = url_from_path(&path);
         }
     }
 
@@ -185,9 +182,7 @@ fn pack_input(input: &mut CommandInputParameter, root_id: &str, doc_dir: impl As
         && !location.starts_with("file://")
     {
         if Path::new(location).is_absolute() {
-            *location = Url::from_file_path(&location)
-                .map_err(|_| "Could not get url from file_path")?
-                .to_string();
+            *location = url_from_path(&mut *location);
         } else {
             let path = doc_dir.as_ref().join(&location);
             let path = if path.exists() {
@@ -195,7 +190,7 @@ fn pack_input(input: &mut CommandInputParameter, root_id: &str, doc_dir: impl As
             } else {
                 normalize_path(&path).unwrap_or(path).to_string_lossy().into_owned()
             };
-            *location = Url::from_file_path(path).map_err(|_| "Could not get url from file_path")?.to_string();
+            *location = url_from_path(&path);
         }
     }
 
@@ -208,16 +203,16 @@ fn unpack_input(input: &mut CommandInputParameter, id: &str) {
 
 fn pack_workflow_output(output: &mut WorkflowOutputParameter, root_id: &str) {
     output.id = format!("{root_id}/{}", output.id);
-    output.output_source = format!("{root_id}/{}", output.output_source);
+    if let Some(output_source) = &output.output_source {
+        output.output_source = Some(format!("{root_id}/{}", output_source));
+    }
 }
 
 fn unpack_workflow_output(output: &mut WorkflowOutputParameter, id: &str) {
     output.id = output.id.strip_prefix(&format!("{id}/")).unwrap_or(&output.id).to_string();
-    output.output_source = output
-        .output_source
-        .strip_prefix(&format!("{id}/"))
-        .unwrap_or(&output.output_source)
-        .to_string();
+    if let Some(output_source) = &output.output_source {
+        output.output_source = Some(output_source.strip_prefix(&format!("{id}/")).unwrap_or(output_source).to_string());
+    }
 }
 
 fn pack_command_output(output: &mut CommandOutputParameter, root_id: &str) {
@@ -346,6 +341,20 @@ fn unpack_step(step: &mut WorkflowStep, root_id: &str, graph: &[CWLDocument]) ->
     Ok(())
 }
 
+fn url_from_path(path: impl AsRef<Path>) -> String {
+    let str = path.as_ref().to_string_lossy().into_owned();
+    // windows fixes
+    let str = str.replace(MAIN_SEPARATOR_STR, "/");
+    //remove windows /? thingy
+    let str = str.split_once("/?").unwrap_or(("", &str)).1;
+
+    if !str.starts_with("/") {
+        return format!("file:///{str}");
+    }
+
+    format!("file://{str}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -397,7 +406,7 @@ mod tests {
         let mut output = WorkflowOutputParameter {
             id: "out".to_string(),
             type_: CWLType::File,
-            output_source: "plot/results".to_string(),
+            output_source: Some("plot/results".to_string()),
         };
 
         pack_workflow_output(&mut output, "#main");
@@ -504,7 +513,7 @@ mod tests {
         let packed = pack_workflow(&wf, file, None).unwrap();
         let mut json = serde_json::json!(&packed);
 
-        let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap();
+        let base_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../").canonicalize().unwrap();
         let reference_json = include_str!("../../../testdata/packed/main_packed.cwl")
             .replace("/mnt/m4.4_sciwin_client", &base_dir.to_string_lossy().replace(MAIN_SEPARATOR_STR, "/"))
             .replace("//?", "");

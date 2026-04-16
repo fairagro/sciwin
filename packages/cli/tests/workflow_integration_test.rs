@@ -151,7 +151,7 @@ pub fn test_workflow() -> Result<(), Box<dyn std::error::Error>> {
     assert!(!workflow.has_step_input("speakers"));
     assert!(!workflow.has_step_input("pop"));
     assert!(!workflow.has_step_input("calculation/results"));
-    assert!(!workflow.has_step_output("plot/results"));
+    assert!(workflow.has_step_output("plot/results")); 
 
     env::set_current_dir(current).unwrap();
 
@@ -247,7 +247,7 @@ pub fn test_workflow_optional_flags() -> Result<(), Box<dyn std::error::Error>> 
     assert!(!workflow.has_step_input("speakers"));
     assert!(!workflow.has_step_input("pop"));
     assert!(!workflow.has_step_input("calculation/results"));
-    assert!(!workflow.has_step_output("plot/results"));
+    assert!(workflow.has_step_output("plot/results"));
 
     env::set_current_dir(current).unwrap();
 

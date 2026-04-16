@@ -3,12 +3,12 @@ use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer}
 use smart_default::SmartDefault;
 use toml_edit::{Item, Value};
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 pub struct Config {
     pub workflow: WorkflowConfig,
 }
 
-#[derive(Serialize, Deserialize, Debug, SmartDefault, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, SmartDefault, PartialEq, Clone)]
 pub struct WorkflowConfig {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -45,7 +45,7 @@ impl Config {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone)]
 pub struct Author {
     pub name: String,
     pub email: Option<String>,

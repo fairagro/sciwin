@@ -3,25 +3,28 @@
   <img src="docs/src/assets/logo.svg" alt="icon" height="100"/> 
 </p>
 
-# SciWIn Client - Scientific Workflow Infrastructure<!-- omit from toc -->
+# SciWIn - Scientific Workflow Infrastructure<!-- omit from toc -->
 
 ![Rust][rust-image] 
-[![🦀 Continuous Integration](https://github.com/fairagro/m4.4_sciwin_client/actions/workflows/ci.yml/badge.svg)](https://github.com/fairagro/m4.4_sciwin_client/actions/workflows/ci.yml)
+[![🦀 Continuous Integration](https://github.com/fairagro/sciwin/actions/workflows/ci.yml/badge.svg)](https://github.com/fairagro/sciwin/actions/workflows/ci.yml)
 ![GitHub License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-green)
-[![GitHub Release](https://img.shields.io/github/v/release/fairagro/m4.4_sciwin_client)](https://github.com/fairagro/m4.4_sciwin_client/releases/latest)
-[![GitHub Downloads](https://raw.githubusercontent.com/fairagro/m4.4_metrics/refs/heads/master/badge.svg)]([https](https://github.com/fairagro/m4.4_sciwin_client/releases/latest))
+[![GitHub Release](https://img.shields.io/github/v/release/fairagro/sciwin)](https://github.com/fairagro/sciwin/releases/latest)
+[![GitHub Downloads](https://raw.githubusercontent.com/fairagro/m4.4_metrics/refs/heads/master/badge.svg)]([https](https://github.com/fairagro/sciwin/releases/latest))
 
 
 ⭐ **Star this Repo** to say "Thank you!" ⭐
 
-[![Share](https://img.shields.io/badge/share-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/fairagro/m4.4_sciwin_client)
-[![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/fairagro/m4.4_sciwin_client)
-[![Share](https://img.shields.io/badge/share-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/fairagro/m4.4_sciwin_client)
-[![Share](https://img.shields.io/badge/share-000000?logo=x&logoColor=white)](https://x.com/intent/tweet?text=Check%20out%20this%20project%20on%20GitHub:%2[https://github.com/fairagro/m4.4_sciwin_client](https://github.com/fairagro/m4.4_sciwin_client))
+[![Share](https://img.shields.io/badge/share-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/fairagro/sciwin)
+[![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/fairagro/sciwin)
+[![Share](https://img.shields.io/badge/share-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/fairagro/sciwin)
+[![Share](https://img.shields.io/badge/share-000000?logo=x&logoColor=white)](https://x.com/intent/tweet?text=Check%20out%20this%20project%20on%20GitHub:%2[https://github.com/fairagro/sciwin](https://github.com/fairagro/sciwin))
 
-📖 Read the **[Documentation](https://fairagro.github.io/m4.4_sciwin_client/)** to get started or take a look at some [examples](https://github.com/fairagro/m4.4_sciwin_client_examples)! 🚀
+📖 Read the **[Documentation](https://fairagro.github.io/sciwin/)** to get started or take a look at some [examples](https://github.com/fairagro/m4.4_sciwin_client_examples)! 🚀
 
-🦀 Take a look at our latest publications 👀
+🦀 Take a look at our latest publications and talks 👀
+- [SciWIn-Client and SciWIn-Studio: Simplifying FAIR Computational Workflows](https://doi.org/10.5281/zenodo.19060805), FAIRagro Community Summit 2026
+- [FAIR, fast, and frictionless – computational workflows with SciWIn](https://doi.org/10.5281/zenodo.17651648), FDM Niedersachsen DataDays 2025 
+- [FAIRagro Talk: SciWIn – making your workflows work for you](https://fairagro.net/event/fairagro-talk-sciwin-making-your-workflows-work-for-you/), FAIRagro Talk Nov. 2025
 - [Easy creation of reproducible computational workflows with SciWIn-Client](https://doi.org/10.5281/zenodo.17119086), CoRDI 2025
 - [SciWIn Client: Reproducible computational workflows made easy](https://doi.org/10.5281/zenodo.14098277), FAIRagro Plenary 2024
 - [Lightning Talk: Boosting Scientific Reusability](https://doi.org/10.5281/zenodo.12743569), FAIRagro Community Summit 2024
@@ -33,6 +36,7 @@ or the FAIRagro Blogpost:
 ## 📖 Table of Contents<!-- omit from toc -->
 - [🚀 About](#-about)
 - [🏗️ How to Build and Test](#️-how-to-build-and-test)
+- [💚 SciWin Studio](#-sciwin-studio)
 - [🎯 Installation](#-installation)
 - [📚 How to Use](#-how-to-use)
   - [Project initialization](#project-initialization)
@@ -44,22 +48,25 @@ or the FAIRagro Blogpost:
 
 
 ## 🚀 About
+Computational workflows, which define complex, multi-step procedures for automated execution, are crucial for ensuring reproducibility, scalability, and efficiency in scientific research. The FAIRagro Scientific Workflow Infrastructure (SciWIn) empowers scientists to create, execute, share, and publish these workflows, promoting collaboration and transparency.
 
-Computational workflows, which describe complex, multi-step procedures for automated execution, are essential for ensuring reproducibility, scalability, and efficiency in scientific research. The **FAIRagro Scientific Workflow Infrastructure (SciWIn)** supports scientists to create, execute, share, and publish these workflows, fostering collaboration and transparency.
+This repository consists of two complementary tools: **SciWIn-Client** and **SciWIn-Studio** (currently in testing).
 
+Reproducibility in computational research is essential for effective collaboration, result verification, and maintaining transparency. However, it remains challenging due to complex workflows, inconsistent data management practices, and dependencies on specific software environments. **SciWIn-Client** is a command-line tool designed to simplify the creation, recording, annotation, and execution of computational workflows. It enables researchers to interactively use intuitive commands to track tasks such as data extraction, cleaning, transformation, analysis, visualization, and computational simulation. By automating and standardizing workflows, SciWIn-Client minimizes error sources and supports transparent, reproducible Open Science practices.
 
-Reproducibility in computational research is vital for efficient collaboration, verifying results and ensuring transparency. Yet it remains challenging due to complex workflows, inconsistent data management and the reliance on specific software environments. **SciWIn Client** is a command-line tool designed to easily create, record, annotate and execute computational workflows. SciWIn Client enables researchers to interactively use intuitive commands to keep track of tasks such as as data-extraction, -cleaning, -transformation, -analysis, -visualization and computational simulation. Automated and standardised workflows minimise sources of error and support transparent and reproducible Open Science.
+**SciWIn-Studio** provides a graphical user interface that makes workflow management accessible to researchers who prefer visual tools over command-line interactions, offering an intuitive alternative for designing and executing computational workflows without requiring terminal expertise.
 
 
 ## 🏗️ How to Build and Test
-This project is being developed using Rust and Cargo. To run the source code use `cargo run`, to build use `cargo build`. 
+This project is being developed using Rust and Cargo. 
+To run SciWIn-Client you can just use `cargo run` to run from source code, to build use `cargo build`. 
 
-To run the tests use `cargo test` or `cargo test -- --nocapture` to output logs.
+To run the tests use `cargo nextest` or `bacon nextest` to run as watcher (implying that bacon and nextest are installed).
 
 ```bash
 # Clone the repository
-git clone https://github.com/fairagro/m4.4_sciwin_client
-cd m4.4_sciwin_client
+git clone https://github.com/fairagro/sciwin
+cd sciwin
 
 # Build the project
 cargo build
@@ -70,35 +77,77 @@ cargo run
 
 To run tests (unit and integration)
 ```bash
-cargo test --workspace           # Run all tests
-cargo test -- --nocapture  # Show log output during tests
+cargo nextest --workspace           # Run all tests
 ```
 
-## 🎯 Installation
-Detailed installation instructions can be found at the [latest release](https://github.com/fairagro/m4.4_sciwin_client/releases/latest):
+## 💚 SciWin Studio
+**SciWIn-Studio** is a graphical user interface (GUI) application currently in testing that complements SciWIn-Client. It provides an intuitive visual environment for researchers who prefer graphical tools over command-line interactions.
+### Features
+- Visual workflow design and management
+- Drag-and-drop interface for connecting workflow steps
+- Real-time workflow visualization
+- Accessible workflow creation without terminal expertise
 
-[![GitHub Release](https://img.shields.io/github/v/release/fairagro/m4.4_sciwin_client)](https://github.com/fairagro/m4.4_sciwin_client/releases/latest)
+<img src=".github/studio.png" alt="Screenshot of SciWIn Studio" width=750>
+
+### Running SciWIn-Studio
+To run SciWIn-Studio in Development mode, you need to [install the Dioxus CLI `dx`](https://dioxuslabs.com/learn/0.7/getting_started/):
+```bash
+# Install requirements
+sudo apt-get update 
+sudo apt-get install -y \
+    libgtk-3-dev \
+    libglib2.0-dev \
+    libwebkit2gtk-4.1-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev
+
+# Install Dioxus CLI
+curl -sSL https://dioxus.dev/install.sh | bash
+
+# or (slower)
+cargo install dioxus-cli
+
+# Navigate to the project directory
+cd sciwin
+
+# Launch SciWIn-Studio in debug mode
+dx serve -p sciwin
+```
+> [!NOTE]
+> SciWIn-Studio is currently in testing phase. Features and functionality may change as development progresses.
+
+## 🎯 Installation
+Detailed installation instructions can be found at the [latest release](https://github.com/fairagro/sciwin/releases/latest):
+
+[![GitHub Release](https://img.shields.io/github/v/release/fairagro/sciwin)](https://github.com/fairagro/sciwin/releases/latest)
 
 The easiest way is to use the `shell` or `powershell` scripts with the provided commands.
 To install latests binaries you can use the following scripts:
 
 ### Linux/MacOS:
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://fairagro.github.io/m4.4_sciwin_client/get_s4n.sh | sh 
+curl --proto '=https' --tlsv1.2 -LsSf https://fairagro.github.io/sciwin/get_s4n.sh | sh 
 ```
 If `curl` responds with code 429 you can try to use `wget` instead. 
 ```bash
-wget -qO- https://fairagro.github.io/m4.4_sciwin_client/get_s4n.sh | sh 
+wget -qO- https://fairagro.github.io/sciwin/get_s4n.sh | sh 
 ```
 
 
 ### Windows:
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://fairagro.github.io/m4.4_sciwin_client/get_s4n.ps1 | iex"
+powershell -ExecutionPolicy Bypass -c "irm https://fairagro.github.io/sciwin/get_s4n.ps1 | iex"
 ```
 
 ## 📚 How to Use
-Take a look at the **[User documentation](https://fairagro.github.io/m4.4_sciwin_client/)**. An overview on how to use SciWIn Client is available below.
+Take a look at the **[User documentation](https://fairagro.github.io/sciwin/)**. An overview on how to use SciWIn Client is available below.
 
 ### Project initialization
 Most commands need the context of a Git repo to work. Project initialization can be done using the `s4n init` command.
@@ -172,8 +221,8 @@ s4n execute local <CWLFILE> [ARGUMENTS]
 ```
 
 ## 🪂 Contributors
-<a href="https://github.com/fairagro/m4.4_sciwin_client/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=fairagro/m4.4_sciwin_client" />
+<a href="https://github.com/fairagro/sciwin/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=fairagro/sciwin" />
 </a>
 
 <small>Made with [contrib.rocks](https://contrib.rocks).</small>
@@ -203,8 +252,8 @@ You can choose between one of them if you use this work.
 [rust-image]: https://img.shields.io/badge/Rust-%23000000.svg?e&logo=rust&logoColor=white
 
 ## 🏁 Quick Links
-- [📄 Docs](https://fairagro.github.io/m4.4_sciwin_client/)
-- [🛠️ Releases](https://github.com/fairagro/m4.4_sciwin_client/releases)
+- [📄 Docs](https://fairagro.github.io/sciwin/)
+- [🛠️ Releases](https://github.com/fairagro/sciwin/releases)
 - [🌐 FAIRagro](https://fairagro.net/)
 
 [🔼 Back to Top](#top)

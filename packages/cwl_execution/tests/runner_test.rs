@@ -167,7 +167,7 @@ outputs:
     glob: results.txt
 
 baseCommand:
-- python
+- python3
 - testdata/echo.py
 ";
 

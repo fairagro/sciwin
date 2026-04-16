@@ -1,0 +1,70 @@
+name: 🧰 Bundle SciWIn Studio 
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  bundle_windows:
+    name: 🎁 Bundle windows
+    permissions:
+      contents: read
+      actions: read
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install Dioxus 📈
+        run: cargo install dioxus-cli
+      - name: Create bundle
+        run: dx bundle -p sciwin --desktop --release
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Windows-Bundle
+          path: target/dx/sciwin/bundle/windows/bundle
+          retention-days: 1
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Windows-Exe
+          path: target/dx/sciwin/release/windows
+          retention-days: 1
+  bundle_linux:  
+    name: 🎁 Bundle Linux
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install prerequisites
+        run: |
+            sudo apt-get update 
+            sudo apt-get install -y \
+            libgtk-3-dev \
+            libglib2.0-dev \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+      - name: Install Dioxus 📈
+        run: cargo install dioxus-cli
+      - name: Create bundle
+        run: dx bundle -p sciwin --desktop --release
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Linux-Bundle
+          path: target/dx/sciwin/bundle/linux/bundle
+          retention-days: 1
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Linux-Binary
+          path: target/dx/sciwin/release/linux
+          retention-days: 1

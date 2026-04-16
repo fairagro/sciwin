@@ -548,7 +548,7 @@ mod tests {
         let temp = tempdir().unwrap();
         let working = tempdir().unwrap();
 
-        let file = "https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client/refs/heads/main/README.md";
+        let file = "https://raw.githubusercontent.com/fairagro/sciwin/refs/heads/main/README.md";
         let value = DefaultValue::File(File::from_location(file));
         let input = CommandInputParameter::default().with_id("test").with_type(CWLType::File);
 
