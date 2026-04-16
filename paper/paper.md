@@ -47,7 +47,13 @@ bibliography: paper.bib
 ---
 
 # Summary
+SciWIn-Client (`s4n`) is a command-line tool developed as part of the Scientific Workflow Infrastructure (SciWIn) of the FAIRagro consortium [@Ewert2023Proposal]. It is designed to streamline the creation, execution and management of reproducible computational workflows using the _Common Workflow Language (CWL)_[@Crusoe2022MethodsIncluded]. By wrapping ordinary command-line commands with a thin layer of tooling, SciWIn-Client automatically generates CWL definitions, allowing scientists to write CWL using the well-known commands rather than hand-authoring verbose specifications.
+Implemented in Rust for high performance and reliability, SciWIn-Client integrates nativly with Git for version control and provenance tracking. It supports both local and remote workflow execution and is interoperable with the Workflow RO-Crate[@??] and Workflow Run RO-Crate[@Leo2024WRRC] standards. Furthermore SciWIn-Client is interoperable with research data management frameworks such as DataPLANT's ARC format [@dataplant2025ARCSpec;@Weil2023PLANTdataHUB].
 # Statement of Need
+(OLD)
+Automated computational workflows are essential for managing complex, multi-step data analysis across various scientific disciplines. Significant effort has been invested into domain-specific languages that formalize and standardize computational scientific processes, thereby enhancing reproducibility, scalability and efficiency. In order to harmonize and standardize the proliferation of such languages, the Common Workflow Language (CWL) was introducted as universal standard [@Crusoe2022MethodsIncluded]. 
+Its design emphasizes flexibility and machine readability but its verbose YAML-based syntax poses a barrier to adoption among researchers unfamiliar with such structured data formats. CWL therefore is predestined to be written by machines rather than humans, which ultimately led to the conception of SciWIn-Client.
+SciWIn-Client provides an intuitive command-line interface that automates CWL generation and management. It translates typical research computing tasks into structured, version-controlled workflow definitions, effectively allowing scientists to “write CWL by doing science.”
 # State of the field
 # Software design
 # Reserach impact statement
@@ -61,15 +67,6 @@ All paper content was written manually and reflects the careful thought and inpu
 
 ---
 # OLD
-SciWIn-Client is a command-line tool developed as part of the _Scientific Workflow Infrastructure (SciWIn)_ of the FAIRagro-Consortium [@Ewert2023Proposal]. It is designed to streamline the creation, execution and management of reproducible computational workflows using the _Common Workflow Language (CWL)_.
-SciWIn-Client enables researchers to generate and modify _CWL CommandLineTools_ and _Workflows_ with minimal effort. It supports bothlocal and remote workflow execution in containerized environments, ensuring consistent and reproducible results across different systems.
-By integrating Git as a native backend, SciWIn-Client promotes transparent and collaborative workflow development, enabling versioned provenance tracking and seamless sharing of computational processes.
-
-# Statement of Need
-Automated computational workflows are essential for managing complex, multi-step data analysis across various scientific disciplines. Significant effort has been invested into domain-specific languages that formalize and standardize computational scientific processes, thereby enhancing reproducibility, scalability and efficiency. In order to harmonize and standardize the proliferation of such languages, the Common Workflow Language (CWL) was introducted as universal standard [@Crusoe2022MethodsIncluded]. 
-Its design emphasizes flexibility and machine readability but its verbose YAML-based syntax poses a barrier to adoption among researchers unfamiliar with such structured data formats. CWL therefore is predestined to be written by machines rather than humans, which ultimately led to the conception of SciWIn-Client.
-SciWIn-Client provides an intuitive command-line interface that automates CWL generation and management. It translates typical research computing tasks into structured, version-controlled workflow definitions, effectively allowing scientists to “write CWL by doing science.”
-
 # Features and Implementation
 SciWIn-Client (short: `s4n`) is implemented in the Rust programming language, chosen for its high performance, strong type safety, and robust error handling — qualities essential in scientific software. Git integration provides built-in version control and interoperability with research data management frameworks such as  DataPLANTs ARC [@dataplant2025ARCSpec][@Weil2023PLANTdataHUB] format which can be viewed as a Git-based implementation of the RO-Crate standard [@SoilandReyes2022ROCrate].
 
