@@ -47,6 +47,20 @@ bibliography: paper.bib
 ---
 
 # Summary
+# Statement of Need
+# State of the field
+# Software design
+# Reserach impact statement
+# Acknowledgements 
+We gratefully acknowledge the financial support of the German Research Foundation (DFG) – project number 501899475.
+
+# AI usage disclosure
+All paper content was written manually and reflects the careful thought and input of the authors. SciWIn is an open source project, and as such contributors are free to use any tools, AI or otherwise, to generate code contained in pull requests or commits. All commits and pull requests are reviewed by the core developers and often iterated on multiple times; therefore, all content in the repository represents the effort and judgment of the authors.
+
+# References
+
+---
+# OLD
 SciWIn-Client is a command-line tool developed as part of the _Scientific Workflow Infrastructure (SciWIn)_ of the FAIRagro-Consortium [@Ewert2023Proposal]. It is designed to streamline the creation, execution and management of reproducible computational workflows using the _Common Workflow Language (CWL)_.
 SciWIn-Client enables researchers to generate and modify _CWL CommandLineTools_ and _Workflows_ with minimal effort. It supports bothlocal and remote workflow execution in containerized environments, ensuring consistent and reproducible results across different systems.
 By integrating Git as a native backend, SciWIn-Client promotes transparent and collaborative workflow development, enabling versioned provenance tracking and seamless sharing of computational processes.
