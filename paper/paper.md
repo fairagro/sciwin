@@ -58,6 +58,13 @@ CWL therefore is predestined to be written by machines rather than humans, which
 SciWIn-Client provides an intuitive command-line interface that automates CWL generation and management. It translates typical research computing tasks into structured, version-controlled workflow definitions, effectively allowing scientists to “write CWL by doing science.”
 
 # State of the field
+The landscape of scientific workflow management is broad and fragmented. Numerous patforms and languages have emerged to adress the need for reproducible, automated data analysis pipeline. Tools such as Nextflow[@ref] and Galaxy[@ref] have achieved significant adoption within the scientific community. Both offer powerful execution environments and rich graphical or scripting environments. Both platforms put significant effort in providing a broad set of scripts especially for the OMICS-community (e.g. nf-core), however lacking in the agro-community where individual scripting plays a key part. 
+Bringing individual scripts into the platform in both cases has a hurdle to overcome. For nextflow researchers need to learn the Groovy-based DSL, for Galaxy a curation process needs to be passed to get tools onto the platform. Workflows authored for Galaxy are typically bound to a specific Galaxy instance, and portability across infrastructures can require substantial re-engineering effort.
+CWL was introduced as a vendor-neutral, platform agnostic standard to address fragmentation. CWL workflows are portable by design as they in principle can run on any compliant execution engine. They are even efforts to make Galaxy and Nextflow compliant to this standard [@ref]. One big downside however is the lack of tooling especially in the creation process. CWLs adoption is comparable smaller than Nextflow and Galaxy. Its verbose, YAML-based syntax demands familiarity with structured data formats and workflow abstractions that many domain researchers lack. The result is a paradox: a universal standard that remains inaccessible to a large share of its intended users.
+The CWL ecosystem further compounds this problem. While a number of great runner implementations exist (e.g. cwltool, Toil, REANA, ........), the space of authoring tools is sparse. Rabix offered a graphical editor (Rabix Composer) which was made closed-source and moved into the seven-bridges Platform. The open-sourced version has been unmaintained for over 5 years and is significantly outdated. Many generators are outdated as well meaning there is no actively developed open and lightweight CWL generator that integrates naturally into a researchers existing command-line-driven "workflow". (Planemo einbauen??!?)
+SciWIn-Client adresses this gap removing the need for researchers to write CWL by hand. Second it works fully offline without dependencies to any platform and is Git-native.
+
+
 - Fragmented landscape
 - Platforms like Nextflow, Galaxy -> significant adoption, 
 - CWL vendor-neutral, platform agnostic, portable, runs everywhere
@@ -77,9 +84,7 @@ A central concept of the tool is the automation of CWL generation. When users in
 
 Once individual CWL CommandLineTools have been created, the next step is to combine them into a CWL Workflow. This is achieved using the `s4n connect` command, which allows the user to specify a source (starting tool or node) and a target (a subsequent tool or node). By linking the output of one tool to the input of another, the user defines the workflow's execution sequence. 
 
-In order to expand the possible sources for connecting complex workflows, there is the option to `install` exisiting workflows using SciWIn-Client which internally uses Git's submodule feature. ...
-
-Annotate...
+In order to expand the possible sources for connecting complex workflows, there is the option to `install` exisiting workflows using SciWIn-Client which internally uses Git's submodule feature. 
 
 ## Workflow Execution
 The simplest way to execute a workflow is to run it directly on the machine where the workflow is defined by using the `s4n execute local` command (or `cwltool` which however does not support Windows).
@@ -92,7 +97,7 @@ Structured execution results in form of RO-crates [@SoilandReyes2022ROCrate] mor
 - By automating CWL generation from everyday research computing tasks, it enables domain scientists — regardless of their software engineering background — to participate in open, collaborative, and reproducible science.
 - transparent versioning, FAIR, ARC format, DataPLANT, WRRC
 - Future Development: WorkflowHub? DockerGen
-The source code is openly available at https://github.com/fairagro/m4.4_sciwin_client under a permissive license, and the project welcomes community contributions.
+The source code is openly available at https://github.com/fairagro/sciwin under a permissive license, and the project welcomes community contributions.
 
 # Acknowledgements 
 We gratefully acknowledge the financial support of the German Research Foundation (DFG) – project number 501899475.
