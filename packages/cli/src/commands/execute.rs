@@ -219,21 +219,22 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), ExecutionError
     let out_dir: Option<PathBuf> = args.out_dir.as_ref().map(PathBuf::from);
     if args.file.is_dir() {
         let ro_crate_meta = args.file.join("ro-crate-metadata.json");
-        return execute_cwl_from_rocrate_root(&args.file, out_dir, &ro_crate_meta, &args.rocrate).await.map_err(|e| ExecutionError::Any(anyhow!("{e:#}")));
+        return execute_cwl_from_rocrate_root(&args.file, out_dir, &ro_crate_meta, &args.rocrate, &args.args).await.map_err(|e| ExecutionError::Any(anyhow!("{e:#}")));
     } else if args.file.extension().is_some_and(|ext| ext == "zip") {
         let temp_dir = tempfile::tempdir().map_err(ExecutionError::IOError)?;
         let crate_root = unzip_rocrate(&args.file, temp_dir.path()).map_err(ExecutionError::Any)?;
         let ro_crate_meta = crate_root.join("ro-crate-metadata.json");
-        return execute_cwl_from_rocrate_root(&crate_root, out_dir, &ro_crate_meta, &args.rocrate).await.map_err(|e| ExecutionError::Any(anyhow!("{e:#}")));
+        return execute_cwl_from_rocrate_root(&crate_root, out_dir, &ro_crate_meta, &args.rocrate, &args.args).await.map_err(|e| ExecutionError::Any(anyhow!("{e:#}")));
     }
-    execute_cwlfile(&args.file, &args.args, out_dir, &args.rocrate).await
+    execute_cwlfile(&args.file, &args.args, out_dir, &args.rocrate, None).await
 }
 
 async fn execute_cwl_from_rocrate_root(crate_root: &Path, out_dir: Option<PathBuf>,
-    ro_crate_meta: &Path, rocrate_args: &Option<RocrateArgs>) -> Result<(), ExecutionError> {
-    let (cwl_path, input_yaml) = find_cwl_and_yaml_in_rocrate(crate_root)?;
-       if !verify_cwl_references(&cwl_path).context("Failed to verify CWL references")? || input_yaml.is_none() {
-        let (_tmp, cloned_cwl, cloned_inputs) = clone_from_rocrate_or_cwl(ro_crate_meta, &cwl_path)?;
+    ro_crate_meta: &Path, rocrate_args: &Option<RocrateArgs>, input: &[String]) -> Result<(), ExecutionError> {
+        let (cwl_path, input_yaml) = find_cwl_and_yaml_in_rocrate(crate_root, input)?;
+        if !verify_cwl_references(&cwl_path).context("Failed to verify CWL references")? || input_yaml.is_none() {
+        let (tmp, cloned_cwl, cloned_inputs) = clone_from_rocrate_or_cwl(ro_crate_meta, &cwl_path)?;
+        std::env::set_current_dir(&tmp).map_err(ExecutionError::IOError)?;
         let cwl_path_to_run = cloned_cwl
             .as_ref()
             .ok_or_else(|| ExecutionError::Any(anyhow!("Cloned CWL file not found")))?;
@@ -241,11 +242,10 @@ async fn execute_cwl_from_rocrate_root(crate_root: &Path, out_dir: Option<PathBu
             .as_ref()
             .map(|p| vec![p.to_string_lossy().to_string()])
             .unwrap_or_default();
-        return execute_cwlfile(cwl_path_to_run, &inputs, out_dir, rocrate_args).await;
+        return execute_cwlfile(cwl_path_to_run, &inputs, out_dir, rocrate_args, Some(crate_root)).await;
     }
     let inputs: Vec<String> = input_yaml.as_ref().map(|p| vec![p.to_string_lossy().to_string()]).unwrap_or_default();
-    execute_cwlfile(&cwl_path, &inputs, out_dir, rocrate_args).await
-    //execute_cwlfile(&cwl_path, &input_yaml, out_dir, rocrate_args).await
+    execute_cwlfile(&cwl_path, &inputs, out_dir, rocrate_args, Some(crate_root)).await
 }
 
 pub async fn schedule_run(file: &Path, input_file: &Option<PathBuf>, rocrate_args: &Option<RocrateArgs>, watch: bool, logout: bool) -> Result<(), Box<dyn Error>> {

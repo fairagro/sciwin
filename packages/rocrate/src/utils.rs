@@ -18,9 +18,14 @@ use std::process::Command;
 
 pub type StepTimestamp = HashMap<String, (Option<String>, Option<String>)>;
 
-
-/// Find the main CWL file inside a RO-Crate folder
-pub fn find_cwl_in_rocrate(crate_root: &Path) -> Result<PathBuf> {
+pub fn find_cwl_and_yaml_in_rocrate(crate_root: &Path, raw_inputs: &[String]) -> Result<(PathBuf, Option<PathBuf>)> {
+    let mut yaml_path = None; 
+    for raw_input in raw_inputs {
+        let path = Path::new(raw_input);
+        if path.exists() && path.is_file() {
+            yaml_path = Some(path.to_path_buf()); 
+        }
+    }
     let meta_path = crate_root.join("ro-crate-metadata.json");
     let json_str = fs::read_to_string(&meta_path).with_context(|| format!("Failed to read RO-Crate metadata: {meta_path:?}"))?;
     let json_value: Value = serde_json::from_str(&json_str).context("Failed to parse RO-Crate metadata JSON")?;
@@ -41,43 +46,14 @@ pub fn find_cwl_in_rocrate(crate_root: &Path) -> Result<PathBuf> {
     if !cwl_path.exists() {
         return Err(anyhow!("CWL file not found at {cwl_path:?}"));
     }
-
-    Ok(cwl_path)
-}
-
-pub fn find_cwl_and_yaml_in_rocrate(crate_root: &Path) -> Result<(PathBuf, Option<PathBuf>)> {
-    let meta_path = crate_root.join("ro-crate-metadata.json");
-    let json_str = fs::read_to_string(&meta_path).with_context(|| format!("Failed to read RO-Crate metadata: {meta_path:?}"))?;
-    let json_value: Value = serde_json::from_str(&json_str).context("Failed to parse RO-Crate metadata JSON")?;
-    let graph = json_value
-        .get("@graph")
-        .and_then(|v| v.as_array())
-        .ok_or_else(|| anyhow!("RO-Crate metadata missing @graph"))?;
-    let dataset_node = graph
-        .iter()
-        .find(|node| node.get("@id").and_then(|id| id.as_str()) == Some("./"))
-        .ok_or_else(|| anyhow!("No Dataset node with @id './' found"))?;
-    let main_entity_id = dataset_node
-        .get("mainEntity")
-        .and_then(|me| me.get("@id"))
-        .and_then(|id| id.as_str())
-        .ok_or_else(|| anyhow!("Dataset node './' missing mainEntity.@id"))?;
-    let cwl_path = crate_root.join(main_entity_id);
-    if !cwl_path.exists() {
-        return Err(anyhow!("CWL file not found at {cwl_path:?}"));
-    }
-    let mut yaml_path: Option<PathBuf> = None;
-    let walker = walkdir::WalkDir::new(crate_root)
-        .follow_links(false)
-        .sort_by_file_name()
-        .into_iter();
+    let walker = WalkDir::new(crate_root).follow_links(false).sort_by_file_name().into_iter();
     for entry in walker {
         let entry = entry.with_context(|| "Failed to read directory entry")?;
         let path = entry.path();
         if !entry.file_type().is_file() {
             continue;
         }
-        if let Some(ext) = path.extension() {
+        if let Some(ext) = path.extension() && yaml_path.is_none() {
             let ext_str = ext.to_string_lossy().to_lowercase();
             if ext_str == "yml" || ext_str == "yaml" {
                 yaml_path = Some(path.to_path_buf());
@@ -113,141 +89,144 @@ pub fn verify_cwl_references(cwl_path: &Path) -> Result<bool> {
 struct RepoInfo {
     repo_url: String,
     reference: Option<String>,
-    file_path: Option<String>,
 }
 
 fn parse_repo_url(url: &str) -> RepoInfo {
-    // GitLab raw: /-/raw/<ref>/<path>
     if let Some((repo, rest)) = url.split_once("/-/raw/") {
         let mut parts = rest.splitn(2, '/');
         let reference = parts.next().map(|s| s.to_string());
-        let file_path = parts.next().map(|s| s.to_string());
-
         return RepoInfo {
             repo_url: format!("{}.git", repo),
             reference,
-            file_path,
         };
     }
     if let Some((repo, rest)) = url.split_once("/blob/") {
         let mut parts = rest.splitn(2, '/');
-
         return RepoInfo {
             repo_url: format!("{}.git", repo),
             reference: parts.next().map(|s| s.to_string()),
-            file_path: parts.next().map(|s| s.to_string()),
         };
     }
-    // GitHub raw: raw.githubusercontent.com/<org>/<repo>/<ref>/<path>
     if url.contains("raw.githubusercontent.com") {
         let parts: Vec<&str> = url.split('/').collect();
         if parts.len() > 6 {
             return RepoInfo {
                 repo_url: format!("https://github.com/{}/{}.git", parts[3], parts[4]),
                 reference: Some(parts[5].to_string()),
-                file_path: Some(parts[6..].join("/")),
             };
         }
     }
-    // Bitbucket raw: /raw/<ref>/<path>
     if let Some((repo, rest)) = url.split_once("/raw/") {
         let mut parts = rest.splitn(2, '/');
         let reference = parts.next().map(|s| s.to_string());
-        let file_path = parts.next().map(|s| s.to_string());
-
         return RepoInfo {
             repo_url: repo.to_string(),
             reference,
-            file_path,
         };
     }
     RepoInfo {
         repo_url: url.to_string(),
         reference: None,
-        file_path: None,
     }
 }
- 
-pub fn clone_from_rocrate_or_cwl(
-    ro_crate_meta: &Path,
-    cwl_path: &Path,
-) -> Result<(TempDir, Option<PathBuf>, Option<PathBuf>)> {
+
+pub fn clone_from_rocrate_or_cwl(ro_crate_meta: &Path, cwl_path: &Path) -> Result<(TempDir, Option<PathBuf>, Option<PathBuf>)> {
     let meta_json: Value = serde_json::from_str(
-        &fs::read_to_string(ro_crate_meta)
-            .with_context(|| format!("Failed to read {:?}", ro_crate_meta))?
+        &fs::read_to_string(ro_crate_meta).with_context(|| format!("Failed to read {:?}", ro_crate_meta))?
     ).context("Invalid RO-Crate JSON")?;
-    let graph = meta_json
-        .get("@graph")
-        .and_then(|v| v.as_array())
-        .context("Missing @graph in RO-Crate")?;
-    let root = graph.iter()
-        .find(|item| item.get("@id").and_then(|v| v.as_str()) == Some("./"));
-    let git_url =
-        root.and_then(|r| r.get("isBasedOn"))
-            .and_then(|v| v.as_str())
-            .map(str::to_owned)
-        .or_else(|| {
-            let main_entity_id = root
-                .and_then(|r| r.get("mainEntity"))
-                .and_then(|me| me.get("@id"))
-                .and_then(|id| id.as_str())?;
-            graph.iter()
-                .find(|item| item.get("@id").and_then(|v| v.as_str()) == Some(main_entity_id))
-                .and_then(|node| node.get("url"))
-                .and_then(|url| url.as_str())
-                .map(str::to_owned)
-        })
-        .or_else(|| {
-            if !cwl_path.exists() {
-                return None;
+    let graph = meta_json.get("@graph").and_then(|v| v.as_array()).context("Missing @graph in RO-Crate")?;
+    let root = graph.iter().find(|item| item.get("@id").and_then(|v| v.as_str()) == Some("./"));
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(url) = root.and_then(|r| r.get("isBasedOn")).and_then(|v| v.as_str()) {
+        candidates.push(url.to_string());
+    }
+    if let Some(main_entity_id) = root.and_then(|r| r.get("mainEntity"))
+     .and_then(|me| me.get("@id")).and_then(|id| id.as_str())
+     && let Some(url) = graph.iter()
+        .find(|item| item.get("@id").and_then(|v| v.as_str()) == Some(main_entity_id))
+        .and_then(|node| node.get("url"))
+        .and_then(|url| url.as_str())
+    {
+        candidates.push(url.to_string());
+    }
+    if cwl_path.exists() && let Ok(content) = fs::read_to_string(cwl_path) {
+        for line in content.lines() {
+            if let Some(v) = line.trim_start().strip_prefix("s:codeRepository:") {
+                candidates.push(v.trim().to_string());
             }
-            fs::read_to_string(cwl_path).ok().and_then(|content| {
-                content.lines()
-                    .find_map(|l| {
-                        l.trim_start()
-                            .strip_prefix("s:codeRepository:")
-                            .map(|v| v.trim().to_string())
-                    })
-            })
-        })
-        .context("No repository URL found in RO-Crate or CWL file")?;
-    let repo = parse_repo_url(&git_url);
-    eprintln!("📦 Cloning {}", repo.repo_url);
+        }
+    }
+    if candidates.is_empty() {
+        anyhow::bail!("No repository URL found in RO-Crate or CWL file");
+    }
     let temp = tempfile::tempdir().context("Failed to create temp dir")?;
     let repo_path = temp.path();
-    let mut cmd = Command::new("git");
-    cmd.arg("clone")
-        .arg("--depth").arg("1")
-        .arg("--single-branch")
-        .arg("--no-tags")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_LFS_SKIP_SMUDGE", "1");
-    if let Some(ref branch) = repo.reference {
-        cmd.arg("--branch").arg(branch);
+    let mut cloned = false;
+    for candidate in candidates {
+        if !looks_like_git_repo(&candidate) {
+            continue;
+        }
+        let repo = parse_repo_url(&candidate);
+        let mut cmd = Command::new("git");
+        cmd.arg("clone")
+            .arg("--depth").arg("1")
+            .arg("--single-branch")
+            .arg("--no-tags")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_LFS_SKIP_SMUDGE", "1");
+        if let Some(ref branch) = repo.reference {
+            cmd.arg("--branch").arg(branch);
+        }
+        cmd.arg(&repo.repo_url).arg(repo_path);
+        match cmd.status() {
+            Ok(status) if status.success() => {
+                eprintln!("✅ Cloned {}", repo.repo_url);
+                cloned = true;
+                break;
+            }
+            _ => {
+                eprintln!("⚠️ Failed to clone {}", repo.repo_url);
+            }
+        }
     }
-    cmd.arg(&repo.repo_url)
-        .arg(repo_path);
-    let status = cmd.status()
-        .with_context(|| format!("Git clone failed: {}", repo.repo_url))?;
-    if !status.success() {
-        anyhow::bail!("❌ Git clone failed: {}", repo.repo_url);
+    if !cloned {
+        anyhow::bail!("❌ No valid git repository found in RO-Crate or CWL");
     }
     let _ = fs::remove_dir_all(repo_path.join(".git"));
-    let (_cwl_candidate, mut inputs_yaml_candidate) =
-        if let Some(path) = repo.file_path {
-            (Some(repo_path.join(path)), None)
+    let (cwl_candidate, mut inputs_yaml_candidate) =
+        if let Some(path) = find_cwl_and_inputs(repo_path, cwl_path).0 {
+            (Some(path), None)
         } else {
             find_cwl_and_inputs(repo_path, cwl_path)
         };
     if inputs_yaml_candidate.is_none() {
-        inputs_yaml_candidate = find_yaml_file(repo_path);
+        inputs_yaml_candidate = find_yaml_file(repo_path, cwl_path)
+            .and_then(|p| validate_yaml_paths(&p, temp.path()));
     }
-
-    Ok((temp, Some(cwl_path.to_path_buf()), inputs_yaml_candidate))
+    Ok((temp, cwl_candidate, inputs_yaml_candidate))
 }
 
-//todo change this to search for neeeded params in case multiple files
-fn find_yaml_file(root: &Path) -> Option<PathBuf> {
+fn looks_like_git_repo(url: &str) -> bool {
+   std::path::Path::new(url).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
+        || url.contains("github.com")
+        || url.contains("gitlab.")
+        || url.contains("bitbucket.")
+        || url.contains("/git/")
+        || url.contains("git")
+}
+
+fn find_yaml_file(root: &Path, cwl_path: &Path) -> Option<PathBuf> {
+    let cwl_content = fs::read_to_string(cwl_path).ok()?;
+    let cwl_yaml: serde_yaml::Value = serde_yaml::from_str(&cwl_content).ok()?;
+    let input_ids: Vec<String> = cwl_yaml
+        .get("inputs")?
+        .as_mapping()?
+        .keys()
+        .filter_map(|k| k.as_str().map(|s| s.to_string()))
+        .collect();
+    if input_ids.is_empty() {
+        return None;
+    }
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let entries = fs::read_dir(&dir).ok()?;
@@ -259,15 +238,139 @@ fn find_yaml_file(root: &Path) -> Option<PathBuf> {
             }
             if path.is_dir() {
                 stack.push(path);
-            } else {
-                let ext = path.extension().and_then(|e| e.to_str());
-                if let Some(ext) = ext && (ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml")) {
-                    return Some(path);
+                continue;
+            }
+            if let Some(ext) = path.extension() {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                if (ext_str == "yaml" || ext_str == "yml") &&
+                 let Ok(content) = fs::read_to_string(&path) &&
+                 let Ok(yaml) = serde_yaml::from_str::<serde_yaml::Value>(&content) &&
+                 let Some(map) = yaml.as_mapping() {
+                    let keys: Vec<&str> = map.keys().filter_map(|k| k.as_str()).collect();
+                    if input_ids.iter().any(|id| keys.contains(&id.as_str())) {
+                        return Some(path.to_path_buf());
+                    }
                 }
             }
         }
     }
     None
+}
+
+pub fn extract_repo_name(url: &str) -> Option<String> {
+    let url = url.trim();
+    let url = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://")).or_else(|| url.strip_prefix("git@")).unwrap_or(url);
+    let url = if let Some(pos) = url.find(':') {
+        &url[pos + 1..]
+    } else {
+        url
+    };
+    let parts: Vec<&str> = url.split('/').collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let mut repo = parts.last()?.to_string();
+    if std::path::Path::new(&repo).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("git")) {
+        repo = std::path::Path::new(&repo).file_stem().and_then(|s| s.to_str()).unwrap_or(&repo).to_string();
+    }
+    Some(repo)
+}
+
+pub fn resolve_yaml_path<P: AsRef<Path>, Q: AsRef<Path>>(yaml_file: P, yaml_path: Q) -> std::io::Result<PathBuf> {
+    let yaml_file = yaml_file.as_ref();
+    let yaml_path = yaml_path.as_ref();
+    if yaml_path.is_absolute() && yaml_path.exists() {
+        return Ok(yaml_path.to_path_buf());
+    }
+    let yaml_dir = yaml_file.parent().ok_or_else(|| std::io::Error::other("Invalid YAML path"))?;
+    let joined = yaml_dir.join(yaml_path);
+    let normalized = normalize_path(&joined);
+
+    Ok(normalized)
+}
+
+/// Normalize a path without requiring it to exist
+fn normalize_path(path: &Path) -> PathBuf {
+    let components = path.components().peekable();
+    let mut normalized = PathBuf::new();
+    for component in components {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::CurDir => {}
+            _ => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
+pub fn validate_yaml_paths(yaml_path: &Path, base_dir: &Path) -> Option<PathBuf> {
+    let content = fs::read_to_string(yaml_path).ok()?;
+    let mut yaml: serde_yaml::Value = serde_yaml::from_str(&content).ok()?;
+    let mut missing_found = false;
+    fn clean(
+        value: &mut serde_yaml::Value,
+        base_dir: &Path,
+        missing_found: &mut bool,
+        yaml_path: &Path,
+    ) {
+        match value {
+            serde_yaml::Value::Mapping(map) => {
+                let class = map
+                    .get(serde_yaml::Value::String("class".into()))
+                    .and_then(|v| v.as_str());
+                if matches!(class, Some("File") | Some("Directory")) {
+                    let key = serde_yaml::Value::String("path".into());
+                    let loc = serde_yaml::Value::String("location".into());
+                    let target_key = if map.contains_key(&key) {
+                        Some(key.clone())
+                    } else if map.contains_key(&loc) {
+                        Some(loc.clone())
+                    } else {
+                        None
+                    };
+                    if let Some(k) = target_key && let Some(serde_yaml::Value::String(path_str)) = map.get(&k) {
+                        let normalized = resolve_yaml_path(yaml_path, path_str)
+                            .unwrap_or_else(|_| path_str.clone().into());
+                        let candidate = base_dir.join(&normalized);
+                        if !candidate.exists() {
+                            *missing_found = true;
+                            map.insert(k, serde_yaml::Value::Null);
+                        } else {
+                            map.insert(
+                                k,
+                                serde_yaml::Value::String(candidate.to_string_lossy().to_string()),
+                            );
+                        }
+                    }
+                }
+                for (_, v) in map.iter_mut() {
+                    clean(v, base_dir, missing_found, yaml_path);
+                }
+            }
+            serde_yaml::Value::Sequence(seq) => {
+                for v in seq {
+                    clean(v, base_dir, missing_found, yaml_path);
+                }
+            }
+            _ => {}
+        }
+    }
+    clean(&mut yaml, base_dir, &mut missing_found, yaml_path);
+    if missing_found {
+        eprintln!("\n❌ Missing files detected in YAML");
+        eprintln!("No changes written. YAML preview:\n");
+        if let Ok(s) = serde_yaml::to_string(&yaml) {
+            eprintln!("{s}");
+        }
+        return None;
+    }
+    let updated_yaml = serde_yaml::to_string(&yaml).ok()?;
+    if fs::write(yaml_path, updated_yaml).is_err() {
+        return None;
+    }
+    Some(yaml_path.to_path_buf())
 }
 
 /// Find CWL and inputs.yaml files in a cloned repository
@@ -325,22 +428,17 @@ pub fn unzip_rocrate(zip_path: &Path, dest_dir: &Path) -> Result<PathBuf> {
 pub fn zip_dir(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let file = std::fs::File::create(dst)?;
     let mut zip = ZipWriter::new(file);
-
     let options = SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
-
     for entry in WalkDir::new(src) {
         let entry = entry?;
         let path = entry.path();
         let rel = path.strip_prefix(src)?;
-
         // skip root dir entry
         if rel.as_os_str().is_empty() {
             continue;
         }
-
         let zip_path = rel.to_string_lossy();
-
         if path.is_file() {
             zip.start_file(zip_path, options)?;
             let mut f = std::fs::File::open(path)?;
@@ -349,7 +447,6 @@ pub fn zip_dir(src: &Path, dst: &Path) -> Result<(), Box<dyn std::error::Error>>
             zip.add_directory(zip_path, options)?;
         }
     }
-
     zip.finish()?;
     Ok(())
 }

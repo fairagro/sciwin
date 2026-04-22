@@ -165,7 +165,7 @@ pub fn SolutionView(project_path: ReadSignal<PathBuf>, dialog_signals: (Signal<b
                                                         let _ = tx_clone.send(format!("❌ inputs.yml not found: {:?}\n", inputs_file)).await;
                                                         return;
                                                     }
-                                                    match execute_cwlfile(&cwl_path, &args_clone, Some(dir_clone), &None).await {
+                                                    match execute_cwlfile(&cwl_path, &args_clone, Some(dir_clone), &None, None).await {
                                                         Ok(_) => {
                                                             let _ = tx_clone.send("✅ Local execution completed.\n".to_string()).await;
                                                         }
@@ -499,7 +499,7 @@ fn LocalRunButton(item: Node, module: Option<String>) -> Element {
                     };
                     let tx_clone = tx.clone();
                     spawn(async move {
-                        match execute_cwlfile(&cwl_path, &args, Some(workflow_dir.clone()), &None).await {
+                         match execute_cwlfile(&cwl_path, &args, Some(workflow_dir.clone()), &None, None).await {
                             Ok(_) => {
                                 let _ = tx_clone.send("Local execution completed.\n".to_string()).await;
                             }

@@ -33,7 +33,8 @@ use rocrate::{export_rocrate, RocrateArgs};
 pub type Result<T> = std::result::Result<T, ExecutionError>;
 
 #[allow(clippy::disallowed_macros)]
-pub async fn execute_cwlfile(cwlfile: impl AsRef<Path> + Debug, raw_inputs: &[String], outdir: Option<impl AsRef<Path>>, rocrate_args: &Option<RocrateArgs>) -> Result<()> {
+pub async fn execute_cwlfile(cwlfile: impl AsRef<Path> + Debug, raw_inputs: &[String], outdir: Option<impl AsRef<Path>>, 
+    rocrate_args: &Option<RocrateArgs>, crate_root: Option<&Path>) -> Result<()> {
     //gather inputs
     let mut input_values = if raw_inputs.len() == 1 && !raw_inputs[0].starts_with('-') {
         let yaml = fs::read_to_string(&raw_inputs[0])?;
@@ -85,15 +86,17 @@ pub async fn execute_cwlfile(cwlfile: impl AsRef<Path> + Debug, raw_inputs: &[St
     }
 
     //make paths relative to calling object
-    let path_prefix = if raw_inputs.len() == 1 && !raw_inputs[0].starts_with('-') {
-        Path::new(&raw_inputs[0]).parent().unwrap() //path of job file
+    let path_prefix = if let Some(root) = crate_root {
+        root.to_path_buf()
+    } else if raw_inputs.len() == 1 && !raw_inputs[0].starts_with('-') {
+        Path::new(&raw_inputs[0]).parent().unwrap_or_else(|| Path::new(".")).to_path_buf()
     } else {
-        Path::new(".")
+        Path::new(".").to_path_buf()
     };
     for value in input_values.inputs.values_mut() {
         match value {
-            DefaultValue::File(file) => correct_path(file, path_prefix),
-            DefaultValue::Directory(directory) => correct_path(directory, path_prefix),
+            DefaultValue::File(file) => correct_path(file, &path_prefix),
+            DefaultValue::Directory(directory) => correct_path(directory, &path_prefix),
             _ => (),
         }
     }
@@ -123,7 +126,6 @@ pub async fn execute_cwlfile(cwlfile: impl AsRef<Path> + Debug, raw_inputs: &[St
         ).await?;
     }
     else {
-   
         let output_values = execute(cwlfile, &input_values, outdir, None).await?;
         let _json = serde_json::to_string_pretty(&output_values)?;
     }
