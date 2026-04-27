@@ -24,10 +24,10 @@ toml_edit = { workspace = true }
 keyring = { workspace = true }
 uuid = { workspace = true }
 
-chrono = { version = "0.4.41" }
-tokio = {version = "1.50.0"}
+chrono = { version = "0.4.44" }
+tokio = {version = "1.52.1"}
 futures = {version = "0.3.32"}
 
 [dev-dependencies]
-mockito = "1.7.1"
-httpmock = "0.8.2"
+mockito = "1.7.2"
+httpmock = "0.8.3"
