@@ -46,7 +46,10 @@ pub async fn test_execute_local_with_args() {
             .canonicalize()
             .unwrap(),
         out_dir: Some(dir.path().to_path_buf()),
-        args: vec!["--test".to_string(), input_alt.to_string_lossy().into_owned()],
+        args: vec![
+            "--test".to_string(),
+            input_alt.to_string_lossy().into_owned(),
+        ],
         ..Default::default()
     };
 
@@ -228,7 +231,9 @@ pub async fn test_execute_local_workflow_no_steps() {
 #[serial]
 #[cfg(not(target_os = "windows"))] //file system issues with windows
 pub async fn test_execute_local_workflow_in_param() {
-    let path = PathBuf::from("../../testdata/test-wf_features.cwl");
+    let path = PathBuf::from("../../testdata/test-wf_features.cwl")
+        .canonicalize()
+        .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
     let out_file = format!("{}/file.wtf", &out_dir);
@@ -256,7 +261,9 @@ pub async fn test_execute_local_workflow_in_param() {
 #[serial]
 pub async fn test_execute_local_workflow_dir_out() {
     //has no steps, do not complain!
-    let path = PathBuf::from("../../testdata/wf_inout_dir.cwl");
+    let path = PathBuf::from("../../testdata/wf_inout_dir.cwl")
+        .canonicalize()
+        .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
     let out_path = format!("{}/test_dir", &out_dir);
@@ -277,7 +284,9 @@ pub async fn test_execute_local_workflow_dir_out() {
 #[serial]
 pub async fn test_execute_local_workflow_file_out() {
     //has no steps, do not complain!
-    let path = PathBuf::from("../../testdata/wf_inout_file.cwl");
+    let path = PathBuf::from("../../testdata/wf_inout_file.cwl")
+        .canonicalize()
+        .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
     let out_path = format!("{out_dir}/file.txt");
@@ -296,7 +305,9 @@ pub async fn test_execute_local_workflow_file_out() {
 #[tokio::test]
 #[serial]
 pub async fn test_execute_local_workflow_directory_out() {
-    let path = PathBuf::from("../../testdata/mkdir_wf.cwl");
+    let path = PathBuf::from("../../testdata/mkdir_wf.cwl")
+        .canonicalize()
+        .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_path_buf();
 
@@ -308,13 +319,15 @@ pub async fn test_execute_local_workflow_directory_out() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).await.is_ok());
+    assert!(execute_local(&args).await.is_ok()); //TODO: test fails
 }
 
 #[tokio::test]
 #[serial]
 pub async fn test_execute_local_with_binary_input() {
-    let path = PathBuf::from("../../testdata/read_bin.cwl");
+    let path = PathBuf::from("../../testdata/read_bin.cwl")
+        .canonicalize()
+        .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
     let out_path = format!("{}/output.txt", &out_dir);
