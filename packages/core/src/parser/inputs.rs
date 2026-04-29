@@ -6,7 +6,7 @@ use commonwl::{
     documents::CommandLineTool,
     files::{Directory, Dirent, File, FileOrDirectory},
     inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
-    requirements::{Include, ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
+    requirements::{ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
     types::CWLType,
 };
 use rand::{Rng, distr::Alphanumeric};
@@ -42,8 +42,15 @@ fn get_positional(current: &str, index: isize) -> CommandInputParameter {
 
     //check id for bad words
     let mut id = slugify!(&current, separator = "_");
-    if BAD_WORDS.iter().any(|&word| current.to_lowercase().contains(word)) {
-        let rnd: String = rand::rng().sample_iter(&Alphanumeric).take(2).map(char::from).collect();
+    if BAD_WORDS
+        .iter()
+        .any(|&word| current.to_lowercase().contains(word))
+    {
+        let rnd: String = rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(2)
+            .map(char::from)
+            .collect();
         id = format!("secret_{rnd}");
     }
 
@@ -51,7 +58,11 @@ fn get_positional(current: &str, index: isize) -> CommandInputParameter {
         .id(&id)
         .r#type(cwl_type)
         .default(default_value)
-        .input_binding(CommandLineBinding::builder().position(IntegerOrExpression::Int(index as i32)).build())
+        .input_binding(
+            CommandLineBinding::builder()
+                .position(IntegerOrExpression::Int(index as i32))
+                .build(),
+        )
         .build()
 }
 
@@ -81,8 +92,12 @@ fn get_option(current: &str, next: &str) -> CommandInputParameter {
 
 fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
     match cwl_type {
-        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(File::builder().location(value).build())),
-        CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(value).build())),
+        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
+            File::builder().location(value).build(),
+        )),
+        CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+            Directory::builder().location(value).build(),
+        )),
         CWLType::String => DefaultValue::Any(Value::String(value.to_string())),
         _ => DefaultValue::Any(serde_yaml::from_str(value).unwrap()),
     }
@@ -110,7 +125,10 @@ fn parse_input(input: &str) -> (&str, CWLType) {
     }
 }
 
-pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn add_fixed_inputs(
+    tool: &mut CommandLineTool,
+    inputs: &[&str],
+) -> Result<(), Box<dyn std::error::Error>> {
     for input in inputs {
         let (input, type_) = parse_input(input);
 
@@ -121,20 +139,24 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
             for item in requirements {
                 if let ToolRequirements::InitialWorkDirRequirement(req) = item {
                     let dirent = Dirent::builder()
-                        .entry(StringOrInclude::Include(Include {
-                            include: get_entry_name(input),
-                        }))
+                        .entry(StringOrInclude::String(get_entry_name(input)))
                         .entryname(input)
                         .build();
                     match &mut req.listing {
                         WorkDirItems::Expression(expr) => {
-                            req.listing = WorkDirItems::ListingItems(Box::new(OneOrMany::Many(vec![
-                                ListingItems::Dirent(dirent),
-                                ListingItems::Expression(expr.to_string()),
-                            ])));
+                            req.listing =
+                                WorkDirItems::ListingItems(Box::new(OneOrMany::Many(vec![
+                                    ListingItems::Dirent(dirent),
+                                    ListingItems::Expression(expr.to_string()),
+                                ])));
                         }
                         WorkDirItems::ListingItems(items) => match &mut **items {
-                            OneOrMany::One(item) => **items = OneOrMany::Many(vec![item.clone(), ListingItems::Dirent(dirent)]),
+                            OneOrMany::One(item) => {
+                                **items = OneOrMany::Many(vec![
+                                    item.clone(),
+                                    ListingItems::Dirent(dirent),
+                                ]);
+                            }
                             OneOrMany::Many(items) => items.push(ListingItems::Dirent(dirent)),
                         },
                     }
@@ -144,14 +166,23 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
         }
 
         let default = match type_ {
-            CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(File::builder().location(input).build())),
-            CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(input).build())),
+            CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                File::builder().location(input).build(),
+            )),
+            CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+                Directory::builder().location(input).build(),
+            )),
             _ => DefaultValue::Any(serde_yaml::from_str(input)?),
         };
         let id = slugify!(input, separator = "_");
 
-        tool.inputs
-            .push(CommandInputParameter::builder().id(&id).r#type(type_).default(default).build());
+        tool.inputs.push(
+            CommandInputParameter::builder()
+                .id(&id)
+                .r#type(type_)
+                .default(default)
+                .build(),
+        );
     }
 
     Ok(())

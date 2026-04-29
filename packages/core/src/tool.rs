@@ -146,6 +146,14 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
         cwl.outputs = parser::get_outputs(outputs);
     }
 
+    if !inputs.is_empty() {
+        parser::add_fixed_inputs(
+            &mut cwl,
+            &inputs.iter().map(String::as_str).collect::<Vec<_>>(),
+        )
+        .map_err(|e| anyhow!("Could not gather fixed inputs: {e}"))?;
+    }
+    dbg!(&cwl);
     if !no_run {
         let storage = Arc::new(StorageBackend::new());
         let backend = Arc::new(LocalBackend::new(
@@ -224,20 +232,12 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
         }
     }
 
-    if !inputs.is_empty() {
-        parser::add_fixed_inputs(
-            &mut cwl,
-            &inputs.iter().map(String::as_str).collect::<Vec<_>>(),
-        )
-        .map_err(|e| anyhow!("Could not gather fixed inputs: {e}"))?;
-    }
     // Clear defaults if requested
     if clear_defaults {
         for input in &mut cwl.inputs {
             input.default = None;
         }
     }
-
     Ok(cwl)
 }
 
