@@ -80,7 +80,7 @@ To run tests (unit and integration)
 cargo nextest --workspace           # Run all tests
 ```
 
-## 💚 SciWin Studio
+## 💚 SciWIn-Studio
 **SciWIn-Studio** is a graphical user interface (GUI) application currently in testing that complements SciWIn-Client. It provides an intuitive visual environment for researchers who prefer graphical tools over command-line interactions.
 ### Features
 - Visual workflow design and management
@@ -123,7 +123,10 @@ dx serve -p sciwin
 > [!NOTE]
 > SciWIn-Studio is currently in testing phase. Features and functionality may change as development progresses.
 
-## 🎯 Installation
+## 💻 SciWIn-Client
+**SciWIn-Client** is a command-line tool designed to simplify the creation, recording, annotation, and execution of computational workflows. 
+
+### 🎯 Installation
 Detailed installation instructions can be found at the [latest release](https://github.com/fairagro/sciwin/releases/latest):
 
 [![GitHub Release](https://img.shields.io/github/v/release/fairagro/sciwin)](https://github.com/fairagro/sciwin/releases/latest)
@@ -147,7 +150,7 @@ powershell -ExecutionPolicy Bypass -c "irm https://fairagro.github.io/sciwin/get
 ```
 
 ## 📚 How to Use
-Take a look at the **[User documentation](https://fairagro.github.io/sciwin/)**. An overview on how to use SciWIn Client is available below.
+Take a look at the **[User documentation](https://fairagro.github.io/sciwin/)**. An overview on how to use SciWIn-Client is available below.
 
 ### Project initialization
 Most commands need the context of a Git repo to work. Project initialization can be done using the `s4n init` command.
