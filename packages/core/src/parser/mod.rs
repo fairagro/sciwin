@@ -17,7 +17,7 @@ use crate::append_requirement;
 //TODO complete list
 pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "node"];
 pub static SCRIPT_MODIFIERS: &[&str] = &["-e", "-m"];
-
+static SPECIAL_CHARS: &[&str] = &["|", ">", "2>"];
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 
 pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
@@ -123,9 +123,13 @@ fn collect_arguments(piped: &[&str], inputs: &[CommandInputParameter]) -> Option
     }
 
     let piped_args = piped.iter().enumerate().map(|(i, &x)| {
+        let shell_quote = if SPECIAL_CHARS.contains(&x) {
+            Some(false)
+        } else{None};
         Argument::Binding(CommandLineBinding {
             position: Some(IntegerOrExpression::Int((inputs.len() + i).try_into().unwrap())),
             value_from: Some(x.to_string()),
+            shell_quote,
             ..Default::default()
         })
     });

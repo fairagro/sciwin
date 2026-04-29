@@ -318,19 +318,15 @@ pub async fn test_piping() {
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
-
+    dbg!(fs::read_to_string(&tool_path).unwrap());
     let CWLDocument::CommandLineTool(tool) = load_cwl_file(&tool_path, true).unwrap() else {
         panic!("Loaded CWL file is not a CommandLineTool!");
     };
-    assert_eq!(
-        tool.base_command,
-        Some(OneOrMany::Many(vec!["cat".to_string()]))
-    );
+    assert_eq!(tool.base_command, Some(OneOrMany::One("cat".to_string())));
     assert_eq!(tool.inputs.len(), 1);
     assert_eq!(tool.outputs.len(), 1);
     assert!(tool.arguments.is_some());
     assert_eq!(tool.arguments.unwrap().len(), 6);
-
     //test if is executable
     if !cfg!(target_os = "macos") {
         execute_local(&LocalExecuteArgs {

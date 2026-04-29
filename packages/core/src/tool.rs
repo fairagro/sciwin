@@ -153,7 +153,6 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
         )
         .map_err(|e| anyhow!("Could not gather fixed inputs: {e}"))?;
     }
-    dbg!(&cwl);
     if !no_run {
         let storage = Arc::new(StorageBackend::new());
         let backend = Arc::new(LocalBackend::new(
