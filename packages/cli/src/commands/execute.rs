@@ -19,10 +19,11 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
-    process::exit,
     sync::Arc,
 };
 use tokio_util::sync::CancellationToken;
+
+use crate::ExitCode;
 
 pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Result<()> {
     match subcommand {
@@ -237,9 +238,9 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
     if let EngineStatus::Success(_) = evaluated_code {
         let json = serde_json::to_string_pretty(&result.outputs)?;
         println!("{json}");
-        exit(0)
+        Ok(())
     } else {
-        exit(1)
+        anyhow::bail!(ExitCode(1))
     }
 }
 

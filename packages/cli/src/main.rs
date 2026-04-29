@@ -1,6 +1,7 @@
 use clap::{CommandFactory, Parser};
 use log::{LevelFilter, error};
 use s4n::{
+    ExitCode,
     cli::{Cli, Commands, generate_completions},
     commands::{
         check_git_config,
@@ -32,6 +33,8 @@ async fn main() {
         if let Some(src) = e.source() {
             error!("Caused by: {src}");
         }
+        let code = e.downcast_ref::<ExitCode>().unwrap_or(&ExitCode(1));
+        exit(code.0)
     }
     exit(0);
 }
