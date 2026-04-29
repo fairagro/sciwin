@@ -319,7 +319,9 @@ pub async fn test_execute_local_workflow_directory_out() {
         ..Default::default()
     };
 
-    assert!(execute_local(&args).await.is_ok()); //TODO: test fails
+    let res = execute_local(&args).await;
+    dbg!(&res);
+    assert!(res.is_ok()); 
 }
 
 #[tokio::test]
