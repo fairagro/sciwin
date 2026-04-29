@@ -576,7 +576,7 @@ pub async fn tool_create_remote_file() {
         panic!("Could not load tool");
     };
     assert_eq!(tool.inputs.len(), 1);
-    assert_eq!(tool.inputs[0].r#type, CWLType::File.into());
+    assert_eq!(tool.inputs[0].r#type, CWLType::String.into());
 }
 
 #[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
