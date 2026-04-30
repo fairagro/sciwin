@@ -11,7 +11,7 @@ pub mod tool;
 pub mod visualize;
 pub mod workflow;
 
-pub(crate) fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRequirements) {
+pub fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRequirements) {
     if let Some(reqs) = &mut tool.requirements {
         reqs.push(requirement);
     } else {
