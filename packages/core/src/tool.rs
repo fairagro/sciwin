@@ -170,6 +170,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
                 options.env,
             )?;
         }
+
         let mut clone_cwl = cwl.clone();
         clone_cwl.outputs.push(
             CommandOutputParameter::builder()
@@ -177,6 +178,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
                 .output_binding(
                     CommandOutputBinding::builder()
                         .glob(commonwl::OneOrMany::One("*".to_string()))
+                        .output_eval(filter_output(&cwl)) //if something strange happens: this is the culprit
                         .build(),
                 )
                 .r#type(CommandOutputType::CommandOutputSchema(Box::new(
@@ -423,6 +425,61 @@ fn read_env(path: &Path) -> Result<HashMap<String, String>> {
         }
     }
     Ok(map)
+}
+
+fn filter_output(cwl: &CommandLineTool) -> String {
+    let staged_roots = get_iwdr_roots(cwl);
+    let staged_js = format!(
+        "[{}]",
+        staged_roots
+            .iter()
+            .map(|s| format!("\"{}\"", s))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    format!(
+        "${{ var staged = {staged_js}; \
+       return self.filter(function(f) {{ \
+         return staged.indexOf(f.basename) === -1; \
+       }}); \
+    }}"
+    )
+}
+
+fn get_iwdr_roots(cwl: &CommandLineTool) -> Vec<String> {
+    let mut roots = vec![];
+    if let Some(iwdr) = cwl.get_requirement::<InitialWorkDirRequirement>() {
+        match &iwdr.listing {
+            WorkDirItems::Expression(_) => {}
+            WorkDirItems::ListingItems(oom) => match &**oom {
+                OneOrMany::One(item) => get_iwdr_roots_for_item(item, &mut roots),
+                OneOrMany::Many(items) => {
+                    for item in items {
+                        get_iwdr_roots_for_item(item, &mut roots);
+                    }
+                }
+            },
+        }
+    }
+    roots
+}
+
+fn get_iwdr_roots_for_item(item: &ListingItems, roots: &mut Vec<String>) {
+    if let ListingItems::Dirent(dirent) = item {
+        if let Some(ename) = &dirent.entryname {
+            roots.push(root_path(ename));
+        }
+    }
+}
+
+fn root_path(p: impl AsRef<Path>) -> String {
+    p.as_ref()
+        .components()
+        .next()
+        .unwrap()
+        .as_os_str()
+        .to_string_lossy()
+        .to_string()
 }
 
 #[cfg(test)]
