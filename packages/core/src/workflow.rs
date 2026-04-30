@@ -11,7 +11,7 @@ use commonwl::{
 use std::{fs, path::Path};
 
 pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> Result<String> {
-    let wf = Workflow::default();
+    let wf = CWLDocument::Workflow(Workflow::default());
     let filename = filename.as_ref();
 
     let mut yaml = serde_yaml::to_string(&wf)?;
@@ -27,13 +27,32 @@ pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> Result<String
         .and_then(|s| s.to_str())
         .context("Could not determine workflow name from filename")?;
 
-    let parent = filename.parent().context("Could not determine parent directory of workflow file")?;
-    fs::create_dir_all(parent).with_context(|| format!("Could not create parent directory for workflow file at {}", parent.to_string_lossy()))?;
-    fs::write(filename, &yaml).map_err(|e| anyhow::anyhow!("❌ Could not create workflow {} at {}: {}", name, filename.to_string_lossy(), e))?;
+    let parent = filename
+        .parent()
+        .context("Could not determine parent directory of workflow file")?;
+    fs::create_dir_all(parent).with_context(|| {
+        format!(
+            "Could not create parent directory for workflow file at {}",
+            parent.to_string_lossy()
+        )
+    })?;
+    fs::write(filename, &yaml).map_err(|e| {
+        anyhow::anyhow!(
+            "❌ Could not create workflow {} at {}: {}",
+            name,
+            filename.to_string_lossy(),
+            e
+        )
+    })?;
     Ok(yaml)
 }
 
-pub fn add_workflow_step(workflow: &mut Workflow, name: &str, path: impl AsRef<Path>, doc: &CWLDocument) {
+pub fn add_workflow_step(
+    workflow: &mut Workflow,
+    name: &str,
+    path: impl AsRef<Path>,
+    doc: &CWLDocument,
+) {
     let path = path.as_ref().to_string_lossy().into_owned();
     if !workflow.has_step(name) {
         let path = if path.starts_with("workflows") {
@@ -55,11 +74,14 @@ pub fn add_workflow_step(workflow: &mut Workflow, name: &str, path: impl AsRef<P
         workflow.steps.push(workflow_step);
         if !workflow.has_requirement::<SubworkflowFeatureRequirement>() {
             if let Some(requirements) = &mut workflow.requirements {
-                requirements.push(WorkflowRequirements::SubworkflowFeatureRequirement(SubworkflowFeatureRequirement {}));
-            } else {
-                workflow.requirements = Some(vec![WorkflowRequirements::SubworkflowFeatureRequirement(
+                requirements.push(WorkflowRequirements::SubworkflowFeatureRequirement(
                     SubworkflowFeatureRequirement {},
-                )]);
+                ));
+            } else {
+                workflow.requirements =
+                    Some(vec![WorkflowRequirements::SubworkflowFeatureRequirement(
+                        SubworkflowFeatureRequirement {},
+                    )]);
             }
         }
     }
@@ -75,13 +97,20 @@ pub fn add_workflow_input_connection(
 ) -> Result<()> {
     let to_filename = to_filename.as_ref();
 
-    let to_cwl = load_cwl_file(to_filename, true).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+    let to_cwl = load_cwl_file(to_filename, true)
+        .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
     let to_inputs = to_cwl.get_inputs();
-    let to_slot = to_inputs.iter().find(|i| i.id == Some(to_slot_id.to_owned())).expect("No slot");
+    let to_slot = to_inputs
+        .iter()
+        .find(|i| i.id == Some(to_slot_id.to_owned()))
+        .expect("No slot");
 
     //register input
     if !workflow.has_input(from_input) {
-        let mut input = WorkflowInputParameter::builder().id(from_input).r#type(to_slot.r#type.clone()).build();
+        let mut input = WorkflowInputParameter::builder()
+            .id(from_input)
+            .r#type(to_slot.r#type.clone())
+            .build();
         input.default = to_slot.default.clone();
         workflow.inputs.push(input);
     }
@@ -113,7 +142,8 @@ pub fn add_workflow_output_connection(
 ) -> Result<()> {
     let from_filename = from_filename.as_ref();
 
-    let from_cwl = load_cwl_file(from_filename, true).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+    let from_cwl = load_cwl_file(from_filename, true)
+        .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
     let from_type = match &from_cwl {
         CWLDocument::CommandLineTool(clt) => clt
             .outputs
@@ -148,7 +178,11 @@ pub fn add_workflow_output_connection(
                 .build(),
         );
     } else {
-        let output = workflow.outputs.iter_mut().find(|o| o.id == Some(to_output.to_owned())).unwrap();
+        let output = workflow
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == Some(to_output.to_owned()))
+            .unwrap();
         output.r#type = from_type;
         output.output_source = Some(OneOrMany::One(format!("{from_name}/{from_slot_id}")));
     }
@@ -171,7 +205,8 @@ pub fn add_workflow_step_connection(
     let to_filename = to_filename.as_ref();
 
     if !workflow.has_step(from_name) {
-        let from_cwl = load_cwl_file(from_filename, true).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+        let from_cwl = load_cwl_file(from_filename, true)
+            .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
         let from_outputs = from_cwl.get_output_ids();
         if !from_outputs.contains(&from_slot_id.to_string()) {
             anyhow::bail!(
@@ -188,11 +223,16 @@ pub fn add_workflow_step_connection(
 
     //check if step exists
     if !workflow.has_step(to_name) {
-        let to_cwl = load_cwl_file(to_filename, true).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+        let to_cwl = load_cwl_file(to_filename, true)
+            .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
         add_workflow_step(workflow, to_name, to_filename, &to_cwl);
     }
 
-    let step = workflow.steps.iter_mut().find(|s| s.id == Some(to_name.to_owned())).unwrap(); //safe here!
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id == Some(to_name.to_owned()))
+        .unwrap(); //safe here!
     step.r#in.push(
         WorkflowStepInput::builder()
             .id(to_slot_id.to_string())
@@ -204,12 +244,23 @@ pub fn add_workflow_step_connection(
 }
 
 /// Removes a connection between two `CommandLineTools` by removing input from `tool_y` that is also output of `tool_x`.
-pub fn remove_workflow_step_connection(workflow: &mut Workflow, to_name: &str, to_slot_id: &str) -> Result<()> {
-    let step = workflow.steps.iter_mut().find(|s| s.id == Some(to_name.to_owned()));
+pub fn remove_workflow_step_connection(
+    workflow: &mut Workflow,
+    to_name: &str,
+    to_slot_id: &str,
+) -> Result<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id == Some(to_name.to_owned()));
     // If the step is found, try to remove the connection by removing input from `tool_y` that uses output of `tool_x`
     // Input is empty, change that?
     if let Some(step) = step {
-        if step.r#in.iter().any(|v| v.id == Some(to_slot_id.to_owned())) {
+        if step
+            .r#in
+            .iter()
+            .any(|v| v.id == Some(to_slot_id.to_owned()))
+        {
             step.r#in.retain(|v| v.id != Some(to_slot_id.to_owned()));
         }
         Ok(())
@@ -226,11 +277,24 @@ pub fn remove_workflow_input_connection(
     to_slot_id: &str,
     remove_input: bool,
 ) -> Result<()> {
-    if remove_input && let Some(index) = workflow.inputs.iter().position(|s| s.id == Some(from_input.to_string())) {
+    if remove_input
+        && let Some(index) = workflow
+            .inputs
+            .iter()
+            .position(|s| s.id == Some(from_input.to_string()))
+    {
         workflow.inputs.remove(index);
     }
-    if let Some(step) = workflow.steps.iter_mut().find(|s| s.id == Some(to_name.to_owned())) {
-        if step.r#in.iter().any(|v| v.id == Some(to_slot_id.to_owned())) {
+    if let Some(step) = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id == Some(to_name.to_owned()))
+    {
+        if step
+            .r#in
+            .iter()
+            .any(|v| v.id == Some(to_slot_id.to_owned()))
+        {
             step.r#in.retain(|v| v.id != Some(to_slot_id.to_owned()));
             Ok(())
         } else {
@@ -242,11 +306,25 @@ pub fn remove_workflow_input_connection(
 }
 
 /// Removes a connection between an output and a `CommandLineTool`.
-pub fn remove_workflow_output_connection(workflow: &mut Workflow, to_output: &str, remove_output: bool) -> Result<()> {
-    if remove_output && let Some(index) = workflow.outputs.iter().position(|o| o.id == Some(to_output.to_owned())) {
+pub fn remove_workflow_output_connection(
+    workflow: &mut Workflow,
+    to_output: &str,
+    remove_output: bool,
+) -> Result<()> {
+    if remove_output
+        && let Some(index) = workflow
+            .outputs
+            .iter()
+            .position(|o| o.id == Some(to_output.to_owned()))
+    {
         // Remove the output connection
         workflow.outputs.remove(index);
-    } else if !remove_output && let Some(output) = workflow.outputs.iter_mut().find(|o| o.id == Some(to_output.to_owned())) {
+    } else if !remove_output
+        && let Some(output) = workflow
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == Some(to_output.to_owned()))
+    {
         output.output_source = None;
     }
     Ok(())

@@ -83,7 +83,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
     }
 
     //save workflow
-    let mut yaml = serde_yaml::to_string(&workflow)?;
+    let mut yaml = serde_yaml::to_string(&CWLDocument::Workflow(workflow))?;
     yaml = format_cwl(&yaml).map_err(|e| anyhow!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename)?;
     let mut file = fs::File::create(&filename)?;
@@ -149,7 +149,7 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<(
             })?;
     }
 
-    let mut yaml = serde_yaml::to_string(&workflow)?;
+    let mut yaml = serde_yaml::to_string(&CWLDocument::Workflow(workflow))?;
     yaml = format_cwl(&yaml).map_err(|e| anyhow!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename)?;
     let mut file = fs::File::create(&filename)?;
