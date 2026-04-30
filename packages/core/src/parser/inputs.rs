@@ -1,11 +1,15 @@
+use std::path::Path;
+
 use super::BAD_WORDS;
 use commonwl::{
-    guess_type,
-    inputs::{CommandInputParameter, CommandLineBinding},
-    requirements::Requirement,
-    CWLType, CommandLineTool, DefaultValue, Directory, File,
+    IntegerOrExpression, OneOrMany,
+    documents::CommandLineTool,
+    files::{Directory, Dirent, File, FileOrDirectory},
+    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
+    requirements::{ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
+    types::CWLType,
 };
-use rand::{distr::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use serde_yaml::Value;
 use slugify::slugify;
 
@@ -38,25 +42,38 @@ fn get_positional(current: &str, index: isize) -> CommandInputParameter {
 
     //check id for bad words
     let mut id = slugify!(&current, separator = "_");
-    if BAD_WORDS.iter().any(|&word| current.to_lowercase().contains(word)) {
-        let rnd: String = rand::rng().sample_iter(&Alphanumeric).take(2).map(char::from).collect();
+    if BAD_WORDS
+        .iter()
+        .any(|&word| current.to_lowercase().contains(word))
+    {
+        let rnd: String = rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(2)
+            .map(char::from)
+            .collect();
         id = format!("secret_{rnd}");
     }
 
-    CommandInputParameter::default()
-        .with_id(&id)
-        .with_type(cwl_type)
-        .with_default_value(default_value)
-        .with_binding(CommandLineBinding::default().with_position(index))
+    CommandInputParameter::builder()
+        .id(&id)
+        .r#type(cwl_type)
+        .default(default_value)
+        .input_binding(
+            CommandLineBinding::builder()
+                .position(IntegerOrExpression::Int(index as i32))
+                .build(),
+        )
+        .build()
 }
 
 fn get_flag(current: &str) -> CommandInputParameter {
     let id = current.replace('-', "");
-    CommandInputParameter::default()
-        .with_binding(CommandLineBinding::default().with_prefix(current))
-        .with_id(slugify!(&id, separator = "_").as_str())
-        .with_type(CWLType::Boolean)
-        .with_default_value(DefaultValue::Any(Value::Bool(true)))
+    CommandInputParameter::builder()
+        .input_binding(CommandLineBinding::builder().prefix(current).build())
+        .id(slugify!(&id, separator = "_").as_str())
+        .r#type(CWLType::Boolean)
+        .default(DefaultValue::Any(Value::Bool(true)))
+        .build()
 }
 
 fn get_option(current: &str, next: &str) -> CommandInputParameter {
@@ -65,17 +82,22 @@ fn get_option(current: &str, next: &str) -> CommandInputParameter {
     let (next, cwl_type) = parse_input(next);
     let default_value = parse_default_value(next, &cwl_type);
 
-    CommandInputParameter::default()
-        .with_binding(CommandLineBinding::default().with_prefix(current))
-        .with_id(slugify!(&id, separator = "_").as_str())
-        .with_type(cwl_type)
-        .with_default_value(default_value)
+    CommandInputParameter::builder()
+        .input_binding(CommandLineBinding::builder().prefix(current).build())
+        .id(slugify!(&id, separator = "_").as_str())
+        .r#type(cwl_type)
+        .default(default_value)
+        .build()
 }
 
 fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
     match cwl_type {
-        CWLType::File => DefaultValue::File(File::from_location(value)),
-        CWLType::Directory => DefaultValue::Directory(Directory::from_location(value)),
+        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
+            File::builder().location(value).build(),
+        )),
+        CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+            Directory::builder().location(value).build(),
+        )),
         CWLType::String => DefaultValue::Any(Value::String(value.to_string())),
         _ => DefaultValue::Any(serde_yaml::from_str(value).unwrap()),
     }
@@ -103,69 +125,145 @@ fn parse_input(input: &str) -> (&str, CWLType) {
     }
 }
 
-pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn add_fixed_inputs(
+    tool: &mut CommandLineTool,
+    inputs: &[&str],
+) -> Result<(), Box<dyn std::error::Error>> {
     for input in inputs {
         let (input, type_) = parse_input(input);
 
         //todo: add requiement for directory also or add new --mount param and remove block from here
-        if matches!(type_, CWLType::File) {
-            for item in &mut tool.requirements {
-                if let Requirement::InitialWorkDirRequirement(req) = item {
-                    req.add_files(inputs);
+        if matches!(type_, CWLType::File)
+            && let Some(requirements) = &mut tool.requirements
+        {
+            for item in requirements {
+                if let ToolRequirements::InitialWorkDirRequirement(req) = item {
+                    let dirent = Dirent::builder()
+                        .entry(StringOrInclude::String(get_entry_name(input)))
+                        .entryname(input)
+                        .build();
+                    match &mut req.listing {
+                        WorkDirItems::Expression(expr) => {
+                            req.listing =
+                                WorkDirItems::ListingItems(Box::new(OneOrMany::Many(vec![
+                                    ListingItems::Dirent(dirent),
+                                    ListingItems::Expression(expr.to_string()),
+                                ])));
+                        }
+                        WorkDirItems::ListingItems(items) => match &mut **items {
+                            OneOrMany::One(item) => {
+                                **items = OneOrMany::Many(vec![
+                                    item.clone(),
+                                    ListingItems::Dirent(dirent),
+                                ]);
+                            }
+                            OneOrMany::Many(items) => items.push(ListingItems::Dirent(dirent)),
+                        },
+                    }
                     break;
                 }
             }
         }
 
         let default = match type_ {
-            CWLType::File => DefaultValue::File(File::from_location(input)),
-            CWLType::Directory => DefaultValue::Directory(Directory::from_location(input)),
+            CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                File::builder().location(input).build(),
+            )),
+            CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+                Directory::builder().location(input).build(),
+            )),
             _ => DefaultValue::Any(serde_yaml::from_str(input)?),
         };
         let id = slugify!(input, separator = "_");
 
-        tool.inputs
-            .push(CommandInputParameter::default().with_id(&id).with_type(type_).with_default_value(default));
+        tool.inputs.push(
+            CommandInputParameter::builder()
+                .id(&id)
+                .r#type(type_)
+                .default(default)
+                .build(),
+        );
     }
 
     Ok(())
 }
 
+fn get_entry_name(input: &str) -> String {
+    let i = input
+        .trim_start_matches(|c: char| !c.is_alphabetic())
+        .to_string()
+        .replace(['.', '/'], "_");
+    format!("$(inputs.{})", i.to_lowercase()).to_string()
+}
+
+/// Tries to guess the CWLType of a given value
+pub fn guess_type(value: &str) -> CWLType {
+    let path = Path::new(value);
+    if path.exists() {
+        if path.is_file() {
+            return CWLType::File;
+        }
+        if path.is_dir() {
+            return CWLType::Directory;
+        }
+    }
+
+    //we do not have to check for files that do not exist yet, as CWLTool would run into a failure
+    let yaml_value: Value = serde_yaml::from_str(value).unwrap();
+    match yaml_value {
+        Value::Null => CWLType::Null,
+        Value::Bool(_) => CWLType::Boolean,
+        Value::Number(number) => {
+            if number.is_f64() {
+                CWLType::Float
+            } else {
+                CWLType::Int
+            }
+        }
+        Value::String(_) => CWLType::String,
+        _ => CWLType::String,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use serde_yaml::Number;
-
     use super::*;
+    use serde_yaml::Number;
 
     #[test]
     pub fn test_get_inputs() {
         let inputs = "--argument1 value1 --flag -a value2 positional1 -v 1";
         let expected = vec![
-            CommandInputParameter::default()
-                .with_id("argument1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("--argument1"))
-                .with_default_value(DefaultValue::Any(Value::String("value1".to_string()))),
-            CommandInputParameter::default()
-                .with_id("flag")
-                .with_type(CWLType::Boolean)
-                .with_binding(CommandLineBinding::default().with_prefix("--flag"))
-                .with_default_value(DefaultValue::Any(Value::Bool(true))),
-            CommandInputParameter::default()
-                .with_id("a")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("-a"))
-                .with_default_value(DefaultValue::Any(Value::String("value2".to_string()))),
-            CommandInputParameter::default()
-                .with_id("positional1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_position(5))
-                .with_default_value(DefaultValue::Any(Value::String("positional1".to_string()))),
-            CommandInputParameter::default()
-                .with_id("v")
-                .with_type(CWLType::Int)
-                .with_binding(CommandLineBinding::default().with_prefix("-v"))
-                .with_default_value(DefaultValue::Any(serde_yaml::from_str("1").unwrap())),
+            CommandInputParameter::builder()
+                .id("argument1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("--argument1").build())
+                .default(DefaultValue::Any(Value::String("value1".to_string())))
+                .build(),
+            CommandInputParameter::builder()
+                .id("flag")
+                .r#type(CWLType::Boolean)
+                .input_binding(CommandLineBinding::builder().prefix("--flag").build())
+                .default(DefaultValue::Any(Value::Bool(true)))
+                .build(),
+            CommandInputParameter::builder()
+                .id("a")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("-a").build())
+                .default(DefaultValue::Any(Value::String("value2".to_string())))
+                .build(),
+            CommandInputParameter::builder()
+                .id("positional1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().position(5).build())
+                .default(DefaultValue::Any(Value::String("positional1".to_string())))
+                .build(),
+            CommandInputParameter::builder()
+                .id("v")
+                .r#type(CWLType::Int)
+                .input_binding(CommandLineBinding::builder().prefix("-v").build())
+                .default(DefaultValue::Any(serde_yaml::from_str("1").unwrap()))
+                .build(),
         ];
 
         let inputs_vec = shlex::split(inputs).unwrap();
@@ -179,11 +277,12 @@ mod tests {
     #[test]
     pub fn test_get_default_value_number() {
         let commandline_args = "-v 42";
-        let expected = CommandInputParameter::default()
-            .with_id("v")
-            .with_type(CWLType::Int)
-            .with_binding(CommandLineBinding::default().with_prefix("-v"))
-            .with_default_value(DefaultValue::Any(Value::Number(Number::from(42))));
+        let expected = CommandInputParameter::builder()
+            .id("v")
+            .r#type(CWLType::Int)
+            .input_binding(CommandLineBinding::builder().prefix("-v").build())
+            .default(DefaultValue::Any(Value::Number(Number::from(42))))
+            .build();
 
         let args = shlex::split(commandline_args).unwrap();
         let result = get_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
@@ -194,12 +293,31 @@ mod tests {
     #[test]
     pub fn test_get_default_value_json_str() {
         let arg = "{\"message\": \"Hello World\"}";
-        let expected = CommandInputParameter::default()
-            .with_id("message_hello_world")
-            .with_type(CWLType::String)
-            .with_binding(CommandLineBinding::default().with_position(0))
-            .with_default_value(DefaultValue::Any(Value::String(arg.to_string())));
+        let expected = CommandInputParameter::builder()
+            .id("message_hello_world")
+            .r#type(CWLType::String)
+            .input_binding(CommandLineBinding::builder().position(0).build())
+            .default(DefaultValue::Any(Value::String(arg.to_string())))
+            .build();
         let result = get_inputs(&[arg]);
         assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    pub fn test_guess_type() {
+        let inputs = &[
+            ("../../README.md", CWLType::File),
+            ("/some/path/that/does/not/exist.txt", CWLType::String),
+            ("src/", CWLType::Directory),
+            ("--option", CWLType::String),
+            ("2", CWLType::Int),
+            ("1.5", CWLType::Float),
+            ("https://some_url", CWLType::File), //urls are files!
+        ];
+
+        for input in inputs {
+            let t = guess_type(input.0);
+            assert_eq!(t, input.1);
+        }
     }
 }

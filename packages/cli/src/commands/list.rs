@@ -1,9 +1,15 @@
 use clap::Args;
 use colored::Colorize;
-use commonwl::{DocumentBase, StringOrDocument, load_doc, load_tool, prelude::*};
+use commonwl::{
+    Identifiable, docstring,
+    documents::{CWLDocument, CommandLineTool, ExpressionTool, StringOrDocument, Workflow},
+    load_cwl_file,
+    requirements::DockerRequirement,
+};
 use ignore::WalkBuilder;
 use log::info;
 use prettytable::{Cell, Row, Table, row};
+use s4n_core::default_to_string;
 use std::{
     env,
     fs::FileType,
@@ -13,7 +19,11 @@ use std::{
 #[derive(Args, Debug, Default)]
 pub struct ListCWLArgs {
     pub file: Option<PathBuf>,
-    #[arg(short = 'a', long = "all", help = "Outputs the tools with inputs and outputs")]
+    #[arg(
+        short = 'a',
+        long = "all",
+        help = "Outputs the tools with inputs and outputs"
+    )]
     pub list_all: bool,
 }
 
@@ -37,18 +47,29 @@ fn list_single_cwl(filename: impl AsRef<Path>) -> anyhow::Result<()> {
         return Ok(()); //we are okay with the non existance here!
     }
 
-    let tool = load_doc(filename).map_err(|e| anyhow::anyhow!("Could not load CWL File: {e}"))?;
+    let tool = load_cwl_file(filename, true)
+        .map_err(|e| anyhow::anyhow!("Could not load CWL File: {e}"))?;
     match tool {
         CWLDocument::CommandLineTool(clt) => list_clt(&clt, filename),
         CWLDocument::ExpressionTool(et) => list_et(&et, filename),
         CWLDocument::Workflow(wf) => list_wf(&wf, filename),
+        CWLDocument::Operation(_) => {
+            info!(
+                "Operation found: `{}`",
+                filename.to_string_lossy().blue().bold()
+            );
+            Ok(())
+        }
     }?;
 
     Ok(())
 }
 
 pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Result<()> {
-    info!("📂 Available CWL Files in: {}", cwd.as_ref().to_string_lossy().blue().bold());
+    info!(
+        "📂 Available CWL Files in: {}",
+        cwd.as_ref().to_string_lossy().blue().bold()
+    );
 
     // Create a table
     let mut table = Table::new();
@@ -69,7 +90,10 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
         .build()
         .filter_map(Result::ok)
     {
-        if entry.file_type().is_some_and(|ft: FileType| FileType::is_file(&ft)) {
+        if entry
+            .file_type()
+            .is_some_and(|ft: FileType| FileType::is_file(&ft))
+        {
             let file_name = entry.file_name().to_string_lossy();
 
             // Only process .cwl files
@@ -81,11 +105,11 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
                 let file_path = entry.path();
                 let folder = entry.path().parent().unwrap_or_else(|| Path::new("."));
                 // Parse content
-                if let Ok(doc) = load_doc(file_path) {
+                if let Ok(doc) = load_cwl_file(file_path, true) {
                     if detailed {
                         // Extract inputs
-                        for input in &doc.inputs {
-                            inputs_list.push(format!("{tool_name}/{}", input.id));
+                        for input in &doc.get_inputs() {
+                            inputs_list.push(format!("{tool_name}/{}", input.id.as_ref().unwrap()));
                         }
                         // Extract outputs
                         for id in doc.get_output_ids() {
@@ -94,13 +118,19 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
 
                         // add row to the table
                         table.add_row(Row::new(vec![
-                            Cell::new(&format!("{} ({})", tool_name, doc.class)).style_spec("bFg"),
+                            Cell::new(&format!("{} ({})", tool_name, doc.get_class()))
+                                .style_spec("bFg"),
                             Cell::new(&inputs_list.join(", ")),
                             Cell::new(&outputs_list.join(", ")),
                         ]));
                     } else {
                         // Print only the tool name if not all details
-                        info!("📄 {} ({}) in {}", tool_name.green().bold(), doc.class, folder.to_string_lossy());
+                        info!(
+                            "📄 {} ({}) in {}",
+                            tool_name.green().bold(),
+                            doc.get_class(),
+                            folder.to_string_lossy()
+                        );
                     }
                 }
             }
@@ -114,11 +144,53 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
 }
 
 fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
-    info!("🔎 CommandLineTool: `{}`", filename.to_string_lossy().blue().bold());
+    info!(
+        "🔎 CommandLineTool: `{}`",
+        filename.to_string_lossy().blue().bold()
+    );
     print_line();
 
-    info!("Basecommand: \t{}", clt.base_command.to_string().bold().green());
-    list_base(&clt.base, false);
+    if let Some(cmd) = &clt.base_command {
+        info!("Basecommand: \t{}", cmd.to_string().bold().green());
+    }
+    list_base(&CWLDocument::CommandLineTool(clt.clone()), false);
+
+    info!("{}", "Inputs:".bold());
+
+    let mut table = Table::new();
+    table.add_row(Row::new(vec![
+        Cell::new("ID").style_spec("bFg"),
+        Cell::new("Type").style_spec("bFg"),
+        Cell::new("glob").style_spec("bFg"),
+    ]));
+
+    for input in &clt.inputs {
+        let binding = if let Some(b) = &input.input_binding {
+            let prefix = b
+                .prefix
+                .as_ref()
+                .map_or("not set".to_string(), |p| p.to_string());
+            let position = b
+                .position
+                .as_ref()
+                .map_or("not set".to_string(), |p| p.to_string());
+            format!("Prefix: {}; Position: {}", prefix, position)
+        } else {
+            "No Binding".into()
+        };
+
+        table.add_row(Row::new(vec![
+            Cell::new(input.id.as_ref().unwrap()),
+            Cell::new(&format!("{:?}", input.r#type)),
+            Cell::new(&binding),
+            Cell::new(
+                &input
+                    .default
+                    .as_ref()
+                    .map_or("None".to_string(), default_to_string),
+            ),
+        ]));
+    }
 
     info!("{}", "Outputs:".bold());
 
@@ -131,13 +203,15 @@ fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
 
     for output in &clt.outputs {
         let binding = if let Some(b) = &output.output_binding {
-            b.glob.as_ref().map_or("not set".to_string(), |g| g.to_string())
+            b.glob
+                .as_ref()
+                .map_or("not set".to_string(), |g| g.to_string())
         } else {
             "No glob".into()
         };
         table.add_row(Row::new(vec![
-            Cell::new(&output.id),
-            Cell::new(&output.type_.to_string()),
+            Cell::new(output.id.as_ref().unwrap()),
+            Cell::new(&format!("{:?}", output.r#type)),
             Cell::new(&binding),
         ]));
     }
@@ -148,19 +222,50 @@ fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
 }
 
 fn list_et(et: &ExpressionTool, filename: &Path) -> anyhow::Result<()> {
-    info!("🔎 ExpressionTool: `{}`", filename.to_string_lossy().blue().bold());
+    info!(
+        "🔎 ExpressionTool: `{}`",
+        filename.to_string_lossy().blue().bold()
+    );
     print_line();
 
     info!("Expression: \t{}", et.expression.bold().green());
-    list_base(&et.base, false);
+    list_base(&CWLDocument::ExpressionTool(et.clone()), false);
+
+    info!("{}", "Inputs:".bold());
+
+    let mut table = Table::new();
+    table.add_row(Row::new(vec![
+        Cell::new("ID").style_spec("bFg"),
+        Cell::new("Type").style_spec("bFg"),
+        Cell::new("glob").style_spec("bFg"),
+    ]));
+
+    for input in &et.inputs {
+        table.add_row(Row::new(vec![
+            Cell::new(input.id.as_ref().unwrap()),
+            Cell::new(&format!("{:?}", input.r#type)),
+            Cell::new(
+                &input
+                    .default
+                    .as_ref()
+                    .map_or("None".to_string(), default_to_string),
+            ),
+        ]));
+    }
 
     info!("{}", "Outputs:".bold());
 
     let mut table = Table::new();
-    table.add_row(Row::new(vec![Cell::new("ID").style_spec("bFg"), Cell::new("Type").style_spec("bFg")]));
+    table.add_row(Row::new(vec![
+        Cell::new("ID").style_spec("bFg"),
+        Cell::new("Type").style_spec("bFg"),
+    ]));
 
     for output in &et.outputs {
-        table.add_row(Row::new(vec![Cell::new(&output.id), Cell::new(&output.type_.to_string())]));
+        table.add_row(Row::new(vec![
+            Cell::new(output.id.as_ref().unwrap()),
+            Cell::new(&format!("{:?}", output.r#type)),
+        ]));
     }
     table.printstd();
     print_line();
@@ -169,24 +274,27 @@ fn list_et(et: &ExpressionTool, filename: &Path) -> anyhow::Result<()> {
 }
 
 fn list_wf(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
-    info!("🔎 Workflow: `{}`", filename.to_string_lossy().blue().bold());
+    info!(
+        "🔎 Workflow: `{}`",
+        filename.to_string_lossy().blue().bold()
+    );
     print_line();
-    list_base(&wf.base, true);
+    list_base(&CWLDocument::Workflow(wf.clone()), true);
 
     workflow_status(wf, filename)?;
     Ok(())
 }
 
-fn list_base(base: &DocumentBase, is_workflow: bool) {
-    if let Some(id) = &base.id {
+fn list_base(base: &CWLDocument, is_workflow: bool) {
+    if let Some(id) = &base.get_id() {
         info!("ID:\t\t{}", id);
     }
 
-    if let Some(label) = &base.label {
+    if let Some(label) = &base.get_label() {
         info!("Label:\t\t{}", label);
     }
 
-    if let Some(cwl_version) = &base.cwl_version {
+    if let Some(cwl_version) = &base.cwl_version() {
         info!("CWL Version:\t{}", cwl_version);
     }
 
@@ -200,9 +308,9 @@ fn list_base(base: &DocumentBase, is_workflow: bool) {
     }
 
     print_line();
-    if let Some(doc) = &base.doc {
+    if let Some(doc) = base.get_doc() {
         info!("{}", "Summary:".bold());
-        info!("{}", doc);
+        info!("{}", docstring(doc.clone()));
         print_line();
     }
 
@@ -220,22 +328,6 @@ fn list_base(base: &DocumentBase, is_workflow: bool) {
         Cell::new("Default").style_spec("bFg"),
     ]));
 
-    for input in &base.inputs {
-        let binding = if let Some(b) = &input.input_binding {
-            let prefix = b.prefix.as_ref().map_or("not set".to_string(), |p| p.to_string());
-            let position = b.position.map_or("not set".to_string(), |p| p.to_string());
-            format!("Prefix: {}; Position: {}", prefix, position)
-        } else {
-            "No Binding".into()
-        };
-
-        table.add_row(Row::new(vec![
-            Cell::new(&input.id),
-            Cell::new(&input.type_.to_string()),
-            Cell::new(&binding),
-            Cell::new(&input.default.as_ref().map_or("None".to_string(), |d| d.as_value_string())),
-        ]));
-    }
     table.printstd();
     print_line();
 }
@@ -251,12 +343,16 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
         .inputs
         .iter()
         .map(|input| {
-            if wf.has_step_input(&input.id) {
-                format!("✅    {}", input.id)
+            if wf
+                .steps
+                .iter()
+                .any(|step| step.r#in.iter().any(|i| i.id == input.id))
+            {
+                format!("✅    {}", input.id.as_ref().unwrap())
             } else if input.default.is_some() {
-                format!("🔘    {}", input.id)
+                format!("🔘    {}", input.id.as_ref().unwrap())
             } else {
-                format!("❌    {}", input.id)
+                format!("❌    {}", input.id.as_ref().unwrap())
             }
         })
         .collect::<Vec<_>>()
@@ -267,10 +363,28 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
         .outputs
         .iter()
         .map(|output| {
-            if wf.has_step_output(&output.output_source.clone().unwrap_or_default()) {
-                format!("✅    {}", output.id)
+            let is_used = output
+                .output_source
+                .as_ref()
+                .into_iter()
+                .flat_map(|sources| sources.as_many())
+                .any(|src| {
+                    wf.steps.iter().any(|step| {
+                        let Some(step_id) = &step.id else {
+                            return false;
+                        };
+
+                        step.out.iter().any(|o| {
+                            let full = format!("{}/{}", step_id, o.id());
+                            full == src
+                        })
+                    })
+                });
+
+            if is_used {
+                format!("✅    {}", output.id.as_deref().unwrap_or("<no id>"))
             } else {
-                format!("❌    {}", output.id)
+                format!("❌    {}", output.id.as_deref().unwrap_or("<no id>"))
             }
         })
         .collect::<Vec<_>>()
@@ -282,7 +396,17 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
     for step in &wf.steps {
         let tool = match &step.run {
             StringOrDocument::String(run) => {
-                load_tool(path.join(run)).map_err(|e| anyhow::anyhow!("Could not load tool {:?}: {e}", path.join(run)))?
+                let CWLDocument::CommandLineTool(tool) = load_cwl_file(path.join(run), true)
+                    .map_err(|e| {
+                        anyhow::anyhow!("Could not load tool {:?}: {e}", path.join(run))
+                    })?
+                else {
+                    anyhow::bail!(
+                        "Expected CommandLineTool, but got something else for step {}",
+                        step.id.as_deref().unwrap_or("<no id>")
+                    );
+                };
+                tool
             }
             StringOrDocument::Document(boxed_doc) => match &**boxed_doc {
                 CWLDocument::CommandLineTool(doc) => doc.clone(),
@@ -293,12 +417,12 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
             .inputs
             .iter()
             .map(|input| {
-                if step.in_.iter().any(|i| i.id == input.id) {
-                    format!("✅    {}", input.id)
+                if step.r#in.iter().any(|i| i.id == input.id) {
+                    format!("✅    {}", input.id.as_ref().unwrap())
                 } else if input.default.is_some() {
-                    format!("🔘    {}", input.id)
+                    format!("🔘    {}", input.id.as_ref().unwrap())
                 } else {
-                    format!("❌    {}", input.id)
+                    format!("❌    {}", input.id.as_ref().unwrap())
                 }
             })
             .collect::<Vec<_>>()
@@ -308,15 +432,34 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
             .outputs
             .iter()
             .map(|output| {
-                if wf
-                    .steps
-                    .iter()
-                    .any(|s| s.in_.clone().iter().any(|v| v.source == Some(format!("{}/{}", step.id, output.id))))
-                    || wf.outputs.iter().any(|o| o.output_source == Some(format!("{}/{}", step.id, output.id)))
-                {
-                    format!("✅    {}", output.id)
+                let target = format!(
+                    "{}/{}",
+                    step.id.as_ref().unwrap(),
+                    output.id.as_ref().unwrap()
+                );
+
+                let used_in_steps = wf.steps.iter().any(|s| {
+                    s.r#in.iter().any(|v| {
+                        v.source
+                            .as_ref()
+                            .into_iter()
+                            .flat_map(|s| s.as_many())
+                            .any(|src| src == target)
+                    })
+                });
+
+                let used_in_outputs = wf.outputs.iter().any(|o| {
+                    o.output_source
+                        .as_ref()
+                        .into_iter()
+                        .flat_map(|s| s.as_many())
+                        .any(|src| src == target)
+                });
+
+                if used_in_steps || used_in_outputs {
+                    format!("✅    {}", output.id.as_ref().unwrap())
                 } else {
-                    format!("❌    {}", output.id)
+                    format!("❌    {}", output.id.as_ref().unwrap())
                 }
             })
             .collect::<Vec<_>>()
@@ -336,5 +479,8 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
 }
 
 fn print_line() {
-    info!("{}", "_________________________________________________________________".bold());
+    info!(
+        "{}",
+        "_________________________________________________________________".bold()
+    );
 }

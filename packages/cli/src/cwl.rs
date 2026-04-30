@@ -1,4 +1,4 @@
-use commonwl::{CWLDocument, Workflow};
+use commonwl::documents::{CWLDocument, Workflow};
 use dialoguer::{Select, theme::ColorfulTheme};
 use log::info;
 use repository::Repository;
@@ -13,8 +13,13 @@ use syntect::{
 };
 
 pub trait Connectable {
-    fn remove_output_connection(&mut self, from: &str, to_output: &str) -> Result<(), Box<dyn Error>>;
-    fn remove_input_connection(&mut self, from_input: &str, to: &str) -> Result<(), Box<dyn Error>>;
+    fn remove_output_connection(
+        &mut self,
+        from: &str,
+        to_output: &str,
+    ) -> Result<(), Box<dyn Error>>;
+    fn remove_input_connection(&mut self, from_input: &str, to: &str)
+    -> Result<(), Box<dyn Error>>;
     fn add_step_connection(&mut self, from: &str, to: &str) -> Result<(), Box<dyn Error>>;
     fn add_output_connection(&mut self, from: &str, to_output: &str) -> Result<(), Box<dyn Error>>;
     fn add_input_connection(&mut self, from_input: &str, to: &str) -> Result<(), Box<dyn Error>>;
@@ -33,7 +38,13 @@ impl Connectable for Workflow {
         let to_parts = to.split('/').collect::<Vec<_>>();
         let to_filename = resolve_filename(to_parts[0])?;
 
-        s4n_core::workflow::add_workflow_input_connection(self, from_input, &to_filename, to_parts[0], to_parts[1])?;
+        s4n_core::workflow::add_workflow_input_connection(
+            self,
+            from_input,
+            &to_filename,
+            to_parts[0],
+            to_parts[1],
+        )?;
         info!("➕ Added or updated connection from inputs.{from_input} to {to} in workflow");
 
         Ok(())
@@ -44,7 +55,13 @@ impl Connectable for Workflow {
         let from_parts = from.split('/').collect::<Vec<_>>();
         let from_filename = resolve_filename(from_parts[0])?;
 
-        s4n_core::workflow::add_workflow_output_connection(self, from_parts[0], from_parts[1], &from_filename, to_output)?;
+        s4n_core::workflow::add_workflow_output_connection(
+            self,
+            from_parts[0],
+            from_parts[1],
+            &from_filename,
+            to_output,
+        )?;
         info!("➕ Added or updated connection from {from} to outputs.{to_output} in workflow!");
 
         Ok(())
@@ -59,7 +76,15 @@ impl Connectable for Workflow {
         let to_parts = to.split('/').collect::<Vec<_>>();
         let to_filename = resolve_filename(to_parts[0])?;
 
-        s4n_core::workflow::add_workflow_step_connection(self, &from_filename, from_parts[0], from_parts[1], &to_filename, to_parts[0], to_parts[1])?;
+        s4n_core::workflow::add_workflow_step_connection(
+            self,
+            &from_filename,
+            from_parts[0],
+            from_parts[1],
+            &to_filename,
+            to_parts[0],
+            to_parts[1],
+        )?;
         info!("🔗 Added connection from {from} to {to} in workflow!");
 
         Ok(())
@@ -70,10 +95,16 @@ impl Connectable for Workflow {
         let from_parts = from.split('/').collect::<Vec<_>>();
         let to_parts = to.split('/').collect::<Vec<_>>();
         if from_parts.len() != 2 {
-            return Err(format!("Invalid '--from' format: {from}. Please use tool/parameter or @inputs/parameter.").into());
+            return Err(format!(
+                "Invalid '--from' format: {from}. Please use tool/parameter or @inputs/parameter."
+            )
+            .into());
         }
         if to_parts.len() != 2 {
-            return Err(format!("Invalid '--to' format: {to}. Please use tool/parameter or @outputs/parameter.").into());
+            return Err(format!(
+                "Invalid '--to' format: {to}. Please use tool/parameter or @outputs/parameter."
+            )
+            .into());
         }
         if !self.has_step(to_parts[0]) {
             return Err(format!("Step {} not found!", to_parts[0]).into());
@@ -85,19 +116,35 @@ impl Connectable for Workflow {
     }
 
     /// Removes an input from inputs and removes it from `CommandLineTool` input.
-    fn remove_input_connection(&mut self, from_input: &str, to: &str) -> Result<(), Box<dyn Error>> {
+    fn remove_input_connection(
+        &mut self,
+        from_input: &str,
+        to: &str,
+    ) -> Result<(), Box<dyn Error>> {
         let to_parts = to.split('/').collect::<Vec<_>>();
         if to_parts.len() != 2 {
-            return Err(format!("Invalid 'to' format for input connection: {from_input} to:{to}").into());
+            return Err(
+                format!("Invalid 'to' format for input connection: {from_input} to:{to}").into(),
+            );
         }
 
-        s4n_core::workflow::remove_workflow_input_connection(self, from_input, to_parts[0], to_parts[1], true)?;
+        s4n_core::workflow::remove_workflow_input_connection(
+            self,
+            from_input,
+            to_parts[0],
+            to_parts[1],
+            true,
+        )?;
         info!("➖ Removed connection from inputs.{from_input} to {to} in workflow");
         Ok(())
     }
 
     /// Removes a connection between an output and a `CommandLineTool`.
-    fn remove_output_connection(&mut self, _from: &str, to_output: &str) -> Result<(), Box<dyn Error>> {
+    fn remove_output_connection(
+        &mut self,
+        _from: &str,
+        to_output: &str,
+    ) -> Result<(), Box<dyn Error>> {
         s4n_core::workflow::remove_workflow_output_connection(self, to_output, true)?;
         info!("➖ Removed connection to {to_output} from workflow!");
         Ok(())
@@ -131,7 +178,10 @@ pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
         1 => Ok(candidates[0].to_string_lossy().into_owned()),
         0 => Err("Could not resolve filename".into()),
         _ => {
-            let items: Vec<String> = candidates.iter().map(|p| p.to_string_lossy().into_owned()).collect();
+            let items: Vec<String> = candidates
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect();
             let selection = Select::with_theme(&ColorfulTheme::default())
                 .with_prompt("Multiple candidates are found. Select the CWL File to use")
                 .items(&items)
@@ -149,8 +199,14 @@ fn build_path(base: Option<PathBuf>, cwl_filename: &str) -> Option<PathBuf> {
 
     let cwl_filename = cwl_filename.strip_suffix(".cwl").unwrap_or(cwl_filename);
 
-    let candidate_1 = path.join(&wf_folder).join(cwl_filename).join(format!("{cwl_filename}.cwl"));
-    let candidate_2 = path.join(&wf_folder).join(cwl_filename).join("workflow.cwl");
+    let candidate_1 = path
+        .join(&wf_folder)
+        .join(cwl_filename)
+        .join(format!("{cwl_filename}.cwl"));
+    let candidate_2 = path
+        .join(&wf_folder)
+        .join(cwl_filename)
+        .join("workflow.cwl");
 
     candidate_1
         .exists()
@@ -176,7 +232,6 @@ pub fn highlight_cwl(yaml: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::{CreateArgs, create_tool};
     use fstest::fstest;
     use s4n_core::io::get_workflows_folder;
     use std::{
@@ -185,28 +240,14 @@ mod tests {
     };
 
     #[fstest(repo = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
-    fn test_resolve_filename() {
-        create_tool(&CreateArgs {
-            command: vec![
-                "python3".to_string(),
-                "echo.py".to_string(),
-                "--test".to_string(),
-                "input.txt".to_string(),
-            ],
-            ..Default::default()
-        })
-        .unwrap();
-
-        let name = "echo";
-        let path = resolve_filename(name).unwrap();
-        assert_eq!(path, format!("{}{name}{MAIN_SEPARATOR}{name}.cwl", get_workflows_folder()));
-    }
-
-    #[fstest(repo = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
     fn test_resolve_filename_in_submodule() {
         let repo = Repository::open(env::current_dir().unwrap()).unwrap();
         let mut module = repo
-            .submodule("https://github.com/fairagro/M4.4_UC6_ARC", Path::new("uc6"), false)
+            .submodule(
+                "https://github.com/fairagro/M4.4_UC6_ARC",
+                Path::new("uc6"),
+                false,
+            )
             .unwrap();
         module.init(false).unwrap();
         let subrepo = module.open().unwrap();

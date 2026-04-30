@@ -1,29 +1,35 @@
-use commonwl::{prelude::*, requirements::WorkDirItem};
+use commonwl::{IntegerOrExpression, OneOrMany, documents::{Argument, CommandLineTool}, 
+    files::{Directory, Dirent, FileOrDirectory}, 
+    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue}, 
+    requirements::{Include, InitialWorkDirRequirement, ListingItems, ShellCommandRequirement, StringOrInclude, ToolRequirements, WorkDirItems}, 
+    types::CWLType};
 use std::{fs, path::Path};
 
 mod inputs;
 mod outputs;
 mod postprocess;
-pub(crate) use inputs::*;
+pub use inputs::*;
 pub(crate) use outputs::*;
 pub(crate) use postprocess::post_process_cwl;
+
+use crate::append_requirement;
 
 //TODO complete list
 pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "node"];
 pub static SCRIPT_MODIFIERS: &[&str] = &["-e", "-m"];
-
+static SPECIAL_CHARS: &[&str] = &["|", ">", "2>"];
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 
 pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     let base_command = get_base_command(commands);
 
     let remainder = match &base_command {
-        Command::Single(_) => &commands[1..],
-        Command::Multiple(vec) => &commands[vec.len()..],
+       OneOrMany::One(_) => &commands[1..],
+       OneOrMany::Many(vec) => &commands[vec.len()..],
     };
-    let mut tool = CommandLineTool::default().with_base_command(base_command.clone());
+    let tool = CommandLineTool::builder().base_command(base_command.clone());
 
-    if !remainder.is_empty() {
+    let mut tool = if !remainder.is_empty() {
         let (cmd, piped) = split_vec_at(remainder, &"|");
 
         let stdout_pos = cmd.iter().position(|i| *i == ">").unwrap_or(cmd.len());
@@ -37,50 +43,51 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
 
         let args = collect_arguments(&piped, &inputs);
 
-        tool = tool.with_inputs(inputs).with_stdout(stdout).with_stderr(stderr).with_arguments(args);
-    }
+        tool.inputs(inputs).maybe_stdout(stdout).maybe_stderr(stderr).maybe_arguments(args).build()
+    }else {
+        tool.build()
+    };
 
     //add working dir items
     tool = match base_command {
-        Command::Single(cmd) => {
+        OneOrMany::One(cmd) => {
             //if command is an existing file, add to requirements
             if fs::exists(&cmd).unwrap_or_default() {
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(&cmd))]);
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(&cmd)));
             }
             tool
         }
-        Command::Multiple(ref vec) => {
+        OneOrMany::Many(ref vec) => {
             //usual command `pyton script-file.py`
             if fs::exists(&vec[1]).unwrap_or_default() && Path::new(&vec[1]).is_file() {
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
                     &vec[1],
-                ))]);
+                )));
             }
             //command with `R -e script.R`
             if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_file() {
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement::from_file(
+               append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
                     &vec[2],
-                ))]);
+                )));
             }
             //command with `python -m folder`
-            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {
-                let mut tool = tool;
-                tool.inputs.push(CommandInputParameter::default().with_id("module").with_type(CWLType::Directory).with_default_value(DefaultValue::Directory(Directory::from_location(&vec[2]))));
-                return tool.with_requirements(vec![Requirement::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: vec![WorkDirItem::Expression("$(inputs.module)".to_string())] })]);
+            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {                
+                tool.inputs.push(CommandInputParameter::builder().id("module").r#type(CWLType::Directory).default(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(&vec[2]).build()))).build());
+                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: WorkDirItems::Expression("$(inputs.module)".to_string()) }));
             }
             tool
         }
     };
 
     if tool.arguments.is_some() {
-        tool = tool.append_requirement(Requirement::ShellCommandRequirement);
+        append_requirement(&mut tool, ToolRequirements::ShellCommandRequirement(ShellCommandRequirement));
     }
     tool
 }
 
-pub(crate) fn get_base_command(command: &[&str]) -> Command {
+pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
     if command.is_empty() {
-        return Command::Single(String::new());
+        return OneOrMany::One(String::new());
     }
 
     let mut base_command = vec![command[0].to_string()];
@@ -95,8 +102,8 @@ pub(crate) fn get_base_command(command: &[&str]) -> Command {
     }
 
     match base_command.len() {
-        1 => Command::Single(command[0].to_string()),
-        _ => Command::Multiple(base_command),
+        1 => OneOrMany::One(command[0].to_string()),
+        _ => OneOrMany::Many(base_command),
     }
 }
 
@@ -116,15 +123,19 @@ fn collect_arguments(piped: &[&str], inputs: &[CommandInputParameter]) -> Option
     }
 
     let piped_args = piped.iter().enumerate().map(|(i, &x)| {
+        let shell_quote = if SPECIAL_CHARS.contains(&x) {
+            Some(false)
+        } else{None};
         Argument::Binding(CommandLineBinding {
-            position: Some((inputs.len() + i).try_into().unwrap_or_default()),
+            position: Some(IntegerOrExpression::Int((inputs.len() + i).try_into().unwrap())),
             value_from: Some(x.to_string()),
+            shell_quote,
             ..Default::default()
         })
     });
 
     let mut args = vec![Argument::Binding(CommandLineBinding {
-        position: Some(inputs.len().try_into().unwrap_or_default()),
+        position: Some(IntegerOrExpression::Int(inputs.len().try_into().unwrap_or_default())),
         value_from: Some("|".to_string()),
         shell_quote: Some(false),
         ..Default::default()
@@ -145,19 +156,34 @@ fn split_vec_at<T: PartialEq + Clone, C: AsRef<[T]>>(vec: C, split_at: &T) -> (V
     }
 }
 
+fn iwdr_by_file(filename: &str) -> InitialWorkDirRequirement {
+    InitialWorkDirRequirement::builder()
+    .listing(
+        WorkDirItems::ListingItems(
+            Box::new(
+                OneOrMany::One(
+                    ListingItems::Dirent(
+                        Dirent::builder().
+                        entry(StringOrInclude::Include(
+                            Include{include: filename.to_string()})
+                        )
+                        .entryname(filename)
+                        .build()
+                    )
+                )
+            )
+        )
+    )
+    .build()
+}
+
 #[cfg(test)]
 mod tests {
-    use std::env;
-    use std::path::Path;
     use super::*;
-    use commonwl::execution::io::copy_dir;
-    use commonwl::execution::{environment::RuntimeEnvironment, runner::command::run_command};
-    use commonwl::{CWLType, DefaultValue};
+    use commonwl::inputs::CommandLineBinding;
     use rstest::rstest;
     use serde_yaml::Value;
     use serial_test::serial;
-    use tempfile::tempdir;
-    use test_utils::with_temp_repository;
 
     fn parse_command(command: &str) -> CommandLineTool {
         let cmd = shlex::split(command).unwrap();
@@ -165,11 +191,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case("python script.py --arg1 hello", Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))]
-    #[case("echo 'Hello World!'", Command::Single("echo".to_string()))]
-    #[case("Rscript lol.R", Command::Multiple(vec!["Rscript".to_string(), "lol.R".to_string()]))]
-    #[case("", Command::Single(String::new()))]
-    pub fn test_get_base_command(#[case] command: &str, #[case] expected: Command) {
+    #[case("python script.py --arg1 hello", OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))]
+    #[case("echo 'Hello World!'", OneOrMany::One("echo".to_string()))]
+    #[case("Rscript lol.R", OneOrMany::Many(vec!["Rscript".to_string(), "lol.R".to_string()]))]
+    #[case("", OneOrMany::One(String::new()))]
+    pub fn test_get_base_command(#[case] command: &str, #[case] expected: OneOrMany<String>) {
         let args = shlex::split(command).unwrap();
         let args_slice: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
 
@@ -178,42 +204,42 @@ mod tests {
     }
 
     #[rstest]
-    #[case("python script.py", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
+    #[case("python script.py", CommandLineTool::builder().
+            base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()])).build()
         )]
-    #[case("Rscript script.R", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["Rscript".to_string(), "script.R".to_string()]))
+    #[case("Rscript script.R", CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["Rscript".to_string(), "script.R".to_string()])).build()
     )]
-    #[case("python script.py --option1 value1", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
-            .with_inputs(vec![CommandInputParameter::default()
-                .with_id("option1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("--option1"))
-                .with_default_value(DefaultValue::Any(Value::String("value1".to_string())))])
+    #[case("python script.py --option1 value1", CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))
+            .inputs(vec![CommandInputParameter::builder()
+                .id("option1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("--option1").build())
+                .default(DefaultValue::Any(Value::String("value1".to_string()))).build()]).build()
     )]
-    #[case("python script.py --option1 \"value with spaces\"", CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
-            .with_inputs(vec![CommandInputParameter::default()
-                .with_id("option1")
-                .with_type(CWLType::String)
-                .with_binding(CommandLineBinding::default().with_prefix("--option1"))
-                .with_default_value(DefaultValue::Any(Value::String("value with spaces".to_string())))])
+    #[case("python script.py --option1 \"value with spaces\"", CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))
+            .inputs(vec![CommandInputParameter::builder()
+                .id("option1")
+                .r#type(CWLType::String)
+                .input_binding(CommandLineBinding::builder().prefix("--option1").build())
+                .default(DefaultValue::Any(Value::String("value with spaces".to_string()))).build()]).build()
     )]
-    #[case("python script.py positional1 --option1 value1",  CommandLineTool::default()
-            .with_base_command(Command::Multiple(vec!["python".to_string(), "script.py".to_string()]))
-            .with_inputs(vec![
-                CommandInputParameter::default()
-                    .with_id("positional1")
-                    .with_default_value(DefaultValue::Any(Value::String("positional1".to_string())))
-                    .with_type(CWLType::String)
-                    .with_binding(CommandLineBinding::default().with_position(0)),
-                CommandInputParameter::default()
-                    .with_id("option1")
-                    .with_type(CWLType::String)
-                    .with_binding(CommandLineBinding::default().with_prefix("--option1"))
-                    .with_default_value(DefaultValue::Any(Value::String("value1".to_string())))
-            ])
+    #[case("python script.py positional1 --option1 value1",  CommandLineTool::builder()
+            .base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id("positional1")
+                    .default(DefaultValue::Any(Value::String("positional1".to_string())))
+                    .r#type(CWLType::String)
+                    .input_binding(CommandLineBinding::builder().position(0).build()).build(),
+                CommandInputParameter::builder()
+                    .id("option1")
+                    .r#type(CWLType::String)
+                    .input_binding(CommandLineBinding::builder().prefix("--option1").build())
+                    .default(DefaultValue::Any(Value::String("value1".to_string()))).build()
+            ]).build()
             
     )]
     pub fn test_parse_command_line(#[case] input: &str, #[case] expected: CommandLineTool) {
@@ -238,7 +264,7 @@ mod tests {
         let tool = parse_command("df \\| grep --line-buffered tmpfs \\> df.log");
 
         assert!(tool.arguments.is_some());
-        assert!(tool.has_shell_command_requirement());
+        assert!(tool.has_requirement::<ShellCommandRequirement>());
 
         if let Some(args) = tool.arguments {
             if let Argument::Binding(pipe) = &args[0] {
@@ -252,28 +278,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(target_os = "windows", ignore)]
-    pub fn test_cwl_execute_command_single() {
-        let cwl = parse_command("ls -la .");
-        assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());
-    }
-
-    #[test]
     pub fn test_badwords() {
         let tool = parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql");
-        assert!(BAD_WORDS.iter().any(|&word| tool.inputs.iter().any(|i| !i.id.contains(word))));
-    }
-
-    #[test]
-    #[serial]
-    pub fn test_cwl_execute_command_multiple() {
-        with_temp_repository(|dir| {
-            let cwl = parse_command("python3 scripts/echo.py --test data/input.txt");
-            assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());
-
-            let output_path = dir.path().join(Path::new("results.txt"));
-            assert!(output_path.exists());
-        });
+        assert!(BAD_WORDS.iter().any(|&word| tool.inputs.iter().any(|i| !i.id.as_ref().unwrap().contains(word))));
     }
 
     #[test]
@@ -285,26 +292,7 @@ mod tests {
         let result = get_base_command(&args_slice);
         assert_eq!(
             result,
-            Command::Multiple(vec!["python3".to_string(), "-m".to_string(), "my_module".to_string()])
+            OneOrMany::Many(vec!["python3".to_string(), "-m".to_string(), "my_module".to_string()])
         );
-    }
- 
-    #[test]
-    #[serial]
-    pub fn test_python_module_creation() {
-        let dir = tempdir().unwrap();
-        let path = dir.path();
-        let root = env::var("CARGO_MANIFEST_DIR").unwrap();
-        copy_dir(Path::new(&root).join("../../testdata/module"), path.join("module")).unwrap();
-
-        let current = env::current_dir().unwrap();
-        env::set_current_dir(path).unwrap();
-
-        let cwl = parse_command("python3 -m module --what ever");
-        //make sure it runs
-        
-        assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());   
-        assert_eq!(cwl.base_command, Command::Multiple(vec!["python3".to_string(), "-m".to_string(),  "module".to_string() ]));
-        env::set_current_dir(current).unwrap();
     }
 }

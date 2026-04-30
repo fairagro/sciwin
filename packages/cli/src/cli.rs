@@ -1,5 +1,6 @@
 use crate::commands::{
-    AnnotateCommands, ConnectWorkflowArgs, CreateArgs, ExecuteCommands, InitArgs, InstallPackageArgs, ListCWLArgs, PackageArgs, RemoveCWLArgs, SaveArgs, VisualizeWorkflowArgs
+    //AnnotateCommands, 
+    ConnectWorkflowArgs, CreateArgs, ExecuteCommands, InitArgs, InstallPackageArgs, ListCWLArgs, PackageArgs, RemoveCWLArgs, SaveArgs, VisualizeWorkflowArgs
 };
 use clap::{Command, Parser, Subcommand};
 use clap_complete::{Generator, Shell, generate};
@@ -51,13 +52,13 @@ pub enum Commands {
         #[command(subcommand)]
         command: ExecuteCommands,
     },
-    #[command(about = "Annotate CWL files")]
-    Annotate {
-        #[command(subcommand)]
-        command: Option<AnnotateCommands>,
-        #[arg(value_name = "TOOL_NAME", required = false)]
-        tool_name: Option<String>,
-    },
+    //#[command(about = "Annotate CWL files")]
+    //Annotate {
+    //    #[command(subcommand)]
+    //    command: Option<AnnotateCommands>,
+    //    #[arg(value_name = "TOOL_NAME", required = false)]
+    //    tool_name: Option<String>,
+    //},
     #[command(about = "Generate shell completions")]
     Completions {
         #[arg()]

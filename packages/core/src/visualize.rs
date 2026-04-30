@@ -1,5 +1,7 @@
-use commonwl::{CWLDocument, StringOrDocument, Workflow, WorkflowStep};
+use commonwl::documents::{CWLDocument, StringOrDocument, Workflow, WorkflowStep};
 use std::{error::Error, fs, path::Path};
+
+use crate::default_to_string;
 
 pub fn render<R: FlowchartRenderer>(r: &mut R, cwl: &Workflow, filename: &Path, no_defaults: bool) -> Result<String, Box<dyn Error>> {
     r.initialize();
@@ -8,42 +10,42 @@ pub fn render<R: FlowchartRenderer>(r: &mut R, cwl: &Workflow, filename: &Path, 
 
     r.begin_cluster("inputs", Some("Workflow Inputs"), RenderStyle::Input);
     for input in &cwl.inputs {
-        r.node(&input.id, None, RenderStyle::Input);
+        r.node(input.id.as_ref().unwrap(), None, RenderStyle::Input);
     }
     r.end_cluster();
 
     r.begin_cluster("outputs", Some("Workflow Outputs"), RenderStyle::Output);
     for output in &cwl.outputs {
-        r.node(&output.id, None, RenderStyle::Output);
+        r.node(output.id.as_ref().unwrap(), None, RenderStyle::Output);
     }
     r.end_cluster();
 
     for step in &cwl.steps {
-        r.node(&step.id, None, RenderStyle::Default);
+        r.node(step.id.as_ref().unwrap(), None, RenderStyle::Default);
 
-        for input in &step.in_ {
+        for input in &step.r#in {
             if let Some(src) = &input.source {
-                let src_id = src.split('/').next().unwrap();
-                r.edge(src_id, &step.id, Some(&input.id), RenderStyle::Default);
+                let src_id = src.as_one().split('/').next().unwrap();
+                r.edge(src_id, step.id.as_ref().unwrap(), input.id.as_deref(), RenderStyle::Default);
             }
         }
 
         if !no_defaults && let Some(doc) = load_step(step, filename) {
-            for input in &doc.inputs {
-                if !step.in_.iter().any(|i| i.id == input.id)
+            for input in &doc.get_inputs() {
+                if !step.r#in.iter().any(|i| i.id == input.id)
                     && let Some(input_default) = &input.default
                 {
-                    let node_id = format!("{}_{}", step.id, input.id);
-                    r.node(&node_id, Some(&input_default.as_value_string()), RenderStyle::Small);
-                    r.edge(&node_id, &step.id, Some(&input.id), RenderStyle::Small);
+                    let node_id = format!("{}_{}", step.id.as_ref().unwrap(), input.id.as_ref().unwrap());
+                    r.node(&node_id, Some(&default_to_string(input_default)), RenderStyle::Small);
+                    r.edge(&node_id, step.id.as_ref().unwrap(), Some(input.id.as_ref().unwrap()), RenderStyle::Small);
                 }
             }
         }
     }
     for output in &cwl.outputs {
         if let Some(output_source) = &output.output_source {
-            let src = output_source.split('/').next().unwrap();
-            r.edge(src, &output.id, Some(&output.id), RenderStyle::Default);
+            let src = output_source.as_one().split('/').next().unwrap();
+            r.edge(src, output.id.as_ref().unwrap(), Some(output.id.as_ref().unwrap()), RenderStyle::Default);
         }
     }
 

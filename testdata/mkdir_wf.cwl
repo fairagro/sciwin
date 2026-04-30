@@ -9,7 +9,7 @@ inputs:
 
 outputs:
 - id: out
-  type: File
+  type: Directory
   outputSource: mkdir/out
 
 steps:

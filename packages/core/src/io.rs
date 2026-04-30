@@ -1,16 +1,16 @@
 use crate::parser::{SCRIPT_EXECUTORS, SCRIPT_MODIFIERS};
-use commonwl::Command;
+use commonwl::OneOrMany;
 use std::path::Path;
 use util::is_cwl_file;
 
 pub fn get_workflows_folder() -> String {
     "workflows/".to_string()
 }
-pub fn get_qualified_filename(command: &Command, the_name: Option<String>) -> String {
+pub fn get_qualified_filename(command: &OneOrMany<String>, the_name: Option<String>) -> String {
     //decide over filename
 
     let mut filename = match &command {
-        Command::Multiple(cmd) => {
+        OneOrMany::Many(cmd) => {
             if cmd.len() > 2 && SCRIPT_EXECUTORS.contains(&cmd[0].as_str()) && SCRIPT_MODIFIERS.contains(&cmd[1].as_str()) {
                 get_filename_without_extension(cmd[2].as_str())
             } else if SCRIPT_EXECUTORS.contains(&cmd[0].as_str()) {
@@ -19,7 +19,7 @@ pub fn get_qualified_filename(command: &Command, the_name: Option<String>) -> St
                 get_filename_without_extension(cmd[0].as_str())
             }
         }
-        Command::Single(cmd) => get_filename_without_extension(cmd.as_str()),
+        OneOrMany::One(cmd) => get_filename_without_extension(cmd.as_str()),
     };
 
     filename = Path::new(&filename).file_name().unwrap_or_default().to_string_lossy().into_owned();
@@ -98,16 +98,16 @@ mod tests {
     }
 
     #[rstest]
-    #[case(Command::Multiple(vec!["python".to_string(), "test/data/script.py".to_string()]), "workflows/script/script.cwl")]
-    #[case(Command::Single("echo".to_string()), "workflows/echo/echo.cwl")]
-    fn test_get_qualified_filename(#[case] command: Command, #[case] expected: &str) {
+    #[case(OneOrMany::Many(vec!["python".to_string(), "test/data/script.py".to_string()]), "workflows/script/script.cwl")]
+    #[case(OneOrMany::One("echo".to_string()), "workflows/echo/echo.cwl")]
+    fn test_get_qualified_filename(#[case] command: OneOrMany<String>, #[case] expected: &str) {
         assert_eq!(get_qualified_filename(&command, None), expected);
     }
 
     #[test]
     fn test_get_qualified_filename_with_name() {
         assert_eq!(
-            get_qualified_filename(&Command::Single("echo".to_string()), Some("hello".to_string())),
+            get_qualified_filename(&OneOrMany::One("echo".to_string()), Some("hello".to_string())),
             "workflows/hello/hello.cwl"
         );
     }

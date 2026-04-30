@@ -15,7 +15,8 @@ workspace = true
 [dependencies]
 s4n_core = { path = "../core" }
 repository = { path = "../repository" }
-commonwl = { path = "../cwl", features = ["execution", "annotation"] }
+commonwl.workspace = true
+cwl_engine_storage.workspace = true
 remote_execution = { path = "../remote_execution" }
 util = { path = "../util" }
 
@@ -25,8 +26,10 @@ dialoguer = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true }
 serde_yaml = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
+tokio-util = { workspace = true }
 
 clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
 clap_complete = "4.5.61"
@@ -46,3 +49,4 @@ shlex = { workspace = true }
 test_utils = { workspace = true }
 serial_test = { workspace = true }
 fstest = { workspace = true }
+dircpy = { workspace = true }

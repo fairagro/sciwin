@@ -2,7 +2,7 @@ use dialoguer::{Input, theme::ColorfulTheme};
 use log::warn;
 use repository::Config;
 
-mod annotate;
+//mod annotate;
 mod connect;
 mod create;
 mod execute;
@@ -13,7 +13,7 @@ mod remove;
 mod save;
 mod visualize;
 
-pub use annotate::*;
+//pub use annotate::*;
 pub use connect::*;
 pub use create::*;
 pub use execute::*;

@@ -8,6 +8,17 @@ use log::info;
 use similar::{ChangeTag, TextDiff};
 use std::fmt;
 
+#[derive(Debug)]
+pub struct ExitCode(pub i32);
+
+impl std::fmt::Display for ExitCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "exit code {}", self.0)
+    }
+}
+
+impl std::error::Error for ExitCode {}
+
 pub fn print_list(list: &Vec<String>) {
     for item in list {
         info!("\t- {item}");

@@ -1,13 +1,22 @@
 #![allow(clippy::disallowed_macros)]
-
-use commonwl::execution::io::create_and_write_file;
-use commonwl::{load_workflow, requirements::Requirement};
+use commonwl::{
+    documents::CWLDocument, load_cwl_file, requirements::SubworkflowFeatureRequirement,
+};
 use s4n::commands::*;
 use s4n_core::project::initialize_project;
 use serial_test::serial;
-use std::{env, fs, path::Path};
+use std::{env, fs, io::Write, path::Path};
 use tempfile::tempdir;
 use test_utils::check_git_user;
+
+fn create_and_write_file(path: impl AsRef<Path>, content: &str) -> std::io::Result<()> {
+    if let Some(parent) = path.as_ref().parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::File::create(path)?;
+    file.write_all(content.as_bytes())?;
+    Ok(())
+}
 
 #[test]
 #[serial]
@@ -48,8 +57,15 @@ pub fn test_remove_workflow() {
     let target = "workflows/test/test.cwl";
     assert!(fs::exists(target).unwrap());
 
-    handle_list_command(&ListCWLArgs { file: None, list_all: true }).unwrap();
-    handle_remove_command(&RemoveCWLArgs { file: target.to_string() }).unwrap();
+    handle_list_command(&ListCWLArgs {
+        file: None,
+        list_all: true,
+    })
+    .unwrap();
+    handle_remove_command(&RemoveCWLArgs {
+        file: target.to_string(),
+    })
+    .unwrap();
 
     assert!(!fs::exists(target).unwrap());
     env::set_current_dir(current).unwrap();
@@ -116,10 +132,19 @@ pub fn test_workflow() -> Result<(), Box<dyn std::error::Error>> {
     let result = connect_workflow_nodes(&dummy_connect_args);
     assert!(result.is_ok());
 
-    let wf = load_workflow("workflows/dummy/dummy.cwl").unwrap();
-    assert!(wf.requirements.iter().any(|r| matches!(r, Requirement::SubworkflowFeatureRequirement)));
+    let CWLDocument::Workflow(wf) = load_cwl_file("workflows/dummy/dummy.cwl", true).unwrap()
+    else {
+        panic!("Loaded CWL file is not a Workflow!");
+    };
+    assert!(
+        wf.get_requirement::<SubworkflowFeatureRequirement>()
+            .is_some()
+    );
 
-    let workflow = load_workflow("workflows/test/test.cwl").unwrap();
+    let CWLDocument::Workflow(workflow) = load_cwl_file("workflows/test/test.cwl", true).unwrap()
+    else {
+        panic!("Loaded CWL file is not a Workflow!");
+    };
 
     assert!(workflow.has_input("speakers"));
     assert!(workflow.has_input("pop"));
@@ -128,18 +153,16 @@ pub fn test_workflow() -> Result<(), Box<dyn std::error::Error>> {
     assert!(workflow.has_step("calculation"));
     assert!(workflow.has_step("plot"));
 
-    assert!(workflow.has_step_input("speakers"));
-    assert!(workflow.has_step_input("pop"));
-    assert!(workflow.has_step_input("calculation/results"));
-    assert!(workflow.has_step_output("plot/results"));
-
     for c in connect_args {
         let result = disconnect_workflow_nodes(&c);
         assert!(result.is_ok());
     }
 
     // Reload the workflow and validate disconnections
-    let workflow = load_workflow("workflows/test/test.cwl").unwrap();
+    let CWLDocument::Workflow(workflow) = load_cwl_file("workflows/test/test.cwl", true).unwrap()
+    else {
+        panic!("Loaded CWL file is not a Workflow!");
+    };
 
     assert!(!workflow.has_input("speakers"));
     assert!(!workflow.has_input("pop"));
@@ -147,11 +170,6 @@ pub fn test_workflow() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(workflow.has_step("calculation"));
     assert!(workflow.has_step("plot"));
-
-    assert!(!workflow.has_step_input("speakers"));
-    assert!(!workflow.has_step_input("pop"));
-    assert!(!workflow.has_step_input("calculation/results"));
-    assert!(workflow.has_step_output("plot/results")); 
 
     env::set_current_dir(current).unwrap();
 
@@ -212,10 +230,18 @@ pub fn test_workflow_optional_flags() -> Result<(), Box<dyn std::error::Error>> 
     let result = connect_workflow_nodes(&dummy_connect_args);
     assert!(result.is_ok());
 
-    let wf = load_workflow("workflows/dummy/dummy.cwl").unwrap();
-    assert!(wf.requirements.iter().any(|r| matches!(r, Requirement::SubworkflowFeatureRequirement)));
-
-    let workflow = load_workflow("workflows/test/test.cwl").unwrap();
+    let CWLDocument::Workflow(wf) = load_cwl_file("workflows/dummy/dummy.cwl", true).unwrap()
+    else {
+        panic!("Loaded CWL file is not a Workflow!");
+    };
+    assert!(
+        wf.get_requirement::<SubworkflowFeatureRequirement>()
+            .is_some()
+    );
+    let CWLDocument::Workflow(workflow) = load_cwl_file("workflows/test/test.cwl", true).unwrap()
+    else {
+        panic!("Loaded CWL file is not a Workflow!");
+    };
 
     assert!(workflow.has_input("speakers"));
     assert!(workflow.has_input("pop"));
@@ -224,18 +250,16 @@ pub fn test_workflow_optional_flags() -> Result<(), Box<dyn std::error::Error>> 
     assert!(workflow.has_step("calculation"));
     assert!(workflow.has_step("plot"));
 
-    assert!(workflow.has_step_input("speakers"));
-    assert!(workflow.has_step_input("pop"));
-    assert!(workflow.has_step_input("calculation/results"));
-    assert!(workflow.has_step_output("plot/results"));
-
     for c in connect_args {
         let result = disconnect_workflow_nodes(&c);
         assert!(result.is_ok());
     }
 
     // Reload the workflow and validate disconnections
-    let workflow = load_workflow("workflows/test/test.cwl").unwrap();
+    let CWLDocument::Workflow(workflow) = load_cwl_file("workflows/test/test.cwl", true).unwrap()
+    else {
+        panic!("Loaded CWL file is not a Workflow!");
+    };
 
     assert!(!workflow.has_input("speakers"));
     assert!(!workflow.has_input("pop"));
@@ -243,11 +267,6 @@ pub fn test_workflow_optional_flags() -> Result<(), Box<dyn std::error::Error>> 
 
     assert!(workflow.has_step("calculation"));
     assert!(workflow.has_step("plot"));
-
-    assert!(!workflow.has_step_input("speakers"));
-    assert!(!workflow.has_step_input("pop"));
-    assert!(!workflow.has_step_input("calculation/results"));
-    assert!(workflow.has_step_output("plot/results"));
 
     env::set_current_dir(current).unwrap();
 

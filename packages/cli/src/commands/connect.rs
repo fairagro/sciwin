@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use clap::Args;
-use commonwl::{format::format_cwl, load_workflow};
+use commonwl::{documents::CWLDocument, format::format_cwl, load_cwl_file};
 use log::info;
 use s4n_core::io::get_workflows_folder;
 use std::{fs, io::Write, path::Path};
@@ -30,7 +30,11 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
         };
         create_workflow(&args)?;
     }
-    let mut workflow = load_workflow(&filename).map_err(|e| anyhow!("Could not load workflow {filename}: {e}"))?;
+    let CWLDocument::Workflow(mut workflow) = load_cwl_file(&filename, true)
+        .map_err(|e| anyhow!("Could not load workflow {filename}: {e}"))?
+    else {
+        anyhow::bail!("The specified file is not a workflow");
+    };
 
     let from_parts = args.from.split('/').collect::<Vec<_>>();
     let to_parts = args.to.split('/').collect::<Vec<_>>();
@@ -43,7 +47,13 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
 
         workflow
             .add_input_connection(input, &args.to)
-            .map_err(|e| anyhow!("Could not add input connection from {} to {}: {e}", input, args.to))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Could not add input connection from {} to {}: {e}",
+                    input,
+                    args.to
+                )
+            })?;
     } else if to_parts[0] == "@outputs" || to_parts.len() == 1 {
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
@@ -53,15 +63,27 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
 
         workflow
             .add_output_connection(&args.from, output)
-            .map_err(|e| anyhow!("Could not add output connection from {} to {}: {e}", args.from, output))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Could not add output connection from {} to {}: {e}",
+                    args.from,
+                    output
+                )
+            })?;
     } else {
         workflow
             .add_step_connection(&args.from, &args.to)
-            .map_err(|e| anyhow!("Could not add connection from {} to {}:: {e}", args.from, args.to))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Could not add connection from {} to {}:: {e}",
+                    args.from,
+                    args.to
+                )
+            })?;
     }
 
     //save workflow
-    let mut yaml = serde_yaml::to_string(&workflow)?;
+    let mut yaml = serde_yaml::to_string(&CWLDocument::Workflow(workflow))?;
     yaml = format_cwl(&yaml).map_err(|e| anyhow!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename)?;
     let mut file = fs::File::create(&filename)?;
@@ -74,7 +96,11 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
 
 pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> {
     let filename = format!("{}{}/{}.cwl", get_workflows_folder(), args.name, args.name);
-    let mut workflow = load_workflow(&filename).map_err(|e| anyhow!("Could not load workflow {filename}: {e}"))?;
+    let CWLDocument::Workflow(mut workflow) = load_cwl_file(&filename, true)
+        .map_err(|e| anyhow!("Could not load workflow {filename}: {e}"))?
+    else {
+        anyhow::bail!("The specified file is not a workflow");
+    };
 
     let from_parts = args.from.split('/').collect::<Vec<_>>();
     let to_parts = args.to.split('/').collect::<Vec<_>>();
@@ -88,7 +114,13 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<(
 
         workflow
             .remove_input_connection(input, &args.to)
-            .map_err(|e| anyhow!("Could not remove input connection from {} to {}: {e}", input, args.to))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Could not remove input connection from {} to {}: {e}",
+                    input,
+                    args.to
+                )
+            })?;
     } else if to_parts[0] == "@outputs" || to_parts.len() == 1 {
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
@@ -98,14 +130,26 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<(
 
         workflow
             .remove_output_connection(&args.from, output)
-            .map_err(|e| anyhow!("Could not remove output connection from {} to {}: {e}", args.from, output))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Could not remove output connection from {} to {}: {e}",
+                    args.from,
+                    output
+                )
+            })?;
     } else {
         workflow
             .remove_step_connection(&args.from, &args.to)
-            .map_err(|e| anyhow!("Could not remove connection from {} to {}:: {e}", args.from, args.to))?;
+            .map_err(|e| {
+                anyhow!(
+                    "Could not remove connection from {} to {}:: {e}",
+                    args.from,
+                    args.to
+                )
+            })?;
     }
 
-    let mut yaml = serde_yaml::to_string(&workflow)?;
+    let mut yaml = serde_yaml::to_string(&CWLDocument::Workflow(workflow))?;
     yaml = format_cwl(&yaml).map_err(|e| anyhow!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename)?;
     let mut file = fs::File::create(&filename)?;

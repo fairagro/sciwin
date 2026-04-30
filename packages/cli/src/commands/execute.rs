@@ -1,14 +1,33 @@
 use clap::{Args, Subcommand};
-use commonwl::execution::error::ExecutionError;
-use commonwl::execution::{ContainerEngine, execute_cwlfile, set_container_engine};
-use commonwl::prelude::*;
+use commonwl::{
+    OneOrMany,
+    documents::CWLDocument,
+    engine::{
+        ContainerEngine, EngineStatus, InputObject, LocalBackend, create_execution_request,
+        create_execution_request_with_inputs, evaluate_exitcodes,
+    },
+    files::{Directory, File, FileOrDirectory},
+    inputs::{DefaultValue, InputSchema, InputType},
+    types::CWLType,
+};
+use cwl_engine_storage::{StorageBackend, StoragePath};
 use remote_execution::{check_status, download_results, export_rocrate, logout};
+use s4n_core::parser::guess_type;
 use serde_yaml::{Number, Value};
-use std::{collections::HashMap, error::Error, fs, path::{Path, PathBuf}};
+use std::{
+    collections::HashMap,
+    error::Error,
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
+use tokio_util::sync::CancellationToken;
 
-pub fn handle_execute_commands(subcommand: &ExecuteCommands) -> Result<(), Box<dyn Error>> {
+use crate::ExitCode;
+
+pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Result<()> {
     match subcommand {
-        ExecuteCommands::Local(args) => execute_local(args).map_err(|e| Box::new(e).into()),
+        ExecuteCommands::Local(args) => execute_local(args).await,
         ExecuteCommands::Remote(remote_args) => match &remote_args.command {
             RemoteSubcommands::Start {
                 file,
@@ -16,11 +35,23 @@ pub fn handle_execute_commands(subcommand: &ExecuteCommands) -> Result<(), Box<d
                 rocrate,
                 watch,
                 logout,
-            } => schedule_run(file, input_file, *rocrate, *watch, *logout),
-            RemoteSubcommands::Status { workflow_name } => check_status(workflow_name),
-            RemoteSubcommands::Download { workflow_name, all, output_dir } => download_results(workflow_name, *all, output_dir.as_ref()),
-            RemoteSubcommands::Rocrate { workflow_name, output_dir } => export_rocrate(workflow_name, output_dir.as_ref(), None),
-            RemoteSubcommands::Logout => logout(),
+            } => schedule_run(file, input_file, *rocrate, *watch, *logout)
+                .map_err(|e| anyhow::anyhow!("{e}")),
+            RemoteSubcommands::Status { workflow_name } => {
+                check_status(workflow_name).map_err(|e| anyhow::anyhow!("{e}"))
+            }
+            RemoteSubcommands::Download {
+                workflow_name,
+                all,
+                output_dir,
+            } => download_results(workflow_name, *all, output_dir.as_ref())
+                .map_err(|e| anyhow::anyhow!("{e}")),
+            RemoteSubcommands::Rocrate {
+                workflow_name,
+                output_dir,
+            } => export_rocrate(workflow_name, output_dir.as_ref(), None)
+                .map_err(|e| anyhow::anyhow!("{e}")),
+            RemoteSubcommands::Logout => logout().map_err(|e| anyhow::anyhow!("{e}")),
         },
         ExecuteCommands::MakeTemplate(args) => make_template(&args.cwl),
     }
@@ -45,7 +76,7 @@ pub struct MakeTemplateArgs {
 #[derive(Args, Debug, Default)]
 pub struct LocalExecuteArgs {
     #[arg(long = "outdir", help = "A path to output resulting files to")]
-    pub out_dir: Option<String>,
+    pub out_dir: Option<PathBuf>,
     #[arg(long = "quiet", help = "Runner does not print to stdout")]
     pub is_quiet: bool,
     #[arg(long = "podman", help = "Use podman instead of docker")]
@@ -56,7 +87,11 @@ pub struct LocalExecuteArgs {
     pub apptainer: bool,
     #[arg(help = "CWL File to execute")]
     pub file: PathBuf,
-    #[arg(trailing_var_arg = true, help = "Other arguments provided to cwl file", allow_hyphen_values = true)]
+    #[arg(
+        trailing_var_arg = true,
+        help = "Other arguments provided to cwl file",
+        allow_hyphen_values = true
+    )]
     pub args: Vec<String>,
 }
 
@@ -76,9 +111,15 @@ pub enum RemoteSubcommands {
         input_file: Option<PathBuf>,
         #[arg(long = "rocrate", help = "Create Provenance Run Crate")]
         rocrate: bool,
-        #[arg(long = "logout", help = "Delete reana information from credential storage (a.k.a logout)")]
+        #[arg(
+            long = "logout",
+            help = "Delete reana information from credential storage (a.k.a logout)"
+        )]
         logout: bool,
-        #[arg(long = "watch", help = "Wait for workflow execution to finish and download result")]
+        #[arg(
+            long = "watch",
+            help = "Wait for workflow execution to finish and download result"
+        )]
         watch: bool,
     },
     #[command(about = "Get the status of Execution on REANA")]
@@ -92,7 +133,11 @@ pub enum RemoteSubcommands {
         workflow_name: String,
         #[arg(short = 'a', long = "all", help = "Download all files of the workflow")]
         all: bool,
-        #[arg(short = 'd', long = "output_dir", help = "Optional output directory to save downloaded files")]
+        #[arg(
+            short = 'd',
+            long = "output_dir",
+            help = "Optional output directory to save downloaded files"
+        )]
         output_dir: Option<String>,
     },
     #[command(about = "Downloads finished Workflow Run RO-Crate from REANA")]
@@ -111,26 +156,101 @@ pub enum RemoteSubcommands {
     Logout,
 }
 
-pub fn execute_local(args: &LocalExecuteArgs) -> Result<(), ExecutionError> {
+#[allow(clippy::disallowed_macros)]
+pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error> {
     if args.is_quiet {
         log::set_max_level(log::LevelFilter::Error);
     }
-    if args.podman {
-        set_container_engine(ContainerEngine::Podman);
+
+    let container_engine = if args.podman {
+        ContainerEngine::Podman
+    } else if args.singularity {
+        ContainerEngine::Singularity
+    } else if args.apptainer {
+        ContainerEngine::Apptainer
+    } else {
+        ContainerEngine::Docker
+    };
+    let storage = Arc::new(StorageBackend::new());
+    let local_data_store = StoragePath::from_local(Path::new("/tmp"));
+    let backend = Arc::new(LocalBackend::new(
+        container_engine,
+        storage,
+        local_data_store,
+    ));
+
+    let request = if args.args.is_empty() {
+        create_execution_request_with_inputs(
+            args.file.clone(),
+            InputObject::default(),
+            args.out_dir.as_deref(),
+            None,
+        )?
+    } else if args.args.len() == 1 && fs::exists(args.args[0].clone())? {
+        create_execution_request(
+            args.file.clone().clone(),
+            args.args[0].clone(),
+            args.out_dir.as_deref(),
+        )?
+    } else {
+        let raw = args
+            .args
+            .chunks_exact(2)
+            .filter_map(|pair| {
+                if let Some(key) = pair[0].strip_prefix("--") {
+                    let raw_value = &pair[1];
+                    let value = match guess_type(raw_value) {
+                        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                            File::builder().location(raw_value.to_string()).build(),
+                        )),
+                        CWLType::Directory => {
+                            DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+                                Directory::builder().location(raw_value.to_string()).build(),
+                            ))
+                        }
+                        _ => DefaultValue::Any(
+                            serde_yaml::from_str(raw_value).expect("Could not read input"),
+                        ),
+                    };
+                    Some((key.to_string(), value))
+                } else {
+                    None
+                }
+            })
+            .collect::<HashMap<_, _>>();
+        let inputs = InputObject {
+            inputs: raw,
+            ..Default::default()
+        };
+        create_execution_request_with_inputs(
+            args.file.clone(),
+            inputs,
+            args.out_dir.as_deref(),
+            None,
+        )?
+    };
+    let cancellation_token = CancellationToken::new();
+    let result = commonwl::engine::execute(backend, &request, cancellation_token).await?;
+    let exit_status = result.exit_status;
+
+    let evaluated_code = evaluate_exitcodes(&exit_status, &request.specification);
+
+    if let EngineStatus::Success(_) = evaluated_code {
+        let json = serde_json::to_string_pretty(&result.outputs)?;
+        println!("{json}");
+        Ok(())
+    } else {
+        anyhow::bail!(ExitCode(1))
     }
-    else if args.singularity {
-        set_container_engine(ContainerEngine::Singularity);
-    } 
-    else if args.apptainer {
-        set_container_engine(ContainerEngine::Apptainer);
-    }
-    else {
-        set_container_engine(ContainerEngine::Docker);
-    }
-    execute_cwlfile(&args.file, &args.args, args.out_dir.clone())
 }
 
-pub fn schedule_run(file: &Path, input_file: &Option<PathBuf>, rocrate: bool, watch: bool, logout: bool) -> Result<(), Box<dyn Error>> {
+pub fn schedule_run(
+    file: &Path,
+    input_file: &Option<PathBuf>,
+    rocrate: bool,
+    watch: bool,
+    logout: bool,
+) -> Result<(), Box<dyn Error>> {
     let workflow_name = remote_execution::schedule_run(file, input_file)?;
 
     if watch {
@@ -145,7 +265,7 @@ pub fn schedule_run(file: &Path, input_file: &Option<PathBuf>, rocrate: bool, wa
 }
 
 #[allow(clippy::disallowed_macros)]
-pub fn make_template(filename: &PathBuf) -> Result<(), Box<dyn Error>> {
+pub fn make_template(filename: &PathBuf) -> anyhow::Result<()> {
     let template = make_template_impl(filename)?;
     let yaml = serde_yaml::to_string(&template)?;
 
@@ -153,38 +273,60 @@ pub fn make_template(filename: &PathBuf) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn make_template_impl(filename: &PathBuf) -> Result<HashMap<String, DefaultValue>, Box<dyn Error>> {
+fn make_template_impl(filename: &PathBuf) -> anyhow::Result<HashMap<String, DefaultValue>> {
     let contents = fs::read_to_string(filename)?;
     let cwl: CWLDocument = serde_yaml::from_str(&contents)?;
 
     Ok(cwl
-        .inputs
+        .get_inputs() //we assume there is no stdin
         .iter()
         .map(|i| {
             let id = &i.id;
             let dummy_value = if i.default.is_some() {
-                return (id.clone(), i.default.clone().unwrap());
+                return (id.clone().unwrap(), i.default.clone().unwrap());
             } else {
-                match &i.type_ {
-                    CWLType::Optional(cwltype) => default_values(cwltype),
-                    CWLType::Array(cwltype) => DefaultValue::Any(Value::Sequence(vec![defaults(cwltype), defaults(cwltype)])),
-                    cwltype => default_values(cwltype),
-                }
+                get_default(&i.r#type)
             };
-            (id.clone(), dummy_value)
+            (id.clone().unwrap(), dummy_value)
         })
         .collect::<HashMap<_, _>>())
 }
 
-fn default_values(cwltype: &CWLType) -> DefaultValue {
-    match cwltype {
-        CWLType::File => DefaultValue::File(File::from_location("./path/to/file.txt")),
-        CWLType::Directory => DefaultValue::Directory(Directory::from_location("./path/to/dir")),
-        _ => DefaultValue::Any(defaults(cwltype)),
+fn get_default(r#type: &OneOrMany<InputType>) -> DefaultValue {
+    let input_type = match r#type {
+        OneOrMany::One(t) => t,
+        OneOrMany::Many(ts) => ts.first().unwrap_or(&InputType::CWLType(CWLType::Null)),
+    };
+
+    match input_type {
+        InputType::CWLType(cwltype) => fs_defaults(cwltype),
+        InputType::InputSchema(schema) => match schema.as_ref() {
+            InputSchema::Record(_) => DefaultValue::Any(Value::Mapping(Default::default())),
+            InputSchema::Enum(e) => DefaultValue::Any(Value::String(
+                e.symbols.first().cloned().unwrap_or_default(),
+            )),
+            InputSchema::Array(a) => DefaultValue::Any(Value::Sequence(vec![
+                serde_yaml::to_value(get_default(&a.items)).unwrap_or(Value::Null),
+                serde_yaml::to_value(get_default(&a.items)).unwrap_or(Value::Null),
+            ])),
+        },
+        InputType::String(_) => DefaultValue::Any(Value::Null),
     }
 }
 
-fn defaults(cwltype: &CWLType) -> Value {
+fn fs_defaults(cwltype: &CWLType) -> DefaultValue {
+    match cwltype {
+        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
+            File::builder().location("./path/to/file.txt").build(),
+        )),
+        CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+            Directory::builder().location("./path/to/dir").build(),
+        )),
+        _ => DefaultValue::Any(cwltype_defaults(cwltype)),
+    }
+}
+
+fn cwltype_defaults(cwltype: &CWLType) -> Value {
     match cwltype {
         CWLType::Boolean => Value::Bool(true),
         CWLType::Int | CWLType::Long => Value::Number(Number::from(42)),
@@ -201,25 +343,47 @@ mod tests {
 
     #[test]
     fn test_defaults_type() {
-        assert_eq!(defaults(&CWLType::Int), Value::Number(Number::from(42)));
-        assert_eq!(defaults(&CWLType::Boolean), Value::Bool(true));
-        assert_eq!(defaults(&CWLType::Long), Value::Number(Number::from(42)));
-        assert_eq!(defaults(&CWLType::Float), Value::Number(Number::from(69.42)));
-        assert_eq!(defaults(&CWLType::String), Value::String("Hello World".into()));
-        assert_eq!(defaults(&CWLType::Any), Value::String("Any Value".into()));
+        assert_eq!(
+            cwltype_defaults(&CWLType::Int),
+            Value::Number(Number::from(42))
+        );
+        assert_eq!(cwltype_defaults(&CWLType::Boolean), Value::Bool(true));
+        assert_eq!(
+            cwltype_defaults(&CWLType::Long),
+            Value::Number(Number::from(42))
+        );
+        assert_eq!(
+            cwltype_defaults(&CWLType::Float),
+            Value::Number(Number::from(69.42))
+        );
+        assert_eq!(
+            cwltype_defaults(&CWLType::String),
+            Value::String("Hello World".into())
+        );
+        assert_eq!(
+            cwltype_defaults(&CWLType::Any),
+            Value::String("Any Value".into())
+        );
     }
 
     #[test]
     fn test_default_values() {
         assert_eq!(
-            default_values(&CWLType::File),
-            DefaultValue::File(File::from_location("./path/to/file.txt"))
+            fs_defaults(&CWLType::File),
+            DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                File::builder().location("./path/to/file.txt").build()
+            ))
         );
         assert_eq!(
-            default_values(&CWLType::Directory),
-            DefaultValue::Directory(Directory::from_location("./path/to/dir"))
+            fs_defaults(&CWLType::Directory),
+            DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+                Directory::builder().location("./path/to/dir").build()
+            ))
         );
-        assert_eq!(default_values(&CWLType::String), DefaultValue::Any(Value::String("Hello World".into())));
+        assert_eq!(
+            fs_defaults(&CWLType::String),
+            DefaultValue::Any(Value::String("Hello World".into()))
+        );
     }
 
     #[test]
@@ -229,11 +393,19 @@ mod tests {
         let expected = HashMap::from([
             (
                 "population".to_string(),
-                DefaultValue::File(File::from_location("../../data/population.csv")),
+                DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                    File::builder()
+                        .location("../../data/population.csv")
+                        .build(),
+                )),
             ),
             (
                 "speakers".to_string(),
-                DefaultValue::File(File::from_location("../../data/speakers_revised.csv")),
+                DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                    File::builder()
+                        .location("../../data/speakers_revised.csv")
+                        .build(),
+                )),
             ),
         ]);
 

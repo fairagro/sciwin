@@ -2,27 +2,32 @@ use crate::{cwl::highlight_cwl, print_diff, print_list};
 use anyhow::{anyhow, bail};
 use clap::Args;
 use colored::Colorize;
-use commonwl::CommandLineTool;
+use commonwl::{documents::CommandLineTool, engine::ContainerEngine};
 use log::{info, warn};
 use s4n_core::{
     io::{get_qualified_filename, get_workflows_folder},
     tool::ToolCreationOptions,
 };
 use std::{path::PathBuf, str::FromStr};
-use commonwl::execution::docker::ContainerEngine;
 
-pub fn handle_create_command(args: &CreateArgs) -> anyhow::Result<()> {
+pub async fn handle_create_command(args: &CreateArgs) -> anyhow::Result<()> {
     if args.command.is_empty() && args.name.is_some() {
-        info!("ℹ️  Workflow creation is optional. Creation will be triggered by adding the first connection, too!");
+        info!(
+            "ℹ️  Workflow creation is optional. Creation will be triggered by adding the first connection, too!"
+        );
         create_workflow(args)
     } else {
-        create_tool(args)
+        create_tool(args).await
     }
 }
 
 #[derive(Args, Debug, Default)]
 pub struct CreateArgs {
-    #[arg(short = 'n', long = "name", help = "A name to be used for this workflow or tool")]
+    #[arg(
+        short = 'n',
+        long = "name",
+        help = "A name to be used for this workflow or tool"
+    )]
     pub name: Option<String>,
     #[arg(
         short = 'c',
@@ -30,10 +35,18 @@ pub struct CreateArgs {
         help = "An image to pull from e.g. docker hub or path to a Dockerfile"
     )]
     pub container_image: Option<String>,
-    #[arg(short = 't', long = "container-tag", help = "The tag for the container when using a Dockerfile")]
+    #[arg(
+        short = 't',
+        long = "container-tag",
+        help = "The tag for the container when using a Dockerfile"
+    )]
     pub container_tag: Option<String>,
 
-    #[arg(short = 'r', long = "raw", help = "Outputs the raw CWL contents to terminal")]
+    #[arg(
+        short = 'r',
+        long = "raw",
+        help = "Outputs the raw CWL contents to terminal"
+    )]
     pub is_raw: bool,
     #[arg(long = "no-commit", help = "Do not commit at the end of tool creation")]
     pub no_commit: bool,
@@ -43,11 +56,23 @@ pub struct CreateArgs {
     pub is_clean: bool,
     #[arg(long = "no-defaults", help = "Removes default values from inputs")]
     pub no_defaults: bool,
-    #[arg(long = "net", alias = "enable-network", help = "Enables network in container")]
+    #[arg(
+        long = "net",
+        alias = "enable-network",
+        help = "Enables network in container"
+    )]
     pub enable_network: bool,
-    #[arg(short = 'i', long = "inputs", help = "Force values to be considered as an input.", value_delimiter = ' ')]
+    #[arg(
+        short = 'i',
+        long = "inputs",
+        help = "Force values to be considered as an input.",
+        value_delimiter = ' '
+    )]
     pub inputs: Option<Vec<String>>,
-    #[arg(long = "run-container", help = "Possible container engines: docker, podman, singularity, apptainer")]
+    #[arg(
+        long = "run-container",
+        help = "Possible container engines: docker, podman, singularity, apptainer"
+    )]
     pub run_container: Option<ContainerEngineArg>,
     #[arg(
         short = 'o',
@@ -67,7 +92,10 @@ pub struct CreateArgs {
     pub env: Option<PathBuf>,
     #[arg(short = 'f', long = "force", help = "Overwrites existing workflow")]
     pub force: bool,
-    #[arg(trailing_var_arg = true, help = "Command line call e.g. python script.py [ARGUMENTS]")]
+    #[arg(
+        trailing_var_arg = true,
+        help = "Command line call e.g. python script.py [ARGUMENTS]"
+    )]
     pub command: Vec<String>,
 }
 
@@ -81,10 +109,13 @@ impl<'a> From<&'a CreateArgs> for ToolCreationOptions<'a> {
             cleanup: args.is_clean,
             commit: !args.no_commit,
             clear_defaults: args.no_defaults,
-            container: args.container_image.as_ref().map(|image| s4n_core::tool::ContainerInfo {
-                image: image.as_str(),
-                tag: args.container_tag.as_deref(),
-            }),
+            container: args
+                .container_image
+                .as_ref()
+                .map(|image| s4n_core::tool::ContainerInfo {
+                    image: image.as_str(),
+                    tag: args.container_tag.as_deref(),
+                }),
             enable_network: args.enable_network,
             run_container: args.run_container.as_ref().map(|r| r.0),
             mounts: args.mount.as_deref().unwrap_or(&[]),
@@ -126,7 +157,7 @@ pub fn create_workflow(args: &CreateArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
+pub async fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
     if args.command.is_empty() {
         bail!("❌ Command is required to create a tool");
     }
@@ -134,14 +165,14 @@ pub fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
         warn!("User requested no execution, could not determine outputs!");
     }
 
-    let yaml = s4n_core::tool::create_tool(&args.into(), args.name.clone(), !args.is_raw)?;
+    let yaml = s4n_core::tool::create_tool(&args.into(), args.name.clone(), !args.is_raw).await?;
     let cwl: CommandLineTool = serde_yaml::from_str(&yaml)?;
 
     info!("Found outputs:");
     let string_outputs: Vec<String> = cwl
         .outputs
         .iter()
-        .filter_map(|o| o.output_binding.as_ref()?.glob.clone().map(|g| g.into_vec()))
+        .filter_map(|o| o.output_binding.as_ref()?.glob.clone().map(|g| g.as_many()))
         .flatten()
         .collect();
 
@@ -151,7 +182,7 @@ pub fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
     if args.is_raw {
         highlight_cwl(&yaml);
     } else {
-        let path = get_qualified_filename(&cwl.base_command, args.name.clone());
+        let path = get_qualified_filename(&cwl.base_command.unwrap(), args.name.clone());
         info!("\n📄 Created CWL file {}", path.green().bold());
     }
 
