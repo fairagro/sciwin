@@ -10,7 +10,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-commonwl = { path = "../cwl" }
+commonwl.workspace = true
 util = { path = "../util" }
 anyhow = { workspace = true }
 fancy-regex = { workspace = true }
@@ -25,8 +25,8 @@ keyring = { workspace = true }
 uuid = { workspace = true }
 
 chrono = { version = "0.4.41" }
-tokio = {version = "1.50.0"}
-futures = {version = "0.3.32"}
+tokio = { version = "1.50.0" }
+futures = { version = "0.3.32" }
 
 [dev-dependencies]
 mockito = "1.7.1"
