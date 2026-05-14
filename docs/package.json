@@ -16,7 +16,7 @@
     "@fontsource/fira-sans": "^5.2.7",
     "@tailwindcss/vite": "^4.2.4",
     "ansi_up": "^6.0.6",
-    "astro": "^6.1.9",
+    "astro": "^6.3.3",
     "sharp": "^0.34.5",
     "starlight-links-validator": "^0.23.0",
     "starlight-sidebar-topics": "^0.7.1",
