@@ -8,7 +8,7 @@ use commonwl::{
 use rand::{distr::Alphanumeric, Rng};
 use serde_yaml::Value;
 use slugify::slugify;
-use crate::parser::find_mimetype; 
+use crate::parser::find_edam_format; 
 
 pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
     let mut inputs = vec![];
@@ -28,8 +28,8 @@ pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
             input = get_positional(arg, i.try_into().unwrap());
         }
         if matches!(input.type_, CWLType::File) && let Some(loc) = get_location(&input) {
-            let mime = find_mimetype(&loc);
-            input = input.with_format(&mime);
+            let edam_format = find_edam_format(&loc);
+            input = input.with_format(&edam_format);
         }
         inputs.push(input);
         i += 1;
@@ -130,8 +130,8 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
         let id = slugify!(input, separator = "_");
         let mut param = CommandInputParameter::default().with_id(&id).with_type(type_.clone()).with_default_value(default);
         if matches!(type_, CWLType::File) {
-            let mime = find_mimetype(input);
-            param = param.with_format(&mime);
+            let edam_format = find_edam_format(input);
+            param = param.with_format(&edam_format);
         }
         tool.inputs.push(param);
     }

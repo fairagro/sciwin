@@ -4,7 +4,7 @@ use commonwl::{
     outputs::{CommandOutputBinding, CommandOutputParameter},
 };
 use std::path::Path;
-use crate::parser::find_mimetype;
+use crate::parser::find_edam_format;
 
 pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
     files
@@ -24,8 +24,8 @@ pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
                     ..Default::default()
                 });
             if is_file {
-                let mime = find_mimetype(f);
-                out = out.with_format(&mime);
+                let edam_format = find_edam_format(f);
+                out = out.with_format(&edam_format);
             }
             out
         })
@@ -43,7 +43,7 @@ mod tests {
             CommandOutputParameter::default()
                 .with_type(CWLType::File)
                 .with_id("my-file")
-                .with_format("text/plain")
+                .with_format("http://edamontology.org/format_2330")
                 .with_binding(CommandOutputBinding {
                     glob: Some(commonwl::SingularPlural::Singular("my-file.txt".to_string())),
                     ..Default::default()
@@ -51,7 +51,7 @@ mod tests {
             CommandOutputParameter::default()
                 .with_type(CWLType::File)
                 .with_id("archive")
-                .with_format("application/gzip")
+                .with_format("http://edamontology.org/format_3989")
                 .with_binding(CommandOutputBinding {
                     glob: Some(commonwl::SingularPlural::Singular("archive.tar.gz".to_string())),
                     ..Default::default()
