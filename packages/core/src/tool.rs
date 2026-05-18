@@ -366,7 +366,10 @@ fn finalize_tool(cwl: &mut CommandLineTool, path: &str) -> Result<String> {
     Ok(yaml)
 }
 
-fn prepare_save(tool: &mut CommandLineTool, path: &str) -> Result<String, serde_yaml::Error> {
+fn prepare_save(
+    tool: &mut CommandLineTool,
+    path: &str,
+) -> Result<String, serde_saphyr::ser::Error> {
     //rewire paths to new location
     for input in &mut tool.inputs {
         if let Some(DefaultValue::FileOrDirectory(FileOrDirectory::File(value))) =
@@ -411,7 +414,7 @@ fn prepare_save(tool: &mut CommandLineTool, path: &str) -> Result<String, serde_
             }
         }
     }
-    serde_yaml::to_string(&CWLDocument::CommandLineTool(tool.clone()))
+    serde_saphyr::to_string(&CWLDocument::CommandLineTool(tool.clone()))
 }
 
 fn read_env(path: &Path) -> Result<HashMap<String, String>> {
@@ -465,10 +468,10 @@ fn get_iwdr_roots(cwl: &CommandLineTool) -> Vec<String> {
 }
 
 fn get_iwdr_roots_for_item(item: &ListingItems, roots: &mut Vec<String>) {
-    if let ListingItems::Dirent(dirent) = item {
-        if let Some(ename) = &dirent.entryname {
-            roots.push(root_path(ename));
-        }
+    if let ListingItems::Dirent(dirent) = item
+        && let Some(ename) = &dirent.entryname
+    {
+        roots.push(root_path(ename));
     }
 }
 
@@ -495,7 +498,7 @@ mod tests {
         },
         types::CWLType,
     };
-    use serde_yaml::Value;
+    use serde_json::Value;
     use test_utils::os_path;
 
     #[test]

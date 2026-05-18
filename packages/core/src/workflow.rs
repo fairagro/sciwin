@@ -14,7 +14,7 @@ pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> Result<String
     let wf = CWLDocument::Workflow(Workflow::default());
     let filename = filename.as_ref();
 
-    let mut yaml = serde_yaml::to_string(&wf)?;
+    let mut yaml = serde_saphyr::to_string(&wf)?;
     yaml = format_cwl(&yaml).map_err(|e| anyhow::anyhow!("Could not formal yaml: {e}"))?;
 
     //removes file first if exists and force is given

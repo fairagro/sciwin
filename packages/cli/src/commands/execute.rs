@@ -13,7 +13,7 @@ use commonwl::{
 use cwl_engine_storage::{StorageBackend, StoragePath};
 use remote_execution::{check_status, download_results, export_rocrate, logout};
 use s4n_core::parser::guess_type;
-use serde_yaml::{Number, Value};
+use serde_json::{Number, Value};
 use std::{
     collections::HashMap,
     error::Error,
@@ -209,7 +209,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
                             ))
                         }
                         _ => DefaultValue::Any(
-                            serde_yaml::from_str(raw_value).expect("Could not read input"),
+                            serde_saphyr::from_str(raw_value).expect("Could not read input"),
                         ),
                     };
                     Some((key.to_string(), value))
@@ -267,7 +267,7 @@ pub fn schedule_run(
 #[allow(clippy::disallowed_macros)]
 pub fn make_template(filename: &PathBuf) -> anyhow::Result<()> {
     let template = make_template_impl(filename)?;
-    let yaml = serde_yaml::to_string(&template)?;
+    let yaml = serde_saphyr::to_string(&template)?;
 
     println!("{yaml}");
     Ok(())
@@ -275,7 +275,7 @@ pub fn make_template(filename: &PathBuf) -> anyhow::Result<()> {
 
 fn make_template_impl(filename: &PathBuf) -> anyhow::Result<HashMap<String, DefaultValue>> {
     let contents = fs::read_to_string(filename)?;
-    let cwl: CWLDocument = serde_yaml::from_str(&contents)?;
+    let cwl: CWLDocument = serde_saphyr::from_str(&contents)?;
 
     Ok(cwl
         .get_inputs() //we assume there is no stdin
@@ -301,13 +301,13 @@ fn get_default(r#type: &OneOrMany<InputType>) -> DefaultValue {
     match input_type {
         InputType::CWLType(cwltype) => fs_defaults(cwltype),
         InputType::InputSchema(schema) => match schema.as_ref() {
-            InputSchema::Record(_) => DefaultValue::Any(Value::Mapping(Default::default())),
+            InputSchema::Record(_) => DefaultValue::Any(Value::Object(Default::default())),
             InputSchema::Enum(e) => DefaultValue::Any(Value::String(
                 e.symbols.first().cloned().unwrap_or_default(),
             )),
-            InputSchema::Array(a) => DefaultValue::Any(Value::Sequence(vec![
-                serde_yaml::to_value(get_default(&a.items)).unwrap_or(Value::Null),
-                serde_yaml::to_value(get_default(&a.items)).unwrap_or(Value::Null),
+            InputSchema::Array(a) => DefaultValue::Any(Value::Array(vec![
+                serde_json::to_value(get_default(&a.items)).unwrap_or(Value::Null),
+                serde_json::to_value(get_default(&a.items)).unwrap_or(Value::Null),
             ])),
         },
         InputType::String(_) => DefaultValue::Any(Value::Null),
@@ -330,7 +330,7 @@ fn cwltype_defaults(cwltype: &CWLType) -> Value {
     match cwltype {
         CWLType::Boolean => Value::Bool(true),
         CWLType::Int | CWLType::Long => Value::Number(Number::from(42)),
-        CWLType::Float | CWLType::Double => Value::Number(Number::from(69.42)),
+        CWLType::Float | CWLType::Double => Value::Number(Number::from_f64(69.42).unwrap()),
         CWLType::String => Value::String("Hello World".into()),
         CWLType::Any => Value::String("Any Value".into()),
         _ => Value::Null,
@@ -354,7 +354,7 @@ mod tests {
         );
         assert_eq!(
             cwltype_defaults(&CWLType::Float),
-            Value::Number(Number::from(69.42))
+            Value::Number(Number::from_f64(69.42).unwrap())
         );
         assert_eq!(
             cwltype_defaults(&CWLType::String),

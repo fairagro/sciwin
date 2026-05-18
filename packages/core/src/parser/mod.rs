@@ -182,7 +182,7 @@ mod tests {
     use super::*;
     use commonwl::inputs::CommandLineBinding;
     use rstest::rstest;
-    use serde_yaml::Value;
+    use serde_json::Value;
     use serial_test::serial;
 
     fn parse_command(command: &str) -> CommandLineTool {

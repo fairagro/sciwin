@@ -166,7 +166,7 @@ pub async fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
     }
 
     let yaml = s4n_core::tool::create_tool(&args.into(), args.name.clone(), !args.is_raw).await?;
-    let cwl: CommandLineTool = serde_yaml::from_str(&yaml)?;
+    let cwl: CommandLineTool = serde_saphyr::from_str(&yaml)?;
 
     info!("Found outputs:");
     let string_outputs: Vec<String> = cwl

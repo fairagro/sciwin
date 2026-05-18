@@ -39,18 +39,18 @@ fn detect_array_inputs(tool: &mut CommandLineTool) -> anyhow::Result<()> {
                 .into();
 
                 if let Some(default) = &existing.default {
-                    existing.default = Some(DefaultValue::Any(serde_yaml::to_value(vec![
+                    existing.default = Some(DefaultValue::Any(serde_json::to_value(vec![
                         default.clone(),
                     ])?));
                 }
             }
 
             // Append additional default value if present
-            if let Some(DefaultValue::Any(serde_yaml::Value::Sequence(defaults))) =
+            if let Some(DefaultValue::Any(serde_json::Value::Array(defaults))) =
                 &mut existing.default
                 && let Some(default) = input.default
             {
-                defaults.push(serde_yaml::to_value(default.clone())?);
+                defaults.push(serde_json::to_value(default.clone())?);
             }
         }
     }
@@ -150,7 +150,7 @@ fn post_process_ids(tool: &mut CommandLineTool) {
 mod tests {
     use super::*;
     use commonwl::inputs::CommandInputParameter;
-    use serde_yaml::Value;
+    use serde_json::Value;
 
     #[test]
     pub fn test_post_process_inputs() {
@@ -197,7 +197,7 @@ mod tests {
         assert_eq!(
             of_interest.default,
             Some(DefaultValue::Any(
-                serde_yaml::to_value(vec![
+                serde_json::to_value(vec![
                     DefaultValue::Any(Value::String("first".to_string())),
                     DefaultValue::Any(Value::String("second".to_string())),
                     DefaultValue::Any(Value::String("third".to_string()))

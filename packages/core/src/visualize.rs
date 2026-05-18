@@ -59,7 +59,7 @@ fn load_step(step: &WorkflowStep, filename: &Path) -> Option<CWLDocument> {
         StringOrDocument::String(f) => {
             let step_path = filename.parent().unwrap_or(Path::new("")).join(f);
             if step_path.exists() {
-                Some(serde_yaml::from_str(&fs::read_to_string(step_path).ok()?).ok()?)
+                Some(serde_saphyr::from_str(&fs::read_to_string(step_path).ok()?).ok()?)
             } else {
                 None
             }

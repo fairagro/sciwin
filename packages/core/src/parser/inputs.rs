@@ -10,7 +10,7 @@ use commonwl::{
     types::CWLType,
 };
 use rand::{Rng, distr::Alphanumeric};
-use serde_yaml::Value;
+use serde_json::Value;
 use slugify::slugify;
 
 pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
@@ -99,7 +99,7 @@ fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
             Directory::builder().location(value).build(),
         )),
         CWLType::String => DefaultValue::Any(Value::String(value.to_string())),
-        _ => DefaultValue::Any(serde_yaml::from_str(value).unwrap()),
+        _ => DefaultValue::Any(serde_saphyr::from_str(value).unwrap()),
     }
 }
 
@@ -172,7 +172,7 @@ pub(crate) fn add_fixed_inputs(
             CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
                 Directory::builder().location(input).build(),
             )),
-            _ => DefaultValue::Any(serde_yaml::from_str(input)?),
+            _ => DefaultValue::Any(serde_saphyr::from_str(input)?),
         };
         let id = slugify!(input, separator = "_");
 
@@ -209,7 +209,7 @@ pub fn guess_type(value: &str) -> CWLType {
     }
 
     //we do not have to check for files that do not exist yet, as CWLTool would run into a failure
-    let yaml_value: Value = serde_yaml::from_str(value).unwrap();
+    let yaml_value: Value = serde_saphyr::from_str(value).unwrap();
     match yaml_value {
         Value::Null => CWLType::Null,
         Value::Bool(_) => CWLType::Boolean,
@@ -228,7 +228,7 @@ pub fn guess_type(value: &str) -> CWLType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_yaml::Number;
+    use serde_json::Number;
 
     #[test]
     pub fn test_get_inputs() {
@@ -262,7 +262,7 @@ mod tests {
                 .id("v")
                 .r#type(CWLType::Int)
                 .input_binding(CommandLineBinding::builder().prefix("-v").build())
-                .default(DefaultValue::Any(serde_yaml::from_str("1").unwrap()))
+                .default(DefaultValue::Any(serde_saphyr::from_str("1").unwrap()))
                 .build(),
         ];
 
