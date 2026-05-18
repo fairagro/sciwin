@@ -30,6 +30,10 @@ impl CommandOutputParameter {
         self.output_binding = Some(binding);
         self
     }
+    pub fn with_format(mut self, format: &str) -> Self {
+        self.format = Some(format.to_string());
+        self
+    }
 }
 
 impl Identifiable for CommandOutputParameter {

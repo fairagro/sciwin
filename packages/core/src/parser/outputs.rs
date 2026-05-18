@@ -4,24 +4,30 @@ use commonwl::{
     outputs::{CommandOutputBinding, CommandOutputParameter},
 };
 use std::path::Path;
+use crate::parser::find_mimetype;
 
 pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
     files
         .iter()
         .map(|f| {
-            let filename = get_filename_without_extension(f);
-            let output_type = if Path::new(f).extension().is_some() {
+            let is_file = Path::new(f).extension().is_some();
+            let output_type = if is_file {
                 CWLType::File
             } else {
                 CWLType::Directory
             };
-            CommandOutputParameter::default()
+            let mut out = CommandOutputParameter::default()
+                .with_id(&get_filename_without_extension(f))
                 .with_type(output_type)
-                .with_id(&filename)
                 .with_binding(CommandOutputBinding {
-                    glob: Some(SingularPlural::Singular(f.to_string())),
+                    glob: Some(SingularPlural::Singular(f.clone())),
                     ..Default::default()
-                })
+                });
+            if is_file {
+                let mime = find_mimetype(f);
+                out = out.with_format(&mime);
+            }
+            out
         })
         .collect()
 }
@@ -37,6 +43,7 @@ mod tests {
             CommandOutputParameter::default()
                 .with_type(CWLType::File)
                 .with_id("my-file")
+                .with_format("text/plain")
                 .with_binding(CommandOutputBinding {
                     glob: Some(commonwl::SingularPlural::Singular("my-file.txt".to_string())),
                     ..Default::default()
@@ -44,6 +51,7 @@ mod tests {
             CommandOutputParameter::default()
                 .with_type(CWLType::File)
                 .with_id("archive")
+                .with_format("application/gzip")
                 .with_binding(CommandOutputBinding {
                     glob: Some(commonwl::SingularPlural::Singular("archive.tar.gz".to_string())),
                     ..Default::default()

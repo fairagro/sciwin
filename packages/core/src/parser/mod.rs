@@ -1,5 +1,6 @@
 use commonwl::{prelude::*, requirements::WorkDirItem};
 use std::{fs, path::Path};
+use file_type::FileType;
 
 mod inputs;
 mod outputs;
@@ -143,6 +144,15 @@ fn split_vec_at<T: PartialEq + Clone, C: AsRef<[T]>>(vec: C, split_at: &T) -> (V
     } else {
         (slice.to_vec(), vec![])
     }
+}
+
+fn find_mimetype(filename: &str) -> String {
+    let ext_opt = Path::new(filename).extension().and_then(|e| e.to_str());
+    ext_opt
+        .and_then(|ext| FileType::from_extension(ext).first())
+        .and_then(|ft| ft.media_types().first())
+        .map(|s| (*s).to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

@@ -8,13 +8,14 @@ use commonwl::{
 use rand::{distr::Alphanumeric, Rng};
 use serde_yaml::Value;
 use slugify::slugify;
+use crate::parser::find_mimetype; 
 
 pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
     let mut inputs = vec![];
     let mut i = 0;
     while i < args.len() {
         let arg = args[i];
-        let input: CommandInputParameter;
+        let mut input: CommandInputParameter;
         if arg.starts_with('-') {
             if i + 1 < args.len() && !args[i + 1].starts_with('-') {
                 //is not a flag, as next one is a value
@@ -25,6 +26,10 @@ pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
             }
         } else {
             input = get_positional(arg, i.try_into().unwrap());
+        }
+        if matches!(input.type_, CWLType::File) && let Some(loc) = get_location(&input) {
+            let mime = find_mimetype(&loc);
+            input = input.with_format(&mime);
         }
         inputs.push(input);
         i += 1;
@@ -123,12 +128,22 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> R
             _ => DefaultValue::Any(serde_yaml::from_str(input)?),
         };
         let id = slugify!(input, separator = "_");
-
-        tool.inputs
-            .push(CommandInputParameter::default().with_id(&id).with_type(type_).with_default_value(default));
+        let mut param = CommandInputParameter::default().with_id(&id).with_type(type_.clone()).with_default_value(default);
+        if matches!(type_, CWLType::File) {
+            let mime = find_mimetype(input);
+            param = param.with_format(&mime);
+        }
+        tool.inputs.push(param);
     }
 
     Ok(())
+}
+
+fn get_location(param: &CommandInputParameter) -> Option<String> {
+    match &param.default {
+        Some(DefaultValue::File(file)) => file.location.clone(),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
