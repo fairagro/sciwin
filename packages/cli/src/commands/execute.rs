@@ -1,3 +1,4 @@
+use crate::ExitCode;
 use clap::{Args, Subcommand};
 use commonwl::{
     OneOrMany,
@@ -22,8 +23,6 @@ use std::{
     sync::Arc,
 };
 use tokio_util::sync::CancellationToken;
-
-use crate::ExitCode;
 
 pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Result<()> {
     match subcommand {

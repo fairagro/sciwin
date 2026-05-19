@@ -4,6 +4,7 @@ mod line;
 mod node;
 mod node_add;
 mod slot;
+mod styling;
 
 pub use edge::*;
 pub use editor::*;

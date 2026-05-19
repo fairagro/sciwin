@@ -4,14 +4,15 @@ use crate::{
         ICON_SIZE, SmallRoundActionButton,
         files::Node,
         graph::{
-            EdgeElement, Line, LineProps, NodeAddForm, NodeElement, calculate_source_position, calculate_target_position, get_stroke_from_cwl_type,
+            EdgeElement, Line, LineProps, NodeAddForm, NodeElement, calculate_source_position,
+            calculate_target_position, styling,
         },
     },
     graph::auto_layout,
     use_app_state,
     workflow::VisualWorkflow,
 };
-use commonwl::load_doc;
+use commonwl::{documents::CWLDocument, load_cwl_file};
 use dioxus::html::geometry::{
     ClientPoint, Pixels, PixelsSize, PixelsVector2D,
     euclid::{Point2D, Rect},
@@ -29,7 +30,10 @@ pub fn GraphEditor(path: String) -> Element {
 
     let dragging = None::<DragState>;
     let drag_offset = use_signal(ClientPoint::zero);
-    let mut drag_state = use_signal(|| DragContext { drag_offset, dragging });
+    let mut drag_state = use_signal(|| DragContext {
+        drag_offset,
+        dragging,
+    });
     use_context_provider(|| drag_state);
 
     let mut mouse_pos = use_signal(ClientPoint::zero);
@@ -38,8 +42,8 @@ pub fn GraphEditor(path: String) -> Element {
     {
         use_effect(move || {
             let path = path();
-            let data = load_doc(&path).unwrap();
-            if let commonwl::CWLDocument::Workflow(_) = data {
+            let data = load_cwl_file(&path, true).unwrap();
+            if let CWLDocument::Workflow(_) = data {
                 let workflow = VisualWorkflow::from_file(path).unwrap();
                 app_state.write().workflow = workflow;
             }
@@ -105,7 +109,8 @@ pub fn GraphEditor(path: String) -> Element {
                 e.stop_propagation();
                 let item = app_state().get_data_transfer::<Node>()?;
 
-                let mut cwl = load_doc(&item.path).map_err(|e| anyhow::anyhow!("{e}"))?;
+                let mut cwl = load_cwl_file(&item.path, true)
+                    .map_err(|e| anyhow::anyhow!("{e}"))?;
                 let working_dir = app_state().working_directory.unwrap();
                 if let Some(path_relative_to_root) = pathdiff::diff_paths(
                     &item.path,
@@ -113,6 +118,8 @@ pub fn GraphEditor(path: String) -> Element {
                 ) {
                     let name = item.name.strip_suffix(".cwl").unwrap_or(&item.name);
                     app_state
+
+                        //we accepted the data transfer so we clear it
                         .write()
                         .workflow
                         .add_new_step_if_not_exists(
@@ -122,8 +129,6 @@ pub fn GraphEditor(path: String) -> Element {
                             &working_dir,
                         )?;
                 }
-
-                //we accepted the data transfer so we clear it
                 app_state.write().set_data_transfer(&Value::Null)?;
                 Ok(())
             },
@@ -152,7 +157,6 @@ pub fn GraphEditor(path: String) -> Element {
                             let pos = app_state.read().workflow.graph[node_index].position;
                             app_state.write().workflow.graph[node_index].position = Point2D::new(
                                 //we are dragging from a connection
-
                                 pos.x + deltaX as f32,
                                 pos.y + deltaY as f32,
                             );
@@ -174,7 +178,7 @@ pub fn GraphEditor(path: String) -> Element {
                                 .find(|i| i.id == source_port)
                                 .map(|i| i.type_.clone())
                             {
-                                let stroke = get_stroke_from_cwl_type(cwl_type);
+                                let stroke = styling::get_stroke_from_port_type(&cwl_type);
                                 new_line
                                     .set(
                                         Some(LineProps {
@@ -193,7 +197,7 @@ pub fn GraphEditor(path: String) -> Element {
                                     .find(|i| i.id == source_port)
                                     .map(|i| i.type_.clone())
                                     .unwrap();
-                                let stroke = get_stroke_from_cwl_type(cwl_type);
+                                let stroke = styling::get_stroke_from_port_type(&cwl_type);
                                 let (x_source, y_source) = calculate_target_position(
                                     source_node,
                                     &source_port,
