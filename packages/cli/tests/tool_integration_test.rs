@@ -1,6 +1,4 @@
 #![allow(clippy::disallowed_macros)]
-#[cfg(not(target_os = "macos"))]
-use commonwl::requirements::ListingItems;
 use commonwl::documents::{Argument, CWLDocument, CommandLineTool};
 use commonwl::requirements::{
     DockerRequirement, Include, InitialWorkDirRequirement, NetworkAccess, StringOrInclude,
@@ -482,6 +480,7 @@ pub async fn test_tool_output_complete_dir() {
 #[fstest(repo= true, tokio = true, files=["../../testdata/script.sh"])]
 #[cfg(target_os = "linux")]
 pub async fn test_shell_script() {
+    use commonwl::requirements::ListingItems;
     use repository::stage_all;
 
     std::fs::set_permissions(
