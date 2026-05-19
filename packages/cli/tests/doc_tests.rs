@@ -579,7 +579,7 @@ pub async fn test_example_project() {
     let save_args = SaveArgs { name };
     //save workflow
     save_workflow(&save_args).expect("Could not save workflow");
-    let wf_path = PathBuf::from("workflows/test_workflow/test_workflow.cwl");
+    let wf_path = dir.path().join("workflows/test_workflow/test_workflow.cwl");
     assert!(fs::exists(&wf_path).unwrap());
 
     let CWLDocument::Workflow(workflow) = load_cwl_file(&wf_path, true).unwrap() else {
@@ -604,7 +604,7 @@ pub async fn test_example_project() {
 
     assert!(!fs::exists("results.csv").unwrap());
     assert!(!fs::exists("results.svg").unwrap());
-    dbg!(fs::read_to_string(&wf_path).unwrap());
+
     //execute workflow
     execute_local(&LocalExecuteArgs {
         is_quiet: false,
