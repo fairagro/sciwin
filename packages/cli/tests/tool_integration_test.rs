@@ -291,7 +291,8 @@ pub async fn tool_create_test_container_image() {
     //read file
     let cwl_file = Path::new("workflows/echo/echo.cwl");
     let cwl_contents = read_to_string(cwl_file).expect("Could not read CWL File");
-    let cwl: CommandLineTool = serde_saphyr::from_str(&cwl_contents).expect("Could not convert CWL");
+    let cwl: CommandLineTool =
+        serde_saphyr::from_str(&cwl_contents).expect("Could not convert CWL");
     assert_eq!(cwl.requirements.as_ref().unwrap().len(), 2);
 
     let Some(dr) = cwl.get_requirement::<DockerRequirement>() else {
@@ -328,7 +329,8 @@ pub async fn tool_create_test_dockerfile() {
     //read file
     let cwl_file = Path::new("workflows/echo/echo.cwl");
     let cwl_contents = read_to_string(cwl_file).expect("Could not read CWL File");
-    let cwl: CommandLineTool = serde_saphyr::from_str(&cwl_contents).expect("Could not convert CWL");
+    let cwl: CommandLineTool =
+        serde_saphyr::from_str(&cwl_contents).expect("Could not convert CWL");
 
     assert_eq!(cwl.requirements.as_ref().unwrap().len(), 2);
 
@@ -555,9 +557,11 @@ pub async fn test_tool_output_subfolders() {
 pub async fn tool_create_remote_file() {
     let tool_create_args = CreateArgs {
         command: vec![
-            "wget".to_string(),
+            "cat".to_string(),
             "https://raw.githubusercontent.com/fairagro/sciwin/refs/heads/main/README.md"
                 .to_string(),
+            ">".to_string(),
+            "README.md".to_string(),
         ],
         ..Default::default()
     };
@@ -570,13 +574,13 @@ pub async fn tool_create_remote_file() {
     assert!(Path::new("README.md").exists());
 
     //check input
-    let tool_path = Path::new("workflows/wget/wget.cwl");
+    let tool_path = Path::new("workflows/cat/cat.cwl");
     let tool = load_cwl_file(tool_path, true).unwrap();
     let CWLDocument::CommandLineTool(tool) = tool else {
         panic!("Could not load tool");
     };
     assert_eq!(tool.inputs.len(), 1);
-    assert_eq!(tool.inputs[0].r#type, CWLType::String.into());
+    assert_eq!(tool.inputs[0].r#type, CWLType::File.into());
 }
 
 #[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]

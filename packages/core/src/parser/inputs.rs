@@ -208,6 +208,14 @@ pub fn guess_type(value: &str) -> CWLType {
         }
     }
 
+    if value.starts_with("http://")
+        || value.starts_with("https://")
+        || value.starts_with("ftp://")
+        || value.starts_with("s3://")
+    {
+        return CWLType::File; //urls are files!
+    }
+
     //we do not have to check for files that do not exist yet, as CWLTool would run into a failure
     let yaml_value: Value = serde_saphyr::from_str(value).unwrap();
     match yaml_value {

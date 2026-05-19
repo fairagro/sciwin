@@ -1633,7 +1633,7 @@ dependencies = [
 [[package]]
 name = "commonwl"
 version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e30173a7712c087dfc40a496a4c092819fed4bd8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#40a083b668f7a52d2f9343fbe141cfe6fc94c90c"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -2220,7 +2220,7 @@ dependencies = [
 [[package]]
 name = "cwl_core"
 version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e30173a7712c087dfc40a496a4c092819fed4bd8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#40a083b668f7a52d2f9343fbe141cfe6fc94c90c"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -2240,7 +2240,7 @@ dependencies = [
 [[package]]
 name = "cwl_engine"
 version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e30173a7712c087dfc40a496a4c092819fed4bd8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#40a083b668f7a52d2f9343fbe141cfe6fc94c90c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2280,7 +2280,7 @@ dependencies = [
 [[package]]
 name = "cwl_engine_storage"
 version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e30173a7712c087dfc40a496a4c092819fed4bd8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#40a083b668f7a52d2f9343fbe141cfe6fc94c90c"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2289,6 +2289,7 @@ dependencies = [
  "dircpy",
  "dotenvy",
  "glob",
+ "reqwest 0.13.3",
  "tempfile",
  "tokio",
  "tracing",
@@ -2299,7 +2300,7 @@ dependencies = [
 [[package]]
 name = "cwl_salad"
 version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e30173a7712c087dfc40a496a4c092819fed4bd8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#40a083b668f7a52d2f9343fbe141cfe6fc94c90c"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -2310,7 +2311,7 @@ dependencies = [
 [[package]]
 name = "cwl_salad_derive"
 version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e30173a7712c087dfc40a496a4c092819fed4bd8"
+source = "git+https://github.com/fairagro/commonwl?branch=main#40a083b668f7a52d2f9343fbe141cfe6fc94c90c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7874,7 +7875,6 @@ dependencies = [
  "clap_complete",
  "colored",
  "commonwl",
- "cwl_engine_storage",
  "dialoguer",
  "dircpy",
  "fstest",
@@ -7905,7 +7905,6 @@ dependencies = [
  "anyhow",
  "calamine",
  "commonwl",
- "cwl_engine_storage",
  "pathdiff",
  "rand 0.9.4",
  "repository",

@@ -22,9 +22,9 @@ use commonwl::{
         DockerRequirement, EnvVarRequirement, EnvironmentDef, Include, InitialWorkDirRequirement,
         ListingItems, NetworkAccess, StringOrInclude, ToolRequirements, WorkDirItems,
     },
+    storage::{StorageBackend, StoragePath},
     types::CWLType,
 };
-use cwl_engine_storage::{StorageBackend, StoragePath};
 use repository::{self, Repository};
 use std::{
     collections::HashMap,

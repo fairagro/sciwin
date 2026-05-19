@@ -16,7 +16,6 @@ workspace = true
 s4n_core = { path = "../core" }
 repository = { path = "../repository" }
 commonwl.workspace = true
-cwl_engine_storage.workspace = true
 remote_execution = { path = "../remote_execution" }
 util = { path = "../util" }
 

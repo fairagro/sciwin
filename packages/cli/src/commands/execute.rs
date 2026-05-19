@@ -9,9 +9,10 @@ use commonwl::{
     },
     files::{Directory, File, FileOrDirectory},
     inputs::{DefaultValue, InputSchema, InputType},
+    storage::{StorageBackend, StoragePath},
     types::CWLType,
 };
-use cwl_engine_storage::{StorageBackend, StoragePath};
+
 use remote_execution::{check_status, download_results, export_rocrate, logout};
 use s4n_core::parser::guess_type;
 use serde_json::{Number, Value};

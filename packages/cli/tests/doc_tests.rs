@@ -604,7 +604,7 @@ pub async fn test_example_project() {
 
     assert!(!fs::exists("results.csv").unwrap());
     assert!(!fs::exists("results.svg").unwrap());
-
+    dbg!(fs::read_to_string(&wf_path).unwrap());
     //execute workflow
     execute_local(&LocalExecuteArgs {
         is_quiet: false,
