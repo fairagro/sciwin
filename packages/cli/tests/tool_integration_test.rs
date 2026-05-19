@@ -1,8 +1,10 @@
 #![allow(clippy::disallowed_macros)]
+#[cfg(not(target_os = "macos"))]
+use commonwl::requirements::ListingItems;
 use commonwl::documents::{Argument, CWLDocument, CommandLineTool};
 use commonwl::requirements::{
-    DockerRequirement, Include, InitialWorkDirRequirement, ListingItems, NetworkAccess,
-    StringOrInclude, WorkDirItems,
+    DockerRequirement, Include, InitialWorkDirRequirement, NetworkAccess, StringOrInclude,
+    WorkDirItems,
 };
 use commonwl::types::CWLType;
 use commonwl::{OneOrMany, load_cwl_file};
