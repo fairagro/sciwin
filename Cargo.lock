@@ -1632,8 +1632,9 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e4c2cbecbe8edb58b3707dbe3c05ee2ae3398e03"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1f3f239ffd20a6e8e4f38cdd3a2f9b32209489ffa18c86a08143e35db84bdc1"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -2219,8 +2220,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e4c2cbecbe8edb58b3707dbe3c05ee2ae3398e03"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "817e2c30e82fd659d6472d59c190564769e7133a60282305e6cd5cf2b3fbab79"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -2239,8 +2241,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e4c2cbecbe8edb58b3707dbe3c05ee2ae3398e03"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1439de2274340565ffb05e815ab3bae285d706ebb65f105ddd0b91bda6df4947"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2259,13 +2262,11 @@ dependencies = [
  "nonempty",
  "pathdiff",
  "rdf",
- "regex",
  "semver 1.0.28",
  "serde",
  "serde-saphyr",
  "serde_json",
  "sha1 0.11.0",
- "shlex",
  "sysinfo",
  "tar",
  "tempfile",
@@ -2279,8 +2280,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e4c2cbecbe8edb58b3707dbe3c05ee2ae3398e03"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c3fadf3ce17d8178454f562b05a82bbe73ccd942d3c175f23dd3deab6a0c311"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2299,8 +2301,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e4c2cbecbe8edb58b3707dbe3c05ee2ae3398e03"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "028d424b4d1563ff0a6b40703d44017cd1b53c32e6a179158d3ca1a1c2876093"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -2310,8 +2313,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.3.0"
-source = "git+https://github.com/fairagro/commonwl?branch=main#e4c2cbecbe8edb58b3707dbe3c05ee2ae3398e03"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2082ba434072a57a46371d2f7f105d1287d1142749ddce1a82ebd2cc72e8759"
 dependencies = [
  "proc-macro2",
  "quote",
