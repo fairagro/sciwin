@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use commonwl::{StringOrDocument, execution::io::create_and_write_file, format::format_cwl, load_doc, prelude::*};
+use commonwl::{StringOrDocument, execution::io::create_and_write_file, format::format_cwl, load_doc, load_tool, prelude::*};
 use std::{fs, path::Path};
 
 pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> Result<String> {
@@ -126,8 +126,40 @@ pub fn add_workflow_step_connection(
     let from_filename = from_filename.as_ref();
     let to_filename = to_filename.as_ref();
 
+    let from_cwl = load_doc(from_filename).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+    let to_cwl = load_doc(to_filename).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+    let from_tool = load_tool(from_filename).map_err(|e| anyhow::anyhow!("Failed to load tool definition: {e}"))?;
+    let to_tool = load_tool(to_filename).map_err(|e| anyhow::anyhow!("Failed to load tool definition: {e}"))?;
+
+    let from_output = from_tool.outputs.iter().find(|p| p.id == from_slot_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Tool `{}` has no output `{}`. Available outputs: {:?}",
+                from_name,
+                from_slot_id,
+                from_tool.outputs.iter().map(|p| &p.id).collect::<Vec<_>>()
+            )
+        })?;
+
+    let to_input = to_tool.inputs.iter().find(|p| p.id == to_slot_id)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Tool `{}` has no input `{}`. Available inputs: {:?}",
+                to_name,
+                to_slot_id,
+                to_tool.inputs.iter().map(|p| &p.id).collect::<Vec<_>>()
+            )
+        })?;
+
+    // check format compatibility
+    if let (Some(to_format), Some(from_format)) = (&to_input.format, &from_output.format) && to_format != from_format {
+        anyhow::bail!(
+            "Cannot connect `{from_name}` → `{to_name}`: format mismatch. \
+                Output `{from_slot_id}` has format `{from_format}`, \
+                but input `{to_slot_id}` expects `{to_format}`."
+        );
+    }
     if !workflow.has_step(from_name) {
-        let from_cwl = load_doc(from_filename).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
         let from_outputs = from_cwl.get_output_ids();
         if !from_outputs.contains(&from_slot_id.to_string()) {
             anyhow::bail!(
@@ -144,7 +176,6 @@ pub fn add_workflow_step_connection(
 
     //check if step exists
     if !workflow.has_step(to_name) {
-        let to_cwl = load_doc(to_filename).map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
         add_workflow_step(workflow, to_name, to_filename, &to_cwl);
     }
 
