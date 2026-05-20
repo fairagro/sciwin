@@ -251,7 +251,7 @@ pub async fn test_wrapping_a_long_running_script2() {
 pub async fn test_implicit_inputs_hardcoded_files() {
     let (current, dir) = setup();
 
-    let command = &["python", "load.py"];
+    let command = &["python3", "load.py"];
 
     let name = "load";
     let args = &CreateArgs {
@@ -260,7 +260,9 @@ pub async fn test_implicit_inputs_hardcoded_files() {
         command: command.iter().map(|&s| s.to_string()).collect(),
         ..Default::default()
     };
-    assert!(create_tool(args).await.is_ok());
+    let result = create_tool(args).await;
+    dbg!(&result);
+    assert!(result.is_ok());
 
     let tool_path = dir.path().join(format!("workflows/{name}/{name}.cwl"));
     assert!(fs::exists(&tool_path).unwrap());
