@@ -19,10 +19,10 @@ use repository::Repository;
 use repository::submodule::{add_submodule, remove_submodule};
 use reqwest::Url;
 use s4n_core::auto_container_engine;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use std::{env, fs};
 use tokio_util::sync::CancellationToken;
 
 #[component]
@@ -426,7 +426,7 @@ fn LocalRunButton(item: Node, module: Option<String>) -> Element {
 
                     let container_engine = auto_container_engine().unwrap();
                     let storage = Arc::new(StorageBackend::new());
-                    let local_data_store = StoragePath::from_local(Path::new("/tmp"));
+                    let local_data_store = StoragePath::from_local(&env::temp_dir());
                     let backend = Arc::new(
                         LocalBackend::new(container_engine, storage, local_data_store),
                     );

@@ -158,7 +158,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
         let backend = Arc::new(LocalBackend::new(
             run_container.unwrap_or(ContainerEngine::Docker),
             storage,
-            StoragePath::from_local(Path::new("/tmp")),
+            StoragePath::from_local(&env::temp_dir())
         ));
 
         if run_container.is_some() {

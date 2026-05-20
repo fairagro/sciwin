@@ -17,11 +17,7 @@ use remote_execution::{check_status, download_results, export_rocrate, logout};
 use s4n_core::parser::guess_type;
 use serde_json::{Number, Value};
 use std::{
-    collections::HashMap,
-    error::Error,
-    fs,
-    path::{Path, PathBuf},
-    sync::Arc,
+    collections::HashMap, env, error::Error, fs, path::{Path, PathBuf}, sync::Arc
 };
 use tokio_util::sync::CancellationToken;
 
@@ -172,7 +168,8 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
         ContainerEngine::Docker
     };
     let storage = Arc::new(StorageBackend::new());
-    let local_data_store = StoragePath::from_local(Path::new("/tmp"));
+
+    let local_data_store = StoragePath::from_local(&env::temp_dir());
     let backend = Arc::new(LocalBackend::new(
         container_engine,
         storage,
