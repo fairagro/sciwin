@@ -1,5 +1,9 @@
 use commonwl::{prelude::*, requirements::WorkDirItem};
 use std::{fs, path::Path};
+use file_type::FileType;
+use reqwest::{self, blocking::Client};
+use serde_json::{Value};
+use urlencoding::encode;
 
 mod inputs;
 mod outputs;
@@ -13,6 +17,11 @@ pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "n
 pub static SCRIPT_MODIFIERS: &[&str] = &["-e", "-m"];
 
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
+
+const ONTOLOGY_API_BASE: &str = "https://api.terminology.tib.eu/api/select";
+const ONTOLOGY_API_ONT: &str = "edam";
+const ONTOLOGY_API_FIELD_LIST: &str = "iri,label,short_form,description,type,ontology_name";
+const ONTOLOGY_API_PARENT: &str = "http://edamontology.org/format_1915";
 
 pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     let base_command = get_base_command(commands);
@@ -143,6 +152,77 @@ fn split_vec_at<T: PartialEq + Clone, C: AsRef<[T]>>(vec: C, split_at: &T) -> (V
     } else {
         (slice.to_vec(), vec![])
     }
+}
+
+fn query_ontology_api(ext: &str) -> Option<String> {
+    let encoded_ext = encode(ext);
+    let parameters = format!(
+        "q={}&ontology={}&fieldList={}&childrenOf={}",
+        encoded_ext,
+        ONTOLOGY_API_ONT,
+        ONTOLOGY_API_FIELD_LIST,
+        ONTOLOGY_API_PARENT
+    );
+    let url = format!("{}?{}", ONTOLOGY_API_BASE, parameters);
+    let client = Client::new();
+    let response = match client.get(&url).send() {
+        Ok(res) => res,
+        Err(e) => {
+            eprintln!("Request failed: {}", e);
+            return None;
+        }
+    };
+    let body = match response.text() {
+        Ok(body) => body,
+        Err(e) => {
+            eprintln!("Failed to read response body: {}", e);
+            return None;
+        }
+    };
+    let json: Value = match serde_json::from_str(&body) {
+        Ok(val) => val,
+        Err(e) => {
+            eprintln!("Failed to parse JSON: {} | Raw body: {}", e, body);
+            return None;
+        }
+    };
+    let Some(docs) = json["response"]["docs"].as_array() else {
+        eprintln!("No 'response.docs' array in JSON");
+        return None;
+    };
+    if docs.is_empty() {
+        return None;
+    }
+    let iri = match docs[0]["iri"].as_str() {
+        Some(iri) => iri.to_string(),
+        None => {
+            eprintln!("No 'iri' field in first result");
+            return None;
+        }
+    };
+    Some(iri)
+}
+
+pub fn find_edam_format(filename: &str) -> String {
+    let ext_opt = Path::new(filename).extension().and_then(|e| e.to_str());
+    if let Some(ext) = ext_opt {
+        let ext_lower = ext.to_lowercase();
+        //first try to find format with API 
+         if let Some(iri) = query_ontology_api(&ext_lower) {
+            return iri;
+        }
+    }
+    //if not found, fallback to mimetype
+    find_mimetype(filename)
+}
+
+fn find_mimetype(filename: &str) -> String {
+    let ext_opt = Path::new(filename).extension().and_then(|e| e.to_str());
+    ext_opt
+        .and_then(|ext| FileType::from_extension(ext).first())
+        .and_then(|ft| ft.media_types().first())
+        .map(|s| (*s).to_string())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -297,7 +377,7 @@ mod tests {
         let root = env::var("CARGO_MANIFEST_DIR").unwrap();
         copy_dir(Path::new(&root).join("../../testdata/module"), path.join("module")).unwrap();
 
-        let current = env::current_dir().unwrap();
+        let original_dir = Path::new(&root).parent().unwrap().to_path_buf();
         env::set_current_dir(path).unwrap();
 
         let cwl = parse_command("python3 -m module --what ever");
@@ -305,6 +385,6 @@ mod tests {
         
         assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());   
         assert_eq!(cwl.base_command, Command::Multiple(vec!["python3".to_string(), "-m".to_string(),  "module".to_string() ]));
-        env::set_current_dir(current).unwrap();
+        env::set_current_dir(original_dir).unwrap();
     }
 }
