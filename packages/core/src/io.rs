@@ -98,7 +98,7 @@ mod tests {
     }
 
     #[rstest]
-    #[case(OneOrMany::Many(vec!["python".to_string(), "test/data/script.py".to_string()]), "workflows/script/script.cwl")]
+    #[case(OneOrMany::Many(vec!["python3".to_string(), "test/data/script.py".to_string()]), "workflows/script/script.cwl")]
     #[case(OneOrMany::One("echo".to_string()), "workflows/echo/echo.cwl")]
     fn test_get_qualified_filename(#[case] command: OneOrMany<String>, #[case] expected: &str) {
         assert_eq!(get_qualified_filename(&command, None), expected);

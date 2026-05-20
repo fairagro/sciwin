@@ -22,7 +22,7 @@ use test_utils::os_path;
 pub async fn tool_create_test() {
     let tool_create_args = CreateArgs {
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -63,7 +63,7 @@ pub async fn tool_create_test_inputs_outputs() {
     let tool_create_args = CreateArgs {
         inputs: Some(vec![input.clone()]),
         outputs: Some(vec!["results.txt".to_string()]),
-        command: vec!["python".to_string(), script.clone()],
+        command: vec!["python3".to_string(), script.clone()],
         ..Default::default()
     };
     let cmd = Commands::Create(tool_create_args);
@@ -105,7 +105,7 @@ pub async fn tool_create_test_is_raw() {
     let tool_create_args = CreateArgs {
         is_raw: true,
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -129,7 +129,7 @@ pub async fn tool_create_test_no_commit() {
     let tool_create_args = CreateArgs {
         no_commit: true, //look!
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -159,7 +159,7 @@ pub async fn tool_create_test_no_run() {
     let tool_create_args = CreateArgs {
         no_run: true,
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -183,7 +183,7 @@ pub async fn tool_create_test_no_run_explicit_inputs() {
         no_run: true,
         inputs: Some(vec!["data.bin".to_string()]),
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -218,7 +218,7 @@ pub async fn tool_create_test_no_run_explicit_inputs_string() {
         no_run: true,
         inputs: Some(vec!["wurstbrot".to_string()]),
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -252,7 +252,7 @@ pub async fn tool_create_test_is_clean() {
     let tool_create_args = CreateArgs {
         is_clean: true,
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -274,9 +274,9 @@ pub async fn tool_create_test_is_clean() {
 #[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
 pub async fn tool_create_test_container_image() {
     let tool_create_args = CreateArgs {
-        container_image: Some("python".to_string()),
+        container_image: Some("python3".to_string()),
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -299,7 +299,7 @@ pub async fn tool_create_test_container_image() {
         panic!("Tool does not contain a DockerRequirement");
     };
     if let Some(image) = &dr.docker_pull {
-        assert_eq!(image, "python");
+        assert_eq!(image, "python3");
     } else {
         panic!("DockerRequirement does not contain a dockerPull");
     }
@@ -315,7 +315,7 @@ pub async fn tool_create_test_dockerfile() {
         container_image: Some("Dockerfile".to_string()),
         container_tag: Some("sciwin-client".to_string()),
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
@@ -429,7 +429,7 @@ pub async fn test_tool_magic_arguments(_dir: &Path) {
 #[fstest(repo = true, tokio = true, files = ["../../testdata/create_dir.py"])]
 pub async fn test_tool_output_is_dir() {
     let name = "create_dir";
-    let command = &["python", "create_dir.py"];
+    let command = &["python3", "create_dir.py"];
     let args = CreateArgs {
         command: command.iter().map(|s| (*s).to_string()).collect::<Vec<_>>(),
         ..Default::default()
@@ -450,7 +450,7 @@ pub async fn test_tool_output_is_dir() {
 #[fstest(repo = true, tokio = true, files = ["../../testdata/create_dir.py"])]
 pub async fn test_tool_output_complete_dir() {
     let name = "create_dir";
-    let command = &["python", "create_dir.py"];
+    let command = &["python3", "create_dir.py"];
     let args = CreateArgs {
         outputs: Some(vec![".".into()]), //
         command: command.iter().map(|s| (*s).to_string()).collect::<Vec<_>>(),
@@ -546,7 +546,7 @@ pub async fn test_tool_uncommitted_no_run() {
 /// see Issue [#88](https://github.com/fairagro/sciwin/issues/88)
 pub async fn test_tool_output_subfolders() {
     let args = CreateArgs {
-        command: ["python".to_string(), "subfolders.py".to_string()].to_vec(),
+        command: ["python3".to_string(), "subfolders.py".to_string()].to_vec(),
         ..Default::default()
     };
     //should be ok to not commit changes, as tool does not run
@@ -588,12 +588,12 @@ pub async fn tool_create_remote_file() {
 pub async fn tool_create_test_network() {
     let tool_create_args = CreateArgs {
         command: vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string(),
             "--test".to_string(),
             "input.txt".to_string(),
         ],
-        container_image: Some("python".to_string()),
+        container_image: Some("python3".to_string()),
         enable_network: true,
         ..Default::default()
     };

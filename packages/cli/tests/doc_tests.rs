@@ -112,7 +112,7 @@ pub async fn test_wrapping_python_script() {
     let (current, dir) = setup();
 
     let command = &[
-        "python",
+        "python3",
         "echo.py",
         "--message",
         "SciWIn rocks!",
@@ -120,7 +120,7 @@ pub async fn test_wrapping_python_script() {
         "out.txt",
     ];
 
-    let name = "echo_python";
+    let name = "echo_python3";
     let args = &CreateArgs {
         name: Some(name.to_string()),
         command: command.iter().map(|&s| s.to_string()).collect(),
@@ -137,7 +137,7 @@ pub async fn test_wrapping_python_script() {
     assert_eq!(
         tool.base_command,
         Some(OneOrMany::Many(vec![
-            "python".to_string(),
+            "python3".to_string(),
             "echo.py".to_string()
         ]))
     );
@@ -161,7 +161,7 @@ pub async fn test_wrapping_python_script() {
 pub async fn test_wrapping_a_long_running_script() {
     let (current, dir) = setup();
 
-    let command = &["python", "sleep.py"];
+    let command = &["python3", "sleep.py"];
 
     let name = "sleep";
     let args = &CreateArgs {
@@ -180,7 +180,7 @@ pub async fn test_wrapping_a_long_running_script() {
     assert_eq!(
         tool.base_command,
         Some(OneOrMany::Many(vec![
-            "python".to_string(),
+            "python3".to_string(),
             "sleep.py".to_string()
         ]))
     );
@@ -204,7 +204,7 @@ pub async fn test_wrapping_a_long_running_script() {
 pub async fn test_wrapping_a_long_running_script2() {
     let (current, dir) = setup();
 
-    let command = &["python", "sleep.py"];
+    let command = &["python3", "sleep.py"];
 
     let name = "sleep2";
     let args = &CreateArgs {
@@ -225,7 +225,7 @@ pub async fn test_wrapping_a_long_running_script2() {
     assert_eq!(
         tool.base_command,
         Some(OneOrMany::Many(vec![
-            "python".to_string(),
+            "python3".to_string(),
             "sleep.py".to_string()
         ]))
     );
@@ -273,7 +273,7 @@ pub async fn test_implicit_inputs_hardcoded_files() {
     assert_eq!(
         tool.base_command,
         Some(OneOrMany::Many(vec![
-            "python".to_string(),
+            "python3".to_string(),
             "load.py".to_string()
         ]))
     );
@@ -349,7 +349,7 @@ pub async fn test_pulling_containers() {
     let (current, dir) = setup();
 
     let command = &[
-        "python",
+        "python3",
         "calculation.py",
         "--population",
         "population.csv",
@@ -385,7 +385,7 @@ pub async fn test_pulling_containers() {
     assert_eq!(
         tool.base_command,
         Some(OneOrMany::Many(vec![
-            "python".to_string(),
+            "python3".to_string(),
             "calculation.py".to_string()
         ]))
     );
@@ -412,7 +412,7 @@ pub async fn test_building_custom_containers() {
     let (current, dir) = setup();
 
     let command = &[
-        "python",
+        "python3",
         "calculation.py",
         "--population",
         "population.csv",
@@ -450,7 +450,7 @@ pub async fn test_building_custom_containers() {
     assert_eq!(
         tool.base_command,
         Some(OneOrMany::Many(vec![
-            "python".to_string(),
+            "python3".to_string(),
             "calculation.py".to_string()
         ]))
     );
@@ -504,7 +504,7 @@ pub async fn test_example_project() {
     //create calculation tool
     create_tool(&CreateArgs {
         command: [
-            "python".to_string(),
+            "python3".to_string(),
             "workflows/calculation/calculation.py".to_string(),
             "--speakers".to_string(),
             "data/speakers_revised.csv".to_string(),
@@ -522,7 +522,7 @@ pub async fn test_example_project() {
     //create calculation tool
     create_tool(&CreateArgs {
         command: [
-            "python".to_string(),
+            "python3".to_string(),
             "workflows/plot/plot.py".to_string(),
             "--results".to_string(),
             "results.csv".to_string(),

@@ -27,7 +27,7 @@ pub fn tool_remove_test() {
             let tool_create_args = CreateArgs {
                 name: Some("echo".to_string()),
                 command: vec![
-                    "python".to_string(),
+                    "python3".to_string(),
                     "scripts/echo.py".to_string(),
                     "--test".to_string(),
                     "data/input.txt".to_string(),

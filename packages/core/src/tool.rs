@@ -521,7 +521,7 @@ mod tests {
         ];
         let mut clt = CommandLineTool::builder()
             .base_command(OneOrMany::Many(vec![
-                "python".to_string(),
+                "python3".to_string(),
                 "test/script.py".to_string(),
             ]))
             .inputs(inputs)
