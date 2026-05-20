@@ -7,7 +7,7 @@ use commonwl::{
 };
 use dioxus::html::geometry::euclid::Point2D;
 use petgraph::{graph::NodeIndex, prelude::*};
-use rand::Rng;
+use rand::RngExt;
 use std::{
     collections::{HashMap, VecDeque},
     path::Path,

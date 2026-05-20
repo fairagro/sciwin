@@ -17,7 +17,7 @@ use petgraph::{
     graph::{EdgeIndex, NodeIndex},
     visit::EdgeRef,
 };
-use rand::Rng;
+use rand::RngExt;
 use std::{
     fs,
     io::Write,

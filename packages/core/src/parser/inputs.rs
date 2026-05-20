@@ -9,7 +9,7 @@ use commonwl::{
     requirements::{ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
     types::CWLType,
 };
-use rand::{Rng, distr::Alphanumeric};
+use rand::{RngExt, distr::Alphanumeric};
 use serde_json::Value;
 use slugify::slugify;
 

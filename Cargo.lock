@@ -641,9 +641,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.64.7"
+version = "0.64.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10efbbcec1e044b81600e2fc562a391951d291152d95b482d5b7e7132299d762"
+checksum = "e9e8e65f4f81fcccdeb6c3eca2af17ac21d421a1786a26a394aecf421d616d3a"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -725,10 +725,12 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.62.5"
+version = "0.62.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9648b0bb82a2eedd844052c6ad2a1a822d1f8e3adee5fbf668366717e428856a"
+checksum = "517089205f18ab4adc5a3e02888cb139bbbbb2e168eac9f396216925d1fbeaf5"
 dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
 ]
 
@@ -753,15 +755,16 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.11.1"
+version = "1.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0504b1ab12debb5959e5165ee5fe97dd387e7aa7ea6a477bfd7635dfe769a4f5"
+checksum = "b8e6f5caf6fea86f8c2206541ab5857cfcda9013426cdbe8fa0098b9e2d32182"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
  "bytes",
  "fastrand",
@@ -778,9 +781,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b71a13df6ada0aafbf21a73bdfcdf9324cfa9df77d96b8446045be3cde61b42e"
+checksum = "dc117c179ecf39a62a0a3f49f600e9ac26a7ad7dd172177999f83933af776c32"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -806,10 +809,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "aws-smithy-types"
-version = "1.4.7"
+name = "aws-smithy-schema"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d73dbfbaa8e4bc57b9045137680b958d274823509a360abfd8e1d514d40c95c"
+checksum = "7442cb268338f0eb8278140a107c046756aa01093d8ef5e99628d34ae09c94f5"
+dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "http 1.4.0",
+]
+
+[[package]]
+name = "aws-smithy-types"
+version = "1.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "056b66dbce2f81cc0c1e2b05bb402eb58f8a3530479d650efadd5bbae9a4050b"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -1446,6 +1460,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
+name = "chacha20"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f8d983286843e49675a4b7a2d174efe136dc93a18d69130dd18198a6c167601"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.0",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "charset"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1632,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1f3f239ffd20a6e8e4f38cdd3a2f9b32209489ffa18c86a08143e35db84bdc1"
+checksum = "4069e0992840aacc2c941d201fe9e646e6788c46cc8be5b4e60d0a90d532af2d"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -2014,29 +2039,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "crc"
-version = "3.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9710d3b3739c2e349eb44fe848ad0b7c8cb1e42bd87ee49371df2f7acaf3e675"
-dependencies = [
- "crc-catalog",
-]
-
-[[package]]
-name = "crc-catalog"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
-
-[[package]]
 name = "crc-fast"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fd92aca2c6001b1bf5ba0ff84ee74ec8501b52bbef0cac80bf25a6c1d87a83d"
+checksum = "e75b2483e97a5a7da73ac68a05b629f9c53cff58d8ed1c77866079e18b00dba5"
 dependencies = [
- "crc",
  "digest 0.10.7",
- "rustversion",
  "spin 0.10.0",
 ]
 
@@ -2145,9 +2153,9 @@ dependencies = [
 
 [[package]]
 name = "crypto-common"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77727bb15fa921304124b128af125e7e3b968275d1b108b379190264f4423710"
+checksum = "ce6e4c961d6cd6c9a86db418387425e8bdeaf05b3c8bc1411e6dca4c252f1453"
 dependencies = [
  "hybrid-array",
 ]
@@ -2220,9 +2228,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.4.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "817e2c30e82fd659d6472d59c190564769e7133a60282305e6cd5cf2b3fbab79"
+checksum = "00115f0f2c554c40b2070f81c551df5c15ca5af642989283eeed6d9bdff4e8d0"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -2241,9 +2249,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.4.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1439de2274340565ffb05e815ab3bae285d706ebb65f105ddd0b91bda6df4947"
+checksum = "a6d49cbb50294b62e2d7a1723ad30a1cf9b2d5fcf4fd059f8c447fa337f2dc78"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2280,9 +2288,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.4.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c3fadf3ce17d8178454f562b05a82bbe73ccd942d3c175f23dd3deab6a0c311"
+checksum = "98a6d2686e0f0ad8bfb2849ccd6eb5008835ff22fca34bc66699066f259fc03b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2301,9 +2309,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.4.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "028d424b4d1563ff0a6b40703d44017cd1b53c32e6a179158d3ca1a1c2876093"
+checksum = "45a0c7c66956dd651686f891a099f4af671e50af2c021aebe3b23ca9a933fa35"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -2313,9 +2321,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.4.2"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2082ba434072a57a46371d2f7f105d1287d1142749ddce1a82ebd2cc72e8759"
+checksum = "981fcdcca713068f00ef6184188d497d56764d3092751035c7a7a449614471c9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2550,7 +2558,7 @@ checksum = "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
 dependencies = [
  "block-buffer 0.12.0",
  "const-oid 0.10.2",
- "crypto-common 0.2.1",
+ "crypto-common 0.2.2",
  "ctutils",
 ]
 
@@ -3536,9 +3544,9 @@ dependencies = [
 
 [[package]]
 name = "fancy-regex"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
+checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
 dependencies = [
  "bit-set",
  "regex-automata",
@@ -3723,7 +3731,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7df26654850049f639e99ea1a9c3a04c17a94efde8799a2b1af9b4d402386b2"
 dependencies = [
  "fstest_macro",
- "git2",
+ "git2 0.20.4",
  "serial_test",
  "tempfile",
 ]
@@ -3848,9 +3856,9 @@ checksum = "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393"
 
 [[package]]
 name = "futures-timer"
-version = "3.0.3"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f288b0a4f20f9a56b5d1da57e2227c661b7b16168e2f72365f57b63326e29b24"
+checksum = "af43fadb8a98512d547e37b4e92e0ced13e205c061b87b4623eff01d918d6968"
 
 [[package]]
 name = "futures-util"
@@ -4049,6 +4057,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi 6.0.0",
+ "rand_core 0.10.1",
  "wasip2",
  "wasip3",
 ]
@@ -4114,6 +4123,19 @@ dependencies = [
  "openssl-probe 0.1.6",
  "openssl-sys",
  "url",
+]
+
+[[package]]
+name = "git2"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddddbf932745a6be37109b6112d3ee09696106f848449069d3a57bba937ab82e"
+dependencies = [
+ "bitflags 2.11.1",
+ "libc",
+ "libgit2-sys",
+ "log",
+ "openssl-sys",
 ]
 
 [[package]]
@@ -7170,6 +7192,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
+dependencies = [
+ "chacha20",
+ "getrandom 0.4.2",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "rand_chacha"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7225,6 +7258,12 @@ checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 dependencies = [
  "getrandom 0.3.4",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "rand_hc"
@@ -7339,7 +7378,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "commonwl",
- "fancy-regex 0.17.0",
+ "fancy-regex 0.18.0",
  "futures",
  "httpmock",
  "keyring",
@@ -7495,7 +7534,7 @@ dependencies = [
  "anyhow",
  "configparser",
  "fstest",
- "git2",
+ "git2 0.21.0",
 ]
 
 [[package]]
@@ -7910,7 +7949,7 @@ dependencies = [
  "calamine",
  "commonwl",
  "pathdiff",
- "rand 0.9.4",
+ "rand 0.10.1",
  "repository",
  "rstest",
  "semver 1.0.28",
@@ -7997,7 +8036,7 @@ dependencies = [
  "keyring",
  "pathdiff",
  "petgraph",
- "rand 0.9.4",
+ "rand 0.10.1",
  "reana",
  "remote_execution",
  "repository",
@@ -9054,7 +9093,7 @@ name = "test_utils"
 version = "1.2.0"
 dependencies = [
  "copy_dir",
- "git2",
+ "git2 0.21.0",
  "serde_json",
  "tempfile",
  "whoami",
