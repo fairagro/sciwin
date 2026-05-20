@@ -377,7 +377,7 @@ mod tests {
         let root = env::var("CARGO_MANIFEST_DIR").unwrap();
         copy_dir(Path::new(&root).join("../../testdata/module"), path.join("module")).unwrap();
 
-        let current = env::current_dir().unwrap();
+        let original_dir = Path::new(&root).parent().unwrap().to_path_buf();
         env::set_current_dir(path).unwrap();
 
         let cwl = parse_command("python3 -m module --what ever");
@@ -385,6 +385,6 @@ mod tests {
         
         assert!(run_command(&cwl, &mut RuntimeEnvironment::default()).is_ok());   
         assert_eq!(cwl.base_command, Command::Multiple(vec!["python3".to_string(), "-m".to_string(),  "module".to_string() ]));
-        env::set_current_dir(current).unwrap();
+        env::set_current_dir(original_dir).unwrap();
     }
 }
