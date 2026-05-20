@@ -3,9 +3,8 @@ use dircpy::copy_dir;
 use s4n::commands::{LocalExecuteArgs, execute_local};
 use serial_test::serial;
 use std::{
-    env,
     fs::{self},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 use tempfile::tempdir;
 
@@ -185,7 +184,7 @@ pub async fn test_execute_local_tool_default_cwl() {
         file: path.clone(),
         ..Default::default()
     };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let override_path = root.join("../../testdata/input.txt");
     let args_override = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
@@ -238,7 +237,7 @@ pub async fn test_execute_local_workflow_in_param() {
     let out_dir = dir.path().to_string_lossy().into_owned();
     let out_file = format!("{}/file.wtf", &out_dir);
 
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let input_file_path = root.join("../../testdata/input.txt");
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
@@ -321,7 +320,7 @@ pub async fn test_execute_local_workflow_directory_out() {
 
     let res = execute_local(&args).await;
     dbg!(&res);
-    assert!(res.is_ok()); 
+    assert!(res.is_ok());
 }
 
 #[tokio::test]
