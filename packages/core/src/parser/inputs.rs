@@ -212,6 +212,7 @@ pub fn guess_type(value: &str) -> CWLType {
         || value.starts_with("https://")
         || value.starts_with("ftp://")
         || value.starts_with("s3://")
+        || value.starts_with("file://")
     {
         return CWLType::File; //urls are files!
     }
