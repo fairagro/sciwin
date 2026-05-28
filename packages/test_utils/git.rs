@@ -35,11 +35,11 @@ fn write_config() -> Result<(), git2::Error> {
     let mut config = Config::open_default()?;
     if config.get_string("user.name").is_err() {
         config.remove_multivar("user.name", ".*").ok();
-        config.set_str("user.name", &whoami::username())?;
+        config.set_str("user.name", &whoami::username().unwrap())?;
     }
 
     if config.get_string("user.email").is_err() {
-        config.set_str("user.email", &format!("{}@example.com", whoami::username()))?;
+        config.set_str("user.email", &format!("{}@example.com", whoami::username().unwrap()))?;
     }
     Ok(())
 }
