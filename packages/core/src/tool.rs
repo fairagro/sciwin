@@ -205,7 +205,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
             CWLDocument::CommandLineTool(clone_cwl),
             InputObject::default(),
             env::current_dir().unwrap(),
-            Some(&env::current_dir().unwrap()),
+            None,
             None,
         )?;
         let cancellation_token = CancellationToken::new();
