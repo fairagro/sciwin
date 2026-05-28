@@ -1657,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.7.2"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b89910e1710548312b0e4a315517af35e20a4d693a91c41c3e75993bbe72958"
+checksum = "55c28b26f3363d646972ec26b842baf588bd6bd978cf3e816fa339a3137bde89"
 dependencies = [
  "cwl_core",
  "cwl_engine",
