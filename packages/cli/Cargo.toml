@@ -41,7 +41,7 @@ syntect = { version = "5.2.0", default-features = false, features = [
     "default-themes",
     "default-syntaxes",
 ] }
-similar = "2.7.0"
+similar = "3.1.1"
 
 [dev-dependencies]
 shlex = { workspace = true }
