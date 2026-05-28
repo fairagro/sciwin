@@ -47,10 +47,6 @@ async fn run() -> anyhow::Result<()> {
         Commands::Execute { command } => handle_execute_commands(command).await,
         Commands::Install(args) => install_package(&args.identifier, &args.branch),
         Commands::Uninstall(args) => remove_package(&args.identifier),
-        //Commands::Annotate { command, tool_name } => {
-        //    handle_annotation_command(command, tool_name).map_err(|e| anyhow::anyhow!("{e:#}"))?;
-        //    Ok(())
-        //}
         Commands::Completions { shell } => generate_completions(*shell, &mut Cli::command()),
         Commands::List(args) => handle_list_command(args),
         Commands::Remove(args) => handle_remove_command(args),
