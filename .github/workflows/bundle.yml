@@ -18,7 +18,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - uses: cargo-bins/cargo-binstall@main
       - name: Install Dioxus 📈
-        run: cargo binstall dioxus-cli
+        run: cargo binstall dioxus-cli --force
       - name: Create bundle
         run: dx bundle -p sciwin --desktop --release
       - uses: actions/upload-artifact@v5
@@ -57,7 +57,7 @@ jobs:
           librsvg2-dev
       - uses: cargo-bins/cargo-binstall@main
       - name: Install Dioxus 📈
-        run: cargo binstall dioxus-cli
+        run: cargo binstall dioxus-cli --force
       - name: Create bundle
         run: dx bundle -p sciwin --desktop --release
       - uses: actions/upload-artifact@v5
