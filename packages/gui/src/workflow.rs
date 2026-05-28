@@ -1,16 +1,23 @@
 use crate::{
-    graph::{WorkflowGraph, load_workflow_graph},
+    graph::{WorkflowGraph, get_output_type, load_workflow_graph},
     save_file_canonical,
-    types::{NodeInstance, Slot, VisualEdge, VisualNode},
+    types::{NodeInstance, PortType, Slot, VisualEdge, VisualNode},
 };
-use commonwl::{format::format_cwl, load_workflow, prelude::*};
+use commonwl::{
+    Identifiable, OneOrMany,
+    documents::{CWLDocument, Workflow},
+    format::format_cwl,
+    inputs::{InputType, WorkflowInputParameter},
+    load_cwl_file,
+    outputs::{CommandOutputParameterType, WorkflowOutputParameter},
+};
 use dioxus::html::geometry::euclid::Point2D;
 use petgraph::{
     Direction,
     graph::{EdgeIndex, NodeIndex},
     visit::EdgeRef,
 };
-use rand::Rng;
+use rand::RngExt;
 use std::{
     fs,
     io::Write,
@@ -28,7 +35,11 @@ pub struct VisualWorkflow {
 impl VisualWorkflow {
     pub fn from_file(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let path = path.as_ref();
-        let workflow = load_workflow(path).map_err(|e| anyhow::anyhow!("{e}"))?;
+        let CWLDocument::Workflow(workflow) =
+            load_cwl_file(path, true).map_err(|e| anyhow::anyhow!("{e}"))?
+        else {
+            anyhow::bail!("Expected a workflow document")
+        };
         let graph = load_workflow_graph(&workflow, path)?;
         Ok(Self {
             path: Some(path.to_path_buf()),
@@ -39,7 +50,13 @@ impl VisualWorkflow {
 }
 
 impl VisualWorkflow {
-    pub fn add_new_step_if_not_exists(&mut self, name: &str, path: &str, doc: &mut CWLDocument, working_dir: &Path) -> anyhow::Result<()> {
+    pub fn add_new_step_if_not_exists(
+        &mut self,
+        name: &str,
+        path: &str,
+        doc: &mut CWLDocument,
+        working_dir: &Path,
+    ) -> anyhow::Result<()> {
         //prevent name collisions
         let mut i = 1;
         let mut final_name = name.to_string();
@@ -52,8 +69,8 @@ impl VisualWorkflow {
         s4n_core::workflow::add_workflow_step(&mut self.workflow, name, path, doc);
 
         let path = Path::new(path);
-        if doc.id.is_none() {
-            doc.id = Some(path.file_name().unwrap().to_string_lossy().to_string());
+        if doc.get_id().is_none() {
+            doc.set_id(&path.file_name().unwrap().to_string_lossy());
         }
 
         let mut rng = rand::rng();
@@ -61,11 +78,11 @@ impl VisualWorkflow {
             id: name.to_string(),
             instance: NodeInstance::Step(doc.clone()),
             inputs: doc
-                .inputs
+                .get_inputs()
                 .iter()
                 .map(|i| Slot {
-                    id: i.id.clone(),
-                    type_: i.type_.clone(),
+                    id: i.id.clone().unwrap(),
+                    type_: PortType::Input(i.r#type.clone()),
                 })
                 .collect(),
             outputs: doc
@@ -73,7 +90,7 @@ impl VisualWorkflow {
                 .iter()
                 .map(|i| Slot {
                     id: i.to_string(),
-                    type_: doc.get_output_type(i).unwrap(),
+                    type_: PortType::Output(get_output_type(doc, i).unwrap()),
                 })
                 .collect(),
             path: Some(working_dir.join(path)),
@@ -83,8 +100,11 @@ impl VisualWorkflow {
         self.save()
     }
 
-    pub fn add_input(&mut self, id: &str, type_: CWLType) -> anyhow::Result<()> {
-        let input = CommandInputParameter::default().with_id(id).with_type(type_);
+    pub fn add_input(&mut self, id: &str, type_: OneOrMany<InputType>) -> anyhow::Result<()> {
+        let input = WorkflowInputParameter::builder()
+            .id(id)
+            .r#type(type_)
+            .build();
         self.workflow.inputs.push(input.clone());
 
         let mut rng = rand::rng();
@@ -92,8 +112,8 @@ impl VisualWorkflow {
             id: id.to_string(),
             instance: NodeInstance::Input(input.clone()),
             outputs: vec![Slot {
-                id: input.id.clone(),
-                type_: input.type_.clone(),
+                id: input.id.clone().unwrap(),
+                type_: PortType::Input(input.r#type.clone()),
             }],
             inputs: vec![],
             path: None,
@@ -103,10 +123,14 @@ impl VisualWorkflow {
         self.save()
     }
 
-    pub fn add_output(&mut self, id: &str, type_: CWLType) -> anyhow::Result<()> {
+    pub fn add_output(
+        &mut self,
+        id: &str,
+        type_: CommandOutputParameterType,
+    ) -> anyhow::Result<()> {
         let output = WorkflowOutputParameter {
-            type_,
-            id: id.to_owned(),
+            r#type: type_,
+            id: Some(id.to_owned()),
             ..Default::default()
         };
 
@@ -118,8 +142,8 @@ impl VisualWorkflow {
             instance: NodeInstance::Output(output.clone()),
             outputs: vec![],
             inputs: vec![Slot {
-                id: output.id.clone(),
-                type_: output.type_.clone(),
+                id: output.id.clone().unwrap(),
+                type_: PortType::Output(output.r#type.clone()),
             }],
             path: None,
             position: Point2D::new(0.0, rng.random_range(0.0..=100.0)),
@@ -128,7 +152,13 @@ impl VisualWorkflow {
         self.save()
     }
 
-    pub fn add_connection(&mut self, from_id: NodeIndex, from_slot_id: &str, to_id: NodeIndex, to_slot_id: &str) -> anyhow::Result<()> {
+    pub fn add_connection(
+        &mut self,
+        from_id: NodeIndex,
+        from_slot_id: &str,
+        to_id: NodeIndex,
+        to_slot_id: &str,
+    ) -> anyhow::Result<()> {
         let from_node = &self.graph[from_id];
         let to_node = &self.graph[to_id];
 
@@ -156,17 +186,34 @@ impl VisualWorkflow {
             && let Some(to_filename) = to_filename
         {
             // from name is input
-            s4n_core::workflow::add_workflow_input_connection(&mut self.workflow, from_slot_id, to_filename, to_name, to_slot_id)?;
+            s4n_core::workflow::add_workflow_input_connection(
+                &mut self.workflow,
+                from_slot_id,
+                to_filename,
+                to_name,
+                to_slot_id,
+            )?;
         } else if !self.workflow.has_step(to_name)
             && let Some(from_filename) = from_filename
         {
             // from to name is output
-            s4n_core::workflow::add_workflow_output_connection(&mut self.workflow, from_name, from_slot_id, from_filename, to_name)?;
+            s4n_core::workflow::add_workflow_output_connection(
+                &mut self.workflow,
+                from_name,
+                from_slot_id,
+                from_filename,
+                to_name,
+            )?;
         } else {
             anyhow::bail!("undefined connection command")
         }
 
-        let cwl_type = &from_node.outputs.iter().find(|o| o.id == from_slot_id).unwrap().type_;
+        let cwl_type = &from_node
+            .outputs
+            .iter()
+            .find(|o| o.id == from_slot_id)
+            .unwrap()
+            .type_;
 
         self.graph.add_edge(
             from_id,
@@ -194,11 +241,25 @@ impl VisualWorkflow {
         let to_slot = edge.target_port.clone();
         //todo if input/output in named like a step it is confused!
         if self.workflow.has_step(from_node) && self.workflow.has_step(to_node) {
-            s4n_core::workflow::remove_workflow_step_connection(&mut self.workflow, to_node, &to_slot)?
+            s4n_core::workflow::remove_workflow_step_connection(
+                &mut self.workflow,
+                to_node,
+                &to_slot,
+            )?
         } else if !self.workflow.has_step(from_node) {
-            s4n_core::workflow::remove_workflow_input_connection(&mut self.workflow, from_node, to_node, &to_slot, false)?
+            s4n_core::workflow::remove_workflow_input_connection(
+                &mut self.workflow,
+                from_node,
+                to_node,
+                &to_slot,
+                false,
+            )?
         } else if !self.workflow.has_step(to_node) {
-            s4n_core::workflow::remove_workflow_output_connection(&mut self.workflow, to_node, false)?
+            s4n_core::workflow::remove_workflow_output_connection(
+                &mut self.workflow,
+                to_node,
+                false,
+            )?
         } else {
             anyhow::bail!("undefined disconnection command")
         }
@@ -219,9 +280,18 @@ impl VisualWorkflow {
         //remove node
         let node = &self.graph[index];
         match &node.instance {
-            NodeInstance::Step(_) => self.workflow.steps.retain(|s| s.id != node.id),
-            NodeInstance::Input(_) => self.workflow.inputs.retain(|s| s.id != node.id),
-            NodeInstance::Output(_) => self.workflow.outputs.retain(|s| s.id != node.id),
+            NodeInstance::Step(_) => self
+                .workflow
+                .steps
+                .retain(|s| *s.id.as_ref().unwrap() != node.id),
+            NodeInstance::Input(_) => self
+                .workflow
+                .inputs
+                .retain(|s| *s.id.as_ref().unwrap() != node.id),
+            NodeInstance::Output(_) => self
+                .workflow
+                .outputs
+                .retain(|s| *s.id.as_ref().unwrap() != node.id),
         }
 
         self.graph.remove_node(index);
@@ -245,7 +315,8 @@ impl VisualWorkflow {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonwl::execution::io::copy_dir;
+    use commonwl::types::CWLType;
+use dircpy::copy_dir;
     use repository::{Repository, initial_commit};
     use serial_test::serial;
     use std::env;
@@ -279,10 +350,14 @@ mod tests {
         let path = dir.path().join("workflows/main/main.cwl");
         let mut wf = VisualWorkflow::from_file(path).unwrap();
 
-        wf.add_input("wurstbrot", CWLType::Any).unwrap();
+        wf.add_input("wurstbrot", OneOrMany::One(InputType::CWLType(CWLType::Any))).unwrap();
         assert!(wf.workflow.has_input("wurstbrot"));
 
-        let ix = wf.graph.node_indices().find(|i| wf.graph[*i].id == "wurstbrot").unwrap();
+        let ix = wf
+            .graph
+            .node_indices()
+            .find(|i| wf.graph[*i].id == "wurstbrot")
+            .unwrap();
         wf.remove_node(ix).unwrap();
         assert!(!wf.workflow.has_input("wurstbrot"));
         env::set_current_dir(current).unwrap();
@@ -295,10 +370,14 @@ mod tests {
         let path = dir.path().join("workflows/main/main.cwl");
         let mut wf = VisualWorkflow::from_file(path).unwrap();
 
-        wf.add_output("merzlos", CWLType::Any).unwrap();
+        wf.add_output("merzlos", CWLType::Any.into()).unwrap();
         assert!(wf.workflow.has_output("merzlos"));
 
-        let ix = wf.graph.node_indices().find(|i| wf.graph[*i].id == "merzlos").unwrap();
+        let ix = wf
+            .graph
+            .node_indices()
+            .find(|i| wf.graph[*i].id == "merzlos")
+            .unwrap();
         wf.remove_node(ix).unwrap();
         assert!(!wf.workflow.has_output("merzlos"));
         env::set_current_dir(current).unwrap();
@@ -311,8 +390,16 @@ mod tests {
         let path = dir.path().join("workflows/main/main.cwl");
         let mut wf = VisualWorkflow::from_file(path).unwrap();
 
-        let ix_calc = wf.graph.node_indices().find(|i| wf.graph[*i].id.contains("calculation")).unwrap();
-        let ix_plot = wf.graph.node_indices().find(|i| wf.graph[*i].id.contains("plot")).unwrap();
+        let ix_calc = wf
+            .graph
+            .node_indices()
+            .find(|i| wf.graph[*i].id.contains("calculation"))
+            .unwrap();
+        let ix_plot = wf
+            .graph
+            .node_indices()
+            .find(|i| wf.graph[*i].id.contains("plot"))
+            .unwrap();
 
         let edge_ix = wf.graph.find_edge(ix_calc, ix_plot).unwrap();
 
@@ -320,7 +407,8 @@ mod tests {
 
         assert_eq!(wf.graph.edge_count(), 3);
 
-        wf.add_connection(ix_calc, "results", ix_plot, "results").unwrap();
+        wf.add_connection(ix_calc, "results", ix_plot, "results")
+            .unwrap();
 
         assert_eq!(wf.graph.edge_count(), 4);
         env::set_current_dir(current).unwrap();

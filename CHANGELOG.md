@@ -1,4 +1,10 @@
 # Unreleased
+## 🚀 Features
+- Updated the underlying CWL libraries to our [`commonwl`](https://github.com/fairagro/commonwl) library #236
+- Removed `annotate` command due to lack of usage
+
+## 🐛 Bugfixes
+- ramping up runner conformance from 223/378 to 376/378
 
 # v1.2.0
 ## 🚀 Features

@@ -1,9 +1,12 @@
 use crate::utils::{build_inputs_cwl, build_inputs_yaml, get_all_outputs};
 use anyhow::{Context, Result};
 use commonwl::{
-    load_doc,
+    OneOrMany,
+    documents::CWLDocument,
+    inputs::{DefaultValue, InputType},
+    load_cwl_file,
     packed::{PackedCWL, pack_workflow},
-    prelude::*,
+    types::CWLType,
 };
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_yaml::Value;
@@ -79,31 +82,53 @@ pub enum ParameterValue {
     Scalar(String),
 }
 
-pub fn generate_workflow_json_from_cwl(file: &Path, input_file: &Option<PathBuf>) -> Result<WorkflowJson> {
-    let cwl_path = file.to_str().with_context(|| format!("Invalid UTF-8 in CWL file path: {file:?}"))?;
+pub fn generate_workflow_json_from_cwl(
+    file: &Path,
+    input_file: &Option<PathBuf>,
+) -> Result<WorkflowJson> {
+    let cwl_path = file
+        .to_str()
+        .with_context(|| format!("Invalid UTF-8 in CWL file path: {file:?}"))?;
 
     let inputs_yaml_data = match input_file {
-        Some(yaml_file) => build_inputs_yaml(cwl_path, yaml_file).with_context(|| format!("Failed to build inputs YAML from file {yaml_file:?}"))?,
-        None => build_inputs_cwl(cwl_path, None).with_context(|| format!("Failed to build inputs from CWL file '{cwl_path}'"))?,
+        Some(yaml_file) => build_inputs_yaml(cwl_path, yaml_file)
+            .with_context(|| format!("Failed to build inputs YAML from file {yaml_file:?}"))?,
+        None => build_inputs_cwl(cwl_path, None)
+            .with_context(|| format!("Failed to build inputs from CWL file '{cwl_path}'"))?,
     };
 
-    let cwl_document = load_doc(file).map_err(|e| anyhow::anyhow!("Could not load file {file:?}: {e}"))?;
+    let cwl_document = load_cwl_file(file, true)
+        .map_err(|e| anyhow::anyhow!("Could not load file {file:?}: {e}"))?;
     let CWLDocument::Workflow(workflow) = cwl_document else {
         anyhow::bail!("Document is not of kind CWL Workflow {file:?}");
     };
-    let specification = pack_workflow(&workflow, file, None).map_err(|e| anyhow::anyhow!("Could not pack file {file:?}: {e}"))?;
+    let specification = pack_workflow(&workflow, file, None)
+        .map_err(|e| anyhow::anyhow!("Could not pack file {file:?}: {e}"))?;
 
-    let mut inputs_value = serde_yaml::from_value::<WorkflowInputs>(Value::Mapping(inputs_yaml_data.clone()))
-        .context("Failed to deserialize inputs YAML into WorkflowInputs")?;
+    let mut inputs_value =
+        serde_yaml::from_value::<WorkflowInputs>(Value::Mapping(inputs_yaml_data.clone()))
+            .context("Failed to deserialize inputs YAML into WorkflowInputs")?;
 
     let mut params = HashMap::new();
     for node in &specification.graph {
-        for input in &node.inputs {
-            let id = input.id.trim_start_matches('#');
-            if params.contains_key(id) || matches!(input.type_, CWLType::File | CWLType::Directory) {
+        for input in node.get_inputs() {
+            let id = input
+                .id
+                .clone()
+                .unwrap()
+                .trim_start_matches('#')
+                .to_string();
+            //TODO: we can get into trouble with the new type system here. lets keep an eye on here
+            if params.contains_key(&id)
+                || matches!(
+                    input.r#type,
+                    OneOrMany::One(InputType::CWLType(CWLType::File))
+                        | OneOrMany::One(InputType::CWLType(CWLType::Directory))
+                )
+            {
                 continue;
-            } else if let Some(default_value) = &input.default {
-                params.insert(id, default_value.as_value_string());
+            } else if let Some(DefaultValue::Any(default_value)) = &input.default {
+                params.insert(id, serde_yaml::to_string(default_value)?);
             }
         }
     }
@@ -111,7 +136,7 @@ pub fn generate_workflow_json_from_cwl(file: &Path, input_file: &Option<PathBuf>
         && let Value::Mapping(values) = &mut inputs_value.parameters
     {
         for (k, v) in params {
-            if !values.contains_key(k) {
+            if !values.contains_key(&k) {
                 values.insert(k.into(), v.into());
             }
         }
@@ -123,7 +148,9 @@ pub fn generate_workflow_json_from_cwl(file: &Path, input_file: &Option<PathBuf>
         .map(|(_, glob)| glob)
         .collect();
 
-    let outputs = WorkflowOutputs { files: output_files };
+    let outputs = WorkflowOutputs {
+        files: output_files,
+    };
 
     Ok(WorkflowJson {
         inputs: inputs_value,
@@ -146,7 +173,10 @@ mod tests {
     fn test_generate_workflow_json_from_cwl_minimal() {
         let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let cwl_path = base_dir.join("../../testdata/hello_world/workflows/main/main.cwl");
-        assert!(Path::new(&cwl_path).exists(), "Test cwl file does not exists");
+        assert!(
+            Path::new(&cwl_path).exists(),
+            "Test cwl file does not exists"
+        );
         let result = generate_workflow_json_from_cwl(&cwl_path, &None);
 
         assert!(result.is_ok(), "Expected generation to succeed");
@@ -161,7 +191,10 @@ mod tests {
         assert!(inputs.is_object(), "Inputs should be an object");
 
         // Check 'directories'
-        assert!(inputs["directories"].is_array(), "directories should be an array");
+        assert!(
+            inputs["directories"].is_array(),
+            "directories should be an array"
+        );
         assert_eq!(inputs["directories"].as_array().unwrap().len(), 1);
 
         // Check 'files'
@@ -174,7 +207,9 @@ mod tests {
         assert_eq!(parameters["population"]["class"], "File");
 
         // Try 'location' key, fallback to 'path'
-        let population_path_value = parameters["population"].get("location").or_else(|| parameters["population"].get("path"));
+        let population_path_value = parameters["population"]
+            .get("location")
+            .or_else(|| parameters["population"].get("path"));
         let population_path = population_path_value
             .and_then(|v| v.as_str())
             .expect("Expected parameters['population'] to have 'location' or 'path' as a string");
@@ -183,7 +218,9 @@ mod tests {
 
         assert_eq!(parameters["speakers"]["class"], "File");
 
-        let speakers_path_value = parameters["speakers"].get("location").or_else(|| parameters["speakers"].get("path"));
+        let speakers_path_value = parameters["speakers"]
+            .get("location")
+            .or_else(|| parameters["speakers"].get("path"));
         let speakers_path = speakers_path_value
             .and_then(|v| v.as_str())
             .expect("Expected parameters['speakers'] to have 'location' or 'path' as a string");
@@ -193,7 +230,10 @@ mod tests {
         // Check outputs
         let outputs = &json["outputs"];
         assert!(outputs.is_object(), "Outputs should be an object");
-        assert!(outputs["files"].is_array(), "outputs.files should be an array");
+        assert!(
+            outputs["files"].is_array(),
+            "outputs.files should be an array"
+        );
         assert_eq!(outputs["files"].as_array().unwrap().len(), 1);
         assert_eq!(outputs["files"][0], "results.svg");
 
@@ -208,17 +248,31 @@ mod tests {
         let steps = &main["steps"];
         assert!(steps.is_array(), "Steps should be an array");
 
-        assert!(!steps.as_array().unwrap().is_empty(), "Steps array should not be empty");
+        assert!(
+            !steps.as_array().unwrap().is_empty(),
+            "Steps array should not be empty"
+        );
 
-        let calculation_exists = steps.as_array().unwrap().iter().any(|step| step["id"] == "#main/calculation");
+        let calculation_exists = steps
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|step| step["id"] == "#main/calculation");
         assert!(calculation_exists, "'calculation' step is missing");
 
-        let plot_exists = steps.as_array().unwrap().iter().any(|step| step["id"] == "#main/plot");
+        let plot_exists = steps
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|step| step["id"] == "#main/plot");
         assert!(plot_exists, "'plot' step is missing");
     }
 
     fn normalize_path(path: &str) -> String {
-        Path::new(path).to_str().unwrap_or_default().replace("\\", "/")
+        Path::new(path)
+            .to_str()
+            .unwrap_or_default()
+            .replace("\\", "/")
     }
 
     #[test]
@@ -228,7 +282,10 @@ mod tests {
         let inputs_yaml_path = base_dir.join("testdata/hello_world/inputs.yml");
 
         assert!(cwl_path.exists(), "CWL file not found at {cwl_path:?}");
-        assert!(inputs_yaml_path.exists(), "Inputs YAML file not found at {inputs_yaml_path:?}");
+        assert!(
+            inputs_yaml_path.exists(),
+            "Inputs YAML file not found at {inputs_yaml_path:?}"
+        );
 
         let result = generate_workflow_json_from_cwl(&cwl_path, &Some(inputs_yaml_path));
 
@@ -256,7 +313,10 @@ mod tests {
         );
         let outputs = &json["outputs"];
         assert!(outputs.is_object(), "Outputs should be an object");
-        assert!(outputs["files"].is_array(), "outputs.files should be an array");
+        assert!(
+            outputs["files"].is_array(),
+            "outputs.files should be an array"
+        );
         assert_eq!(outputs["files"].as_array().unwrap().len(), 1);
         assert_eq!(outputs["files"][0], "results.svg");
 
@@ -274,12 +334,23 @@ mod tests {
         let steps = &main["steps"];
         assert!(steps.is_array(), "Steps should be an array");
 
-        assert!(!steps.as_array().unwrap().is_empty(), "Steps array should not be empty");
+        assert!(
+            !steps.as_array().unwrap().is_empty(),
+            "Steps array should not be empty"
+        );
 
-        let calculation_exists = steps.as_array().unwrap().iter().any(|step| step["id"] == "#main/calculation");
+        let calculation_exists = steps
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|step| step["id"] == "#main/calculation");
         assert!(calculation_exists, "'calculation' step is missing");
 
-        let plot_exists = steps.as_array().unwrap().iter().any(|step| step["id"] == "#main/plot");
+        let plot_exists = steps
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|step| step["id"] == "#main/plot");
         assert!(plot_exists, "'plot' step is missing");
     }
 }

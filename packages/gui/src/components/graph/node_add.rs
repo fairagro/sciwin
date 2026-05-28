@@ -3,13 +3,17 @@ use crate::{
     files::{get_cwl_files, get_submodules_cwl_files},
     use_app_state,
 };
-use commonwl::{CWLType, load_doc};
+use commonwl::{OneOrMany, inputs::InputType, load_cwl_file, types::CWLType};
 use dioxus::{html::geometry::ClientPoint, prelude::*};
 use dioxus_free_icons::{Icon, icons::go_icons::GoChevronRight};
 use std::path::PathBuf;
 
 #[component]
-pub fn NodeAddForm(open: Signal<bool>, pos: Signal<ClientPoint>, project_path: ReadSignal<PathBuf>) -> Element {
+pub fn NodeAddForm(
+    open: Signal<bool>,
+    pos: Signal<ClientPoint>,
+    project_path: ReadSignal<PathBuf>,
+) -> Element {
     let app_state = use_app_state();
     let files = use_memo(move || {
         open();
@@ -78,7 +82,8 @@ pub fn NodeAddItem(name: String, files: Vec<Node>) -> Element {
                             li { class: "min-w-48 px-2 py-1.25 items-center bg-fairagro-light-200/80 hover:bg-fairagro-light-400",
                                 button {
                                     onclick: move |_| {
-                                        let mut cwl = load_doc(&file.path).map_err(|e| anyhow::anyhow!("{e}"))?;
+                                        let mut cwl = load_cwl_file(&file.path, true)
+                                            .map_err(|e| anyhow::anyhow!("{e}"))?;
                                         let working_dir = app_state().working_directory.unwrap();
                                         if let Some(path_relative_to_root) = pathdiff::diff_paths(
                                             &file.path,
@@ -144,7 +149,7 @@ pub fn InputOutputMenu(is_input: bool, top_level_menu: Signal<bool>) -> Element 
                             li {
                                 TypeMenuItem {
                                     is_input,
-                                    type_: type_.clone(),
+                                    type_,
                                     is_active: active_type_index() == Some(idx),
                                     on_hover: move |_| active_type_index.set(Some(idx)),
                                     top_level_menu,
@@ -159,7 +164,13 @@ pub fn InputOutputMenu(is_input: bool, top_level_menu: Signal<bool>) -> Element 
 }
 
 #[component]
-pub fn TypeMenuItem(is_input: bool, type_: CWLType, is_active: bool, on_hover: EventHandler<()>, top_level_menu: Signal<bool>) -> Element {
+pub fn TypeMenuItem(
+    is_input: bool,
+    type_: CWLType,
+    is_active: bool,
+    on_hover: EventHandler<()>,
+    top_level_menu: Signal<bool>,
+) -> Element {
     rsx! {
         div { class: "flex relative", onmouseenter: move |_| on_hover.call(()),
 
@@ -176,11 +187,7 @@ pub fn TypeMenuItem(is_input: bool, type_: CWLType, is_active: bool, on_hover: E
 
             if is_active {
                 div { class: "absolute left-48 top-0",
-                    NameInputForm {
-                        is_input,
-                        type_: type_.clone(),
-                        top_level_menu,
-                    }
+                    NameInputForm { is_input, type_, top_level_menu }
                 }
             }
         }
@@ -205,13 +212,15 @@ pub fn NameInputForm(is_input: bool, type_: CWLType, top_level_menu: Signal<bool
                         let id = name_input();
                         if !id.is_empty() {
                             if is_input {
-                                app_state.write().workflow.add_input(&id, type_.clone())?;
+                                app_state
+                                    .write()
+                                    .workflow
+                                    .add_input(&id, OneOrMany::One(InputType::CWLType(type_)))?; // we are sucessful and can close the whole menu
                             } else {
-                                app_state.write().workflow.add_output(&id, type_.clone())?;
+                                app_state.write().workflow.add_output(&id, type_.into())?;
                             }
                             name_input.set(String::new());
                         }
-                        //we are sucessful and can close the whole menu
                         top_level_menu.set(false);
                     }
                     Ok(())
@@ -224,5 +233,8 @@ pub fn NameInputForm(is_input: bool, type_: CWLType, top_level_menu: Signal<bool
 
 fn type_iter() -> impl Iterator<Item = CWLType> {
     use CWLType::*;
-    vec![Null, Boolean, Int, Long, Float, Double, String, File, Directory, Any, Stdout, Stderr].into_iter()
+    vec![
+        Null, Boolean, Int, Long, Float, Double, String, File, Directory, Any,
+    ]
+    .into_iter()
 }

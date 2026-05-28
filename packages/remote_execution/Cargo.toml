@@ -8,7 +8,7 @@ authors.workspace = true
 
 [dependencies]
 reana_ext = { package = "reana", path = "../reana" }
-commonwl = { path = "../cwl" }
+commonwl.workspace = true
 util = { path = "../util" }
 s4n_core = { path = "../core" }
 anyhow.workspace = true

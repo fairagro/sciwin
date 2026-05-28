@@ -1,13 +1,12 @@
 use crate::layout::{INPUT_TEXT_CLASSES, RELOAD_TRIGGER, Route};
 use crate::{components::Terminal, use_app_state};
-use commonwl::CommandLineTool;
-use commonwl::execution::ContainerEngine;
+use commonwl::documents::CommandLineTool;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::go_icons::GoSync;
 use dioxus_free_icons::{Icon, icons::go_icons::GoAlert};
 use repository::Repository;
-use s4n_core::io;
 use s4n_core::tool::{ContainerInfo, ToolCreationOptions, create_tool};
+use s4n_core::{auto_container_engine, io};
 use std::env;
 use std::time::Duration;
 
@@ -61,34 +60,30 @@ pub fn ToolAddForm() -> Element {
                 let enable_network = enable_network();
                 let command = command();
 
-                let result = tokio::task::spawn_blocking(move || {
-                    let container_options = container_image
-                        .as_ref()
-                        .map(|image| ContainerInfo {
-                            image,
-                            tag: container_tag.as_deref(),
-                        });
-                    let command = shlex::split(&command).unwrap();
-                    let run_container = if container_options.is_some() {
-                        ContainerEngine::auto()
-                    } else {
+                let container_options = container_image
+                    .as_ref()
+                    .map(|image| ContainerInfo {
+                        image,
+                        tag: container_tag.as_deref(),
+                    });
+                let command = shlex::split(&command).unwrap();
+                let run_container = if container_options.is_some() {
+                    auto_container_engine()
+                } else {
+                    None
+                };
+                let options = ToolCreationOptions {
+                    command: &command,
+                    container: container_options,
+                    enable_network,
+                    commit: true,
+                    run_container,
+                    ..Default::default()
+                };
 
-                        None
-                    };
-                    let options = ToolCreationOptions {
-                        command: &command,
-                        container: container_options,
-                        enable_network,
-                        commit: true,
-                        run_container,
-                        ..Default::default()
-                    };
-                    create_tool(&options, tool_name, true)
-                });
-
-                let yaml = result.await??;
+                let yaml = create_tool(&options, tool_name, true).await?;
                 let cwl: CommandLineTool = serde_yaml::from_str(&yaml)?;
-                let path = io::get_qualified_filename(&cwl.base_command, name());
+                let path = io::get_qualified_filename(&cwl.base_command.unwrap(), name());
                 let path = working_dir().unwrap().join(path);
                 *RELOAD_TRIGGER.write() += 1;
                 env::set_current_dir(current)?;

@@ -1,5 +1,6 @@
 use crate::commands::{
-    AnnotateCommands, ConnectWorkflowArgs, CreateArgs, ExecuteCommands, InitArgs, InstallPackageArgs, ListCWLArgs, PackageArgs, RemoveCWLArgs, SaveArgs, VisualizeWorkflowArgs
+    ConnectWorkflowArgs, CreateArgs, ExecuteCommands, InitArgs, InstallPackageArgs, ListCWLArgs,
+    PackageArgs, RemoveCWLArgs, SaveArgs, VisualizeWorkflowArgs,
 };
 use clap::{Command, Parser, Subcommand};
 use clap_complete::{Generator, Shell, generate};
@@ -30,9 +31,15 @@ pub enum Commands {
     Init(InitArgs),
     #[command(about = "Creates a new CWL File or Workflow")]
     Create(CreateArgs),
-    #[command(about = "Lists either all CWL Files or details to a given file", visible_alias = "ls")]
+    #[command(
+        about = "Lists either all CWL Files or details to a given file",
+        visible_alias = "ls"
+    )]
     List(ListCWLArgs),
-    #[command(about = "Removes a CWL File from the workflows Directory", visible_alias = "rm")]
+    #[command(
+        about = "Removes a CWL File from the workflows Directory",
+        visible_alias = "rm"
+    )]
     Remove(RemoveCWLArgs),
     #[command(about = "Connects a workflow node")]
     Connect(ConnectWorkflowArgs),
@@ -46,17 +53,13 @@ pub enum Commands {
     Install(InstallPackageArgs),
     #[command(about = "Removes an installed workflow")]
     Uninstall(PackageArgs),
-    #[command(about = "Execution of CWL Files locally or on remote servers", visible_alias = "ex")]
+    #[command(
+        about = "Execution of CWL Files locally or on remote servers",
+        visible_alias = "ex"
+    )]
     Execute {
         #[command(subcommand)]
         command: ExecuteCommands,
-    },
-    #[command(about = "Annotate CWL files")]
-    Annotate {
-        #[command(subcommand)]
-        command: Option<AnnotateCommands>,
-        #[arg(value_name = "TOOL_NAME", required = false)]
-        tool_name: Option<String>,
     },
     #[command(about = "Generate shell completions")]
     Completions {
@@ -66,6 +69,11 @@ pub enum Commands {
 }
 
 pub fn generate_completions<G: Generator>(generator: G, cmd: &mut Command) -> anyhow::Result<()> {
-    generate(generator, cmd, cmd.get_name().to_string(), &mut io::stdout());
+    generate(
+        generator,
+        cmd,
+        cmd.get_name().to_string(),
+        &mut io::stdout(),
+    );
     Ok(())
 }

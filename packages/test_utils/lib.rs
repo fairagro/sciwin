@@ -20,7 +20,7 @@ pub fn setup_python(dir_str: &str) -> (String, String) {
     let venv_scripts = if cfg!(target_os = "windows") { "Scripts" } else { "bin" };
 
     //set up python venv
-    let output = Command::new("python")
+    let output = Command::new("python3")
         .arg("-m")
         .arg("venv")
         .arg(".venv")
