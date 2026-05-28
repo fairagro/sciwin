@@ -20,7 +20,8 @@ use commonwl::{
     },
     requirements::{
         DockerRequirement, EnvVarRequirement, EnvironmentDef, Include, InitialWorkDirRequirement,
-        ListingItems, NetworkAccess, StringOrInclude, ToolRequirements, WorkDirItems,
+        InlineJavascriptRequirement, ListingItems, NetworkAccess, StringOrInclude,
+        ToolRequirements, WorkDirItems,
     },
     storage::{StorageBackend, StoragePath},
     types::CWLType,
@@ -140,6 +141,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
 
     //parse command
     let mut cwl = parser::parse_command_line(&command);
+    cwl.cwl_version = Some("v1.2".to_string());
 
     // handle outputs
     if !outputs.is_empty() {
@@ -158,7 +160,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
         let backend = Arc::new(LocalBackend::new(
             run_container.unwrap_or(ContainerEngine::Docker),
             storage,
-            StoragePath::from_local(&env::temp_dir())
+            StoragePath::from_local(&env::temp_dir()),
         ));
 
         if run_container.is_some() {
@@ -193,6 +195,10 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
                     ),
                 )))
                 .build(),
+        );
+        append_requirement(
+            &mut clone_cwl,
+            ToolRequirements::InlineJavascriptRequirement(InlineJavascriptRequirement::default()),
         );
 
         let job = create_execution_request_from_document(
