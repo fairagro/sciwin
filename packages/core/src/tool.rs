@@ -8,8 +8,7 @@ use commonwl::{
     BoolOrExpression, OneOrMany,
     documents::{CWLDocument, CommandLineTool},
     engine::{
-        ContainerEngine, InputObject, LocalBackend, create_execution_request_from_document,
-        execute_commandline_tool,
+        ContainerEngine, InputObject, LocalBackend, create_execution_request_from_document, execute,
     },
     files::{Directory, FileOrDirectory},
     format::format_cwl,
@@ -209,7 +208,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> Result<CommandLi
             None,
         )?;
         let cancellation_token = CancellationToken::new();
-        execute_commandline_tool(backend, &job, cancellation_token).await?;
+        execute(backend, &job, cancellation_token).await?;
 
         // Handle modified files
         let mut files = repository::get_modified_files(&repo);
