@@ -304,28 +304,17 @@ fn add_tool_requirements(
                     let mut items: Vec<ListingItems> =
                         entries.map(ListingItems::FileOrDirectory).collect();
                     items.push(ListingItems::Expression(s.clone()));
-                    iwdr.listing =
-                        WorkDirItems::ListingItems(Box::new(commonwl::OneOrMany::Many(items)));
+                    iwdr.listing = WorkDirItems::ListingItems(items);
                 }
-                WorkDirItems::ListingItems(one_or_many) => match &mut **one_or_many {
-                    OneOrMany::One(item) => {
-                        **one_or_many = OneOrMany::Many(
-                            vec![item.clone()]
-                                .into_iter()
-                                .chain(entries.map(ListingItems::FileOrDirectory))
-                                .collect(),
-                        );
-                    }
-                    OneOrMany::Many(items) => {
-                        items.extend(entries.map(ListingItems::FileOrDirectory));
-                    }
-                },
+                WorkDirItems::ListingItems(items) => {
+                    items.extend(entries.map(ListingItems::FileOrDirectory));
+                }
             }
         } else {
             let items: Vec<ListingItems> = entries.map(ListingItems::FileOrDirectory).collect();
             if !items.is_empty() {
                 let iwdr = InitialWorkDirRequirement {
-                    listing: WorkDirItems::ListingItems(Box::new(OneOrMany::Many(items))),
+                    listing: WorkDirItems::ListingItems(items),
                 };
                 append_requirement(&mut cwl, ToolRequirements::InitialWorkDirRequirement(iwdr));
             }
@@ -398,22 +387,11 @@ fn prepare_save(
             } else if let ToolRequirements::InitialWorkDirRequirement(iwdr) = requirement
                 && let WorkDirItems::ListingItems(listing) = &mut iwdr.listing
             {
-                match &mut **listing {
-                    OneOrMany::One(item) => {
-                        if let ListingItems::Dirent(dirent) = item
-                            && let StringOrInclude::Include(include) = &mut dirent.entry
-                        {
-                            include.include = resolve_path(&include.include, path);
-                        }
-                    }
-                    OneOrMany::Many(items) => {
-                        for item in items {
-                            if let ListingItems::Dirent(dirent) = item
-                                && let StringOrInclude::Include(include) = &mut dirent.entry
-                            {
-                                include.include = resolve_path(&include.include, path);
-                            }
-                        }
+                for item in listing {
+                    if let ListingItems::Dirent(dirent) = item
+                        && let StringOrInclude::Include(include) = &mut dirent.entry
+                    {
+                        include.include = resolve_path(&include.include, path);
                     }
                 }
             }
@@ -459,14 +437,11 @@ fn get_iwdr_roots(cwl: &CommandLineTool) -> Vec<String> {
     if let Some(iwdr) = cwl.get_requirement::<InitialWorkDirRequirement>() {
         match &iwdr.listing {
             WorkDirItems::Expression(_) => {}
-            WorkDirItems::ListingItems(oom) => match &**oom {
-                OneOrMany::One(item) => get_iwdr_roots_for_item(item, &mut roots),
-                OneOrMany::Many(items) => {
-                    for item in items {
-                        get_iwdr_roots_for_item(item, &mut roots);
-                    }
+            WorkDirItems::ListingItems(items) => {
+                for item in items {
+                    get_iwdr_roots_for_item(item, &mut roots);
                 }
-            },
+            }
         }
     }
     roots
@@ -532,18 +507,16 @@ mod tests {
             .inputs(inputs)
             .requirements(vec![
                 ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement {
-                    listing: WorkDirItems::ListingItems(Box::new(OneOrMany::One(
-                        ListingItems::Dirent(
-                            Dirent::builder()
-                                .entry(StringOrInclude::Include(
-                                    Include::builder()
-                                        .include(os_path("test/script.py"))
-                                        .build(),
-                                ))
-                                .entryname("test/script.py".to_string())
-                                .build(),
-                        ),
-                    ))),
+                    listing: WorkDirItems::ListingItems(vec![ListingItems::Dirent(
+                        Dirent::builder()
+                            .entry(StringOrInclude::Include(
+                                Include::builder()
+                                    .include(os_path("test/script.py"))
+                                    .build(),
+                            ))
+                            .entryname("test/script.py".to_string())
+                            .build(),
+                    )]),
                 }),
                 ToolRequirements::DockerRequirement(
                     DockerRequirement::builder()
@@ -576,18 +549,16 @@ mod tests {
         assert_eq!(
             *req_0,
             ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement {
-                listing: WorkDirItems::ListingItems(Box::new(OneOrMany::One(
-                    ListingItems::Dirent(
-                        Dirent::builder()
-                            .entry(StringOrInclude::Include(
-                                Include::builder()
-                                    .include(os_path("../../test/script.py"))
-                                    .build()
-                            ))
-                            .entryname("test/script.py".to_string())
-                            .build()
-                    )
-                ))),
+                listing: WorkDirItems::ListingItems(vec![ListingItems::Dirent(
+                    Dirent::builder()
+                        .entry(StringOrInclude::Include(
+                            Include::builder()
+                                .include(os_path("../../test/script.py"))
+                                .build()
+                        ))
+                        .entryname("test/script.py".to_string())
+                        .build()
+                )]),
             })
         );
         assert_eq!(

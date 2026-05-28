@@ -2,7 +2,7 @@ use std::path::Path;
 
 use super::BAD_WORDS;
 use commonwl::{
-    IntegerOrExpression, OneOrMany,
+    IntegerOrExpression,
     documents::CommandLineTool,
     files::{Directory, Dirent, File, FileOrDirectory},
     inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
@@ -144,21 +144,14 @@ pub(crate) fn add_fixed_inputs(
                         .build();
                     match &mut req.listing {
                         WorkDirItems::Expression(expr) => {
-                            req.listing =
-                                WorkDirItems::ListingItems(Box::new(OneOrMany::Many(vec![
-                                    ListingItems::Dirent(dirent),
-                                    ListingItems::Expression(expr.to_string()),
-                                ])));
+                            req.listing = WorkDirItems::ListingItems(vec![
+                                ListingItems::Dirent(dirent),
+                                ListingItems::Expression(expr.to_string()),
+                            ]);
                         }
-                        WorkDirItems::ListingItems(items) => match &mut **items {
-                            OneOrMany::One(item) => {
-                                **items = OneOrMany::Many(vec![
-                                    item.clone(),
-                                    ListingItems::Dirent(dirent),
-                                ]);
-                            }
-                            OneOrMany::Many(items) => items.push(ListingItems::Dirent(dirent)),
-                        },
+                        WorkDirItems::ListingItems(items) => {
+                            items.push(ListingItems::Dirent(dirent));
+                        }
                     }
                     break;
                 }

@@ -211,14 +211,11 @@ fn adjust_basecommand(tool: &mut CommandLineTool) -> Result<()> {
     if let Some(iwdr) = tool.get_requirement_mut::<InitialWorkDirRequirement>() {
         match &mut iwdr.listing {
             WorkDirItems::Expression(_) => {}
-            WorkDirItems::ListingItems(one_or_many) => match &mut **one_or_many {
-                OneOrMany::One(item) => adjust_iwdr_item(item, &mut command_vec, &mut changed)?,
-                OneOrMany::Many(items) => {
-                    for item in items {
-                        adjust_iwdr_item(item, &mut command_vec, &mut changed)?;
-                    }
+            WorkDirItems::ListingItems(items) => {
+                for item in items {
+                    adjust_iwdr_item(item, &mut command_vec, &mut changed)?;
                 }
-            },
+            }
         }
     }
     if changed {

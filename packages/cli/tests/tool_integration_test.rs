@@ -94,7 +94,7 @@ pub async fn tool_create_test_inputs_outputs() {
     let WorkDirItems::ListingItems(listing) = &iwdr.listing else {
         panic!("InitialWorkDirRequirement does not contain listing items");
     };
-    assert!(listing.as_many().len() == 2);
+    assert!(listing.len() == 2);
 
     //no uncommitted left?
     assert!(get_modified_files(&repo).is_empty());
@@ -518,9 +518,9 @@ pub async fn test_shell_script() {
     let WorkDirItems::ListingItems(listing) = &iwdr.listing else {
         panic!("InitialWorkDirRequirement does not contain listing items");
     };
-    assert!(listing.as_many().len() == 1);
+    assert!(listing.len() == 1);
 
-    let items = listing.as_many();
+    let items = listing;
     let item = items.first().unwrap();
     let ListingItems::Dirent(dirent) = item else {
         panic!("ListingItems is not of type Dirent");
@@ -695,7 +695,7 @@ pub async fn tool_create_mount() {
     let WorkDirItems::ListingItems(listing) = &iwdr.listing else {
         panic!("InitialWorkDirRequirement does not contain listing items");
     };
-    assert!(listing.as_many().len() == 1);
+    assert!(listing.len() == 1);
 }
 
 #[fstest(repo = true, tokio = true)]

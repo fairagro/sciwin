@@ -160,8 +160,7 @@ fn iwdr_by_file(filename: &str) -> InitialWorkDirRequirement {
     InitialWorkDirRequirement::builder()
     .listing(
         WorkDirItems::ListingItems(
-            Box::new(
-                OneOrMany::One(
+            vec![
                     ListingItems::Dirent(
                         Dirent::builder().
                         entry(StringOrInclude::Include(
@@ -170,10 +169,10 @@ fn iwdr_by_file(filename: &str) -> InitialWorkDirRequirement {
                         .entryname(filename)
                         .build()
                     )
+                    ]
                 )
             )
-        )
-    )
+    
     .build()
 }
 
