@@ -16,8 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: cargo-bins/cargo-binstall@main
       - name: Install Dioxus 📈
-        run: cargo install dioxus-cli  --version 0.7.3 --locked
+        run: cargo binstall dioxus-cli
       - name: Create bundle
         run: dx bundle -p sciwin --desktop --release
       - uses: actions/upload-artifact@v5
@@ -39,23 +40,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - name: Install prerequisites
-        run: |
-          sudo apt-get update 
-          sudo apt-get install -y \
-          libgtk-3-dev \
-          libglib2.0-dev \
-          libwebkit2gtk-4.1-dev \
-          build-essential \
-          curl \
-          wget \
-          file \
-          libxdo-dev \
-          libssl-dev \
-          libayatana-appindicator3-dev \
-          librsvg2-dev
+      - uses: cargo-bins/cargo-binstall@main
       - name: Install Dioxus 📈
-        run: cargo install dioxus-cli --version 0.7.3 --locked
+        run: cargo binstall dioxus-cli
       - name: Create bundle
         run: dx bundle -p sciwin --desktop --release
       - uses: actions/upload-artifact@v5
