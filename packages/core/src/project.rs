@@ -2,7 +2,6 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use repository::Repository;
 use repository::{commit, get_modified_files, initial_commit, stage_all};
-use std::env;
 use std::path::Component;
 use std::{
     fs,
@@ -123,7 +122,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
         }
     }
 
-    let cwd = dunce::canonicalize(env::current_dir()?)?;
+    let cwd = dunce::canonicalize(".")?;
     let mut path = cwd.join(folder);
     path = verify_relative_to_cwd(&path)?;
 
@@ -131,7 +130,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
 }
 
 fn verify_relative_to_cwd(path: &Path) -> anyhow::Result<PathBuf> {
-    let cwd = dunce::canonicalize(env::current_dir()?)?;
+    let cwd = dunce::canonicalize(".")?;
 
     let mut path = path.to_path_buf();
     if path.exists() {
