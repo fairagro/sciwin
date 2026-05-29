@@ -3,7 +3,6 @@ use anyhow::{Context, Result};
 use repository::Repository;
 use repository::{commit, get_modified_files, initial_commit, stage_all};
 use std::env;
-use std::path::Component;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -95,16 +94,8 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
-    if folder
-        .components()
-        .any(|component| matches!(component, Component::ParentDir))
-    {
-        anyhow::bail!(
-            "Provided path must be without parent traversal: {folder:?}"
-        );
-    }
-
     let cwd = dunce::canonicalize(env::current_dir()?)?;
+
     let path = if folder.is_absolute() {
         folder.to_path_buf()
     } else {
@@ -112,15 +103,34 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
     };
 
     let canonical_path = if path.exists() {
-        dunce::canonicalize(&path)
-            .with_context(|| format!("Could not canonicalize {path:?}"))?
+        dunce::canonicalize(&path).with_context(|| format!("Could not canonicalize {path:?}"))?
     } else {
-        let parent = path.parent().context("Path has no parent")?;
-        let canonical_parent = parent
-            .canonicalize()
-            .with_context(|| format!("Could not canonicalize parent {parent:?}"))?;
-        let foldername = path.file_name().context("Path has no filename")?;
-        canonical_parent.join(foldername)
+        // Anchor the ENTIRE remaining path against the canonical parent,
+        // stripping it component by component until we find an existing prefix.
+        let mut existing = path.as_path();
+        let mut suffix = vec![];
+
+        loop {
+            if existing.exists() {
+                break;
+            }
+            let name = existing
+                .file_name()
+                .context("Path has no filename while walking up")?
+                .to_owned();
+            suffix.push(name);
+            existing = existing
+                .parent()
+                .context("Reached filesystem root without finding existing parent")?;
+        }
+
+        let mut base = dunce::canonicalize(existing)
+            .with_context(|| format!("Could not canonicalize {existing:?}"))?;
+        // Re-apply suffix in reverse (it was collected leaf→root)
+        for component in suffix.into_iter().rev() {
+            base.push(component);
+        }
+        base
     };
 
     if !canonical_path.starts_with(&cwd) {
@@ -129,7 +139,6 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
              {canonical_path:?}, working_dir is: {cwd:?}"
         );
     }
-
     if canonical_path.exists() && canonical_path.is_file() {
         anyhow::bail!("Provided path is a file, expected a directory: {canonical_path:?}");
     }
