@@ -102,7 +102,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
         cwd.join(folder)
     };
 
-    if !path.starts_with(cwd) {
+    if !path.starts_with(&cwd) {
         anyhow::bail!("Provided path is outside of the current working directory: {path:?}, working_dir is: {cwd:?}");
     }
 
