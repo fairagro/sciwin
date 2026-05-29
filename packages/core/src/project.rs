@@ -60,11 +60,13 @@ fn is_git_repo(path: &Path) -> bool {
 const GITIGNORE_CONTENT: &str = include_str!("../resources/default.gitignore");
 
 fn init_git_repo(base_dir: &Path) -> anyhow::Result<Repository> {
+    let base_dir = verify_relative_to_cwd(base_dir)?;
+
     if !base_dir.exists() {
-        fs::create_dir_all(base_dir)
+        fs::create_dir_all(&base_dir)
             .with_context(|| format!("Could not create Repository at {base_dir:?}"))?;
     }
-    let repo = Repository::init(base_dir)
+    let repo = Repository::init(&base_dir)
         .with_context(|| format!("Could not init Repository at {base_dir:?}"))?;
 
     let gitignore_path = base_dir.join(PathBuf::from(".gitignore"));
@@ -81,6 +83,8 @@ fn init_git_repo(base_dir: &Path) -> anyhow::Result<Repository> {
 }
 
 fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
+    let base_dir = verify_relative_to_cwd(base_dir)?;
+
     // Create the base directory
     if !base_dir.exists() {
         fs::create_dir_all(base_dir)?;
