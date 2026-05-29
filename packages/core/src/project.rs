@@ -104,7 +104,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
         );
     }
 
-    let cwd = env::current_dir()?.canonicalize()?;
+    let cwd = dunce::canonicalize(env::current_dir()?)?;
     let path = if folder.is_absolute() {
         folder.to_path_buf()
     } else {
@@ -112,7 +112,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
     };
 
     let canonical_path = if path.exists() {
-        path.canonicalize()
+        dunce::canonicalize(&path)
             .with_context(|| format!("Could not canonicalize {path:?}"))?
     } else {
         let parent = path.parent().context("Path has no parent")?;

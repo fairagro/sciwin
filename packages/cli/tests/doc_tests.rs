@@ -17,7 +17,7 @@ fn setup() -> (PathBuf, TempDir) {
     copy_dir(test_folder, dir.path()).unwrap();
 
     let current = env::current_dir().unwrap();
-    let canonicalized = dir.path().canonicalize().unwrap();
+    let canonicalized = dunce::canonicalize(dir.path()).unwrap();
     env::set_current_dir(&canonicalized).unwrap();
 
     //init

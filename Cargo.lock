@@ -7880,6 +7880,7 @@ dependencies = [
  "commonwl",
  "dialoguer",
  "dircpy",
+ "dunce",
  "fstest",
  "ignore",
  "log",
@@ -7907,6 +7908,7 @@ version = "1.2.0"
 dependencies = [
  "anyhow",
  "commonwl",
+ "dunce",
  "pathdiff",
  "rand 0.10.1",
  "repository",

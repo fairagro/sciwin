@@ -25,6 +25,7 @@ semver = { version = "1.0.26", features = ["serde"] }
 shlex = "2.0.1"
 slugify = "0.1.0"
 smart-default = "0.7.1"
+dunce.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 
