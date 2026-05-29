@@ -87,7 +87,7 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 
     // Create the base directory
     if !base_dir.exists() {
-        fs::create_dir_all(base_dir)?;
+        fs::create_dir_all(&base_dir)?;
     }
 
     // Check and create subdirectories
@@ -130,6 +130,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
 fn verify_relative_to_cwd(path: &Path) -> anyhow::Result<PathBuf> {
     let cwd = dunce::canonicalize(env::current_dir()?)?;
 
+    let mut path = path.to_path_buf();
     if path.exists() {
         path = dunce::canonicalize(&path)
             .with_context(|| format!("Could not canonicalize {path:?}"))?;
@@ -180,10 +181,15 @@ mod tests {
     #[test]
     #[serial]
     fn test_init_git_repo() {
+        let cwd = env::current_dir().unwrap();
         let temp_dir = tempfile::tempdir().unwrap();
-        let base_folder = temp_dir.path().join("my_repo");
 
+        env::set_current_dir(&temp_dir).unwrap();
+
+        let base_folder = temp_dir.path().join("my_repo");
         let result = init_git_repo(&base_folder);
+
+        env::set_current_dir(cwd).unwrap();
         assert!(result.is_ok(), "Expected successful initialization");
 
         // Verify that the .git directory was created
@@ -227,7 +233,12 @@ mod tests {
 
         let base_folder = temp_dir.path();
 
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(base_folder).unwrap();
+
         let result = create_minimal_folder_structure(base_folder);
+
+        env::set_current_dir(&cwd).unwrap();
 
         //test if result is ok
         assert!(result.is_ok(), "Expected successful initialization");
@@ -248,8 +259,15 @@ mod tests {
         let base_folder = temp_file.path();
 
         eprintln!("Base folder path: {base_folder:?}");
+
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(base_folder).unwrap();
+
         //path to file instead of a directory, assert that it fails
         let result = create_minimal_folder_structure(base_folder);
+
+        env::set_current_dir(&cwd).unwrap();
+
         assert!(result.is_err(), "Expected failed initialization");
     }
 
