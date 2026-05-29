@@ -35,6 +35,8 @@ clap_complete = "4.5.61"
 ignore = "0.4.23"
 prettytable-rs = "0.10.0"
 
+dunce.workspace = true
+
 syntect = { version = "5.2.0", default-features = false, features = [
     "regex-fancy",
     "parsing",

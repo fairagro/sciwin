@@ -3,14 +3,17 @@ use anyhow::{Context, Result};
 use repository::Repository;
 use repository::{commit, get_modified_files, initial_commit, stage_all};
 use std::env;
+use std::path::Component;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 use std::{fs::File, io::Write};
 
-pub fn initialize_project(folder: &Path, arc: bool) -> anyhow::Result<()> {
-    let folder = verify_base_dir(folder)?;
+/// Initializes a new project in the specified folder. If no folder is provided, it initializes in the current directory.
+/// The provided path must be relative to the current working directory.
+pub fn initialize_project(folder: impl AsRef<Path>) -> anyhow::Result<()> {
+    let folder = verify_base_dir(folder.as_ref())?;
 
     let repo = if is_git_repo(&folder) {
         Repository::open(&folder)
@@ -18,10 +21,6 @@ pub fn initialize_project(folder: &Path, arc: bool) -> anyhow::Result<()> {
     } else {
         init_git_repo(&folder)?
     };
-
-    if arc {
-        create_arc_folder_structure(&folder)?;
-    }
 
     create_minimal_folder_structure(&folder)?;
 
@@ -98,72 +97,38 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
-    let cwd = env::current_dir()?.canonicalize()?;
-
-    let path = if folder.is_absolute() {
-        folder.to_path_buf()
-    } else {
-        cwd.join(folder)
-    };
-
-    if !path.starts_with(cwd) {
-        anyhow::bail!("Provided path is outside of the current working directory: {path:?}");
+    if folder.is_absolute() {
+        anyhow::bail!("Provided path must be relative, got absolute path: {folder:?}");
     }
 
+    for component in folder.components() {
+        match component {
+            Component::ParentDir => {
+                anyhow::bail!("Provided path must not contain parent directory components ('..')");
+            }
+            Component::Prefix(_) => {
+                anyhow::bail!("Provided path contains an invalid path prefix");
+            }
+            Component::RootDir => {
+                anyhow::bail!("Provided path must not contain root directory components");
+            }
+            _ => {}
+        }
+    }
+
+    let cwd = dunce::canonicalize(env::current_dir()?)?;
+    let mut path = cwd.join(folder);
+
     if path.exists() {
+        path = dunce::canonicalize(&path)
+            .with_context(|| format!("Could not canonicalize {path:?}"))?;
+
         if path.is_file() {
             anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
         }
-
-        return path
-            .canonicalize()
-            .with_context(|| format!("Could not canonicalize {path:?}"));
     }
 
-    let parent = path.parent().context("Path has to parent")?;
-    let parent = parent.canonicalize()?;
-    let foldername = path.file_name().context("Path has to filename")?;
-
-    Ok(parent.join(foldername))
-}
-
-fn create_arc_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
-    // Create the base directory
-    if !base_dir.exists() {
-        fs::create_dir_all(base_dir)
-            .with_context(|| format!("Could not create folder at {base_dir:?}"))?;
-    }
-
-    create_investigation_excel_file(base_dir.to_str().unwrap_or(""))?;
-    // Check and create subdirectories
-    let dirs = vec!["studies", "assays", "runs"];
-    for dir_name in dirs {
-        let dir = base_dir.join(dir_name);
-        if !dir.exists() {
-            fs::create_dir_all(&dir)
-                .with_context(|| format!("Could not create folder at {dir:?}"))?;
-        }
-        File::create(dir.join(".gitkeep"))
-            .with_context(|| format!("Could not create .gitkeep at {dir:?}"))?;
-    }
-
-    Ok(())
-}
-
-fn create_investigation_excel_file(directory: &str) -> anyhow::Result<()> {
-    // Construct the full path for the Excel file
-    let excel_path = PathBuf::from(directory).join("isa_investigation.xlsx");
-
-    //read binary file from resources
-    let bin = include_bytes!("../resources/isa.investigation.xlsx");
-
-    // Create the directory if it doesn't exist
-    fs::create_dir_all(excel_path.parent().unwrap())
-        .with_context(|| format!("Could not create folder for {excel_path:?}"))?;
-    // Write the binary content to the file
-    fs::write(&excel_path, bin).with_context(|| format!("Could not create {excel_path:?}"))?;
-
-    Ok(())
+    Ok(path)
 }
 
 pub fn git_cleanup(folder_name: Option<String>) -> Result<()> {
@@ -183,7 +148,6 @@ pub fn git_cleanup(folder_name: Option<String>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use calamine::{Reader, Xlsx, open_workbook};
     use serial_test::serial;
     use std::{env, path::Path};
     use tempfile::{Builder, NamedTempFile, tempdir};
@@ -274,13 +238,11 @@ mod tests {
             .unwrap();
         check_git_user().unwrap();
 
-        let base_folder = temp_dir.path();
-
         let cwd = env::current_dir().unwrap();
         env::set_current_dir(&temp_dir).unwrap();
 
         //call method with temp dir
-        let result = initialize_project(base_folder, false);
+        let result = initialize_project("");
         eprintln!("{result:#?}");
         assert!(result.is_ok(), "Expected successful initialization");
 
@@ -288,81 +250,12 @@ mod tests {
 
         //check if directories were created
         let expected_dirs = vec!["workflows"];
-        //check that other directories are not created
-        let unexpected_dirs = vec!["assays", "studies", "runs"];
 
         //assert minimal folders do exist
         for dir in &expected_dirs {
             let full_path = PathBuf::from(temp_dir.path()).join(dir);
             assert!(full_path.exists(), "Directory {dir} does not exist");
         }
-        //assert other arc folders do not exist
-        for dir in &unexpected_dirs {
-            let full_path = PathBuf::from(temp_dir.path()).join(dir);
-            assert!(
-                !full_path.exists(),
-                "Directory {dir} does exist, but should not exist"
-            );
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn test_create_investigation_excel_file() {
-        //create directory
-        let temp_dir = tempdir().unwrap();
-        let directory = temp_dir.path().to_str().unwrap();
-
-        //call the function
-        assert!(
-            create_investigation_excel_file(directory).is_ok(),
-            "Unexpected function create_investigation_excel fail"
-        );
-
-        //verify file exists
-        let excel_path = PathBuf::from(directory).join("isa_investigation.xlsx");
-        assert!(excel_path.exists(), "Excel file does not exist");
-
-        let workbook: Xlsx<_> = open_workbook(excel_path).expect("Cannot open file");
-
-        let sheets = workbook.sheet_names();
-
-        //verify sheet name
-        assert_eq!(
-            sheets[0], "isa_investigation",
-            "Worksheet name is incorrect"
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn test_create_arc_folder_structure() {
-        let temp_dir = tempdir().unwrap();
-
-        let base_folder = temp_dir.path();
-
-        let result = create_arc_folder_structure(base_folder);
-
-        assert!(result.is_ok(), "Expected successful initialization");
-
-        let expected_dirs = vec!["assays", "studies", "runs"];
-        //assert that folders are created
-        for dir in &expected_dirs {
-            let full_path = PathBuf::from(temp_dir.path()).join(dir);
-            assert!(full_path.exists(), "Directory {dir} does not exist");
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn test_create_arc_folder_structure_invalid() {
-        //this test only gives create_arc_folder_structure a file instead of a directory
-        let temp_file = NamedTempFile::new().unwrap();
-        let base_path = temp_file.path();
-
-        let result = create_arc_folder_structure(base_path);
-        //result should not be okay because of invalid input
-        assert!(result.is_err(), "Expected failed initialization");
     }
 
     #[test]
@@ -399,7 +292,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         env::set_current_dir(&temp_dir).unwrap();
         let test_folder = temp_dir.path().join("my_repo");
-        let result = initialize_project(test_folder.as_path(), false);
+        let result = initialize_project("my_repo");
         if let Err(e) = &result {
             eprintln!("Error initializing git repo: {}", e);
         }
