@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use repository::Repository;
 use repository::{commit, get_modified_files, initial_commit, stage_all};
 use std::env;
+use std::path::Component;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -94,6 +95,15 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
+    if folder
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        anyhow::bail!(
+            "Provided path must be without parent traversal: {folder:?}"
+        );
+    }
+
     let cwd = env::current_dir()?.canonicalize()?;
     let path = if folder.is_absolute() {
         folder.to_path_buf()
