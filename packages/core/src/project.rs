@@ -118,6 +118,13 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
 
     let cwd = dunce::canonicalize(env::current_dir()?)?;
     let mut path = cwd.join(folder);
+    path = verify_relative_to_cwd(&path)?;
+
+    Ok(path)
+}
+
+fn verify_relative_to_cwd(path: &Path) -> anyhow::Result<PathBuf> {
+    let cwd = dunce::canonicalize(env::current_dir()?)?;
 
     if path.exists() {
         path = dunce::canonicalize(&path)
