@@ -136,23 +136,24 @@ fn verify_relative_to_cwd(path: &Path) -> anyhow::Result<PathBuf> {
     if path.exists() {
         path = dunce::canonicalize(&path)
             .with_context(|| format!("Could not canonicalize {path:?}"))?;
-
-        //check whether it still stars with cwd
-        if !path.starts_with(&cwd) {
-            anyhow::bail!("Provided path escapes the current working directory: {path:?}");
-        }
-
-        if path.is_file() {
-            anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
-        }
     } else if let Some(parent) = path.parent() {
         let canonical_parent = dunce::canonicalize(parent)
             .with_context(|| format!("Could not canonicalize parent directory {parent:?}"))?;
-        if !canonical_parent.starts_with(&cwd) {
-            anyhow::bail!("Provided path resolves outside the current working directory: {path:?}");
-        }
+        let file_name = path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Provided path has no valid file name: {path:?}"))?;
+        path = canonical_parent.join(file_name);
     } else {
         anyhow::bail!("Provided path has no valid parent directory: {path:?}");
+    }
+
+    // check whether it still starts with cwd
+    if !path.starts_with(&cwd) {
+        anyhow::bail!("Provided path escapes the current working directory: {path:?}");
+    }
+
+    if path.exists() && path.is_file() {
+        anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
     }
 
     Ok(path)
