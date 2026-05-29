@@ -47,7 +47,7 @@ pub fn test_remove_workflow() {
     let current = env::current_dir().unwrap();
     env::set_current_dir(dir.path()).unwrap();
 
-    initialize_project(dir.path()).unwrap();
+    initialize_project("").unwrap();
     create_workflow(&CreateArgs {
         name: Some("test".to_string()),
         ..Default::default()
@@ -78,7 +78,7 @@ pub fn test_workflow() -> Result<(), Box<dyn std::error::Error>> {
     let current = env::current_dir().unwrap();
 
     env::set_current_dir(dir.path()).unwrap();
-    initialize_project(dir.path()).unwrap();
+    initialize_project("").unwrap();
 
     create_and_write_file("workflows/calculation/calculation.cwl", CALCULATION_FILE).unwrap();
     create_and_write_file("workflows/plot/plot.cwl", PLOT_FILE).unwrap();
@@ -183,7 +183,7 @@ pub fn test_workflow_optional_flags() -> Result<(), Box<dyn std::error::Error>> 
     let current = env::current_dir().unwrap();
 
     env::set_current_dir(dir.path()).unwrap();
-    initialize_project(dir.path()).unwrap();
+    initialize_project("").unwrap();
 
     create_and_write_file("workflows/calculation/calculation.cwl", CALCULATION_FILE).unwrap();
     create_and_write_file("workflows/plot/plot.cwl", PLOT_FILE).unwrap();

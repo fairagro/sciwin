@@ -500,7 +500,7 @@ pub async fn test_example_project() {
     check_git_user().unwrap();
 
     //init project
-    initialize_project(dir.path()).expect("Could not init s4n");
+    initialize_project("").expect("Could not init s4n");
 
     //create calculation tool
     create_tool(&CreateArgs {
