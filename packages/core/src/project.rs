@@ -5,7 +5,7 @@ use repository::{commit, get_modified_files, initial_commit, stage_all};
 use std::env;
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 use std::{fs::File, io::Write};
 
@@ -98,27 +98,40 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
-    let path = if folder.is_absolute() {
-        folder.to_path_buf()
-    } else {
-        env::current_dir()?.join(folder)
-    };
+    let cwd = env::current_dir()?.canonicalize()?;
 
-    if path.exists() {
+    if folder.is_absolute() {
+        anyhow::bail!("Provided path must be relative to the current working directory: {folder:?}");
+    }
+
+    if folder
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        anyhow::bail!("Provided path must not contain parent directory traversal ('..'): {folder:?}");
+    }
+
+    let path = cwd.join(folder);
+
+    let resolved = if path.exists() {
         if path.is_file() {
             anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
         }
 
-        return path
-            .canonicalize()
-            .with_context(|| format!("Could not canonicalize {path:?}"));
+        path.canonicalize()
+            .with_context(|| format!("Could not canonicalize {path:?}"))?
+    } else {
+        let parent = path.parent().context("Path has to parent")?;
+        let parent = parent.canonicalize()?;
+        let foldername = path.file_name().context("Path has to filename")?;
+        parent.join(foldername)
+    };
+
+    if !resolved.starts_with(&cwd) {
+        anyhow::bail!("Resolved path escapes current working directory: {resolved:?}");
     }
 
-    let parent = path.parent().context("Path has to parent")?;
-    let parent = parent.canonicalize()?;
-    let foldername = path.file_name().context("Path has to filename")?;
-
-    Ok(parent.join(foldername))
+    Ok(resolved)
 }
 
 fn create_arc_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
