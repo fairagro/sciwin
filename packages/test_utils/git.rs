@@ -18,17 +18,19 @@ pub(super) fn stage_all(repo: &Repository) -> Result<(), git2::Error> {
 }
 
 pub fn check_git_user() -> Result<(), git2::Error> {
+    let mut last_err: Option<git2::Error> = None;
     for i in 0..5 {
         match write_config() {
             Ok(_) => return Ok(()),
-            Err(_) => {
+            Err(err) => {
+                last_err = Some(err);
                 eprintln!("git config is currently being accessed. Attempt #{i}");
                 std::thread::sleep(Duration::from_millis(100))
             }
         }
     }
 
-    Ok(())
+    Err(last_err.expect("last_err must be set after retries are exhausted"))
 }
 
 fn write_config() -> Result<(), git2::Error> {
