@@ -123,9 +123,22 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
         path = dunce::canonicalize(&path)
             .with_context(|| format!("Could not canonicalize {path:?}"))?;
 
+        //check whether it still stars with cwd
+        if !path.starts_with(&cwd) {
+            anyhow::bail!("Provided path escapes the current working directory: {path:?}");
+        }
+
         if path.is_file() {
             anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
         }
+    } else if let Some(parent) = path.parent() {
+        let canonical_parent = dunce::canonicalize(parent)
+            .with_context(|| format!("Could not canonicalize parent directory {parent:?}"))?;
+        if !canonical_parent.starts_with(&cwd) {
+            anyhow::bail!("Provided path resolves outside the current working directory: {path:?}");
+        }
+    } else {
+        anyhow::bail!("Provided path has no valid parent directory: {path:?}");
     }
 
     Ok(path)
