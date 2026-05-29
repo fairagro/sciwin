@@ -256,15 +256,16 @@ mod tests {
     fn test_create_minimal_folder_structure_invalid() {
         //create an invalid file input
         let temp_file = NamedTempFile::new().unwrap();
-        let base_folder = temp_file.path();
+        let base_folder_invalid = temp_file.path();
+        let base_dir = base_folder_invalid.parent().unwrap();
 
-        eprintln!("Base folder path: {base_folder:?}");
+        eprintln!("Base folder path: {base_folder_invalid:?}");
 
         let cwd = env::current_dir().unwrap();
-        env::set_current_dir(base_folder).unwrap();
+        env::set_current_dir(base_dir).unwrap();
 
         //path to file instead of a directory, assert that it fails
-        let result = create_minimal_folder_structure(base_folder);
+        let result = create_minimal_folder_structure(base_folder_invalid);
 
         env::set_current_dir(&cwd).unwrap();
 
