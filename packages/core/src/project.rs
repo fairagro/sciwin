@@ -113,6 +113,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
             Component::Prefix(_) => {
                 anyhow::bail!("Provided path contains an invalid path prefix");
             }
+            Component::CurDir => anyhow::bail!("Provided path must not be current directory '.'"),
             Component::RootDir => {
                 anyhow::bail!("Provided path must not contain root directory components");
             }
