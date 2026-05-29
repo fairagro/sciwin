@@ -276,10 +276,15 @@ mod tests {
 
         let base_folder = temp_dir.path();
 
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+
         //call method with temp dir
         let result = initialize_project(base_folder, false);
         eprintln!("{result:#?}");
         assert!(result.is_ok(), "Expected successful initialization");
+
+        env::set_current_dir(&cwd).unwrap();
 
         //check if directories were created
         let expected_dirs = vec!["workflows"];
@@ -363,6 +368,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_cleanup_no_folder() {
+        let cwd = env::current_dir().unwrap();
         let temp_dir = tempdir().expect("Failed to create a temporary directory");
         eprintln!("Temporary directory: {temp_dir:?}");
         check_git_user().unwrap();
@@ -382,12 +388,16 @@ mod tests {
 
         git_cleanup(None).unwrap();
         assert!(!Path::new(git_folder).exists());
+        env::set_current_dir(&cwd).unwrap();
     }
 
     #[test]
     #[serial]
     fn test_cleanup_failed_init() {
+        let cwd = env::current_dir().unwrap();
+
         let temp_dir = tempdir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
         let test_folder = temp_dir.path().join("my_repo");
         let result = initialize_project(test_folder.as_path(), false);
         if let Err(e) = &result {
@@ -400,6 +410,8 @@ mod tests {
         git_cleanup(Some(test_folder.display().to_string())).unwrap();
         assert!(!Path::new(&test_folder).exists());
         assert!(!git_dir.exists(), "Expected .git directory to be deleted");
+
+        env::set_current_dir(cwd).unwrap();
         temp_dir.close().unwrap();
     }
 }
