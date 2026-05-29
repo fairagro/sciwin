@@ -203,7 +203,12 @@ mod tests {
         let repo_dir = tempdir().unwrap();
         let repo_dir_pa = repo_dir.path();
 
-        let _ = init_git_repo(repo_dir_pa);
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(repo_dir_pa).unwrap();
+
+        init_git_repo(repo_dir_pa).unwrap();
+        env::set_current_dir(cwd).unwrap();
+
         let result = is_git_repo(repo_dir_pa);
         // Assert that directory is a git repo
         assert!(
