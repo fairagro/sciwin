@@ -40,6 +40,8 @@ pub fn initialize_project(folder: impl AsRef<Path>) -> anyhow::Result<()> {
 }
 
 fn write_config(dir: &Path) -> anyhow::Result<()> {
+    let dir = verify_relative_to_cwd(dir)?;
+    
     // create workflow toml
     let mut cfg = Config::default();
     cfg.workflow.name = dir
