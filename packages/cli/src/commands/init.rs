@@ -34,26 +34,24 @@ mod tests {
     #[test]
     #[serial]
     fn test_init_s4n_without_folder() {
-        //create a temp dir
         let temp_dir = tempdir().expect("Failed to create a temporary directory");
+        let cwd = env::current_dir().unwrap();
+
         eprintln!("Temporary directory: {:?}", temp_dir.path());
         check_git_user().unwrap();
 
-        // Change current dir to the temporary directory to not create workflow folders etc in sciwin-client dir
         env::set_current_dir(temp_dir.path()).unwrap();
         eprintln!(
             "Current directory changed to: {}",
             env::current_dir().unwrap().display()
         );
 
-        // test method without folder name and do not create arc folders
         let folder_name: Option<String> = None;
 
         let result = handle_init_command(&InitArgs {
             project: folder_name,
         });
 
-        // Assert results is ok and folders exist/ do not exist
         assert!(result.is_ok());
 
         assert!(PathBuf::from("workflows").exists());
@@ -61,5 +59,7 @@ mod tests {
         assert!(PathBuf::from("assays").exists());
         assert!(PathBuf::from("studies").exists());
         assert!(PathBuf::from("runs").exists());
+
+        env::set_current_dir(cwd).unwrap();
     }
 }
