@@ -10,6 +10,8 @@ use std::{
 };
 use std::{fs::File, io::Write};
 
+/// Initializes a new project in the specified folder. If no folder is provided, it initializes in the current directory.
+/// The provided path must be relative to the current working directory.
 pub fn initialize_project(folder: impl AsRef<Path>) -> anyhow::Result<()> {
     let folder = verify_base_dir(folder.as_ref())?;
 
