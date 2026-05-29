@@ -120,7 +120,7 @@ fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
         );
     }
 
-    if path.exists() && path.is_file() {
+    if canonical_path.exists() && canonical_path.is_file() {
         anyhow::bail!("Provided path is a file, expected a directory: {canonical_path:?}");
     }
 
