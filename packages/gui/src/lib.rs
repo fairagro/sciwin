@@ -1,3 +1,4 @@
+use crate::components::ExecutionType;
 use crate::{
     components::files::{FileType, read_node_type},
     workflow::VisualWorkflow,
@@ -14,15 +15,14 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use crate::components::ExecutionType;
 
 pub mod components;
 pub mod files;
 pub mod graph;
 pub mod layout;
+pub mod reana_integration;
 pub mod types;
 pub mod workflow;
-pub mod reana_integration;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct ApplicationState {
@@ -91,7 +91,11 @@ pub fn use_app_state() -> Signal<ApplicationState> {
 pub fn use_drag() -> Signal<DragContext> {
     use_context::<Signal<DragContext>>()
 }
-pub async fn open_project(path: impl AsRef<Path>, mut open: Signal<bool>, mut confirmed: Signal<bool>) -> anyhow::Result<Option<ProjectInfo>> {
+pub async fn open_project(
+    path: impl AsRef<Path>,
+    mut open: Signal<bool>,
+    mut confirmed: Signal<bool>,
+) -> anyhow::Result<Option<ProjectInfo>> {
     let config_path = path.as_ref().join("workflow.toml");
 
     if !config_path.exists() {
@@ -103,7 +107,7 @@ pub async fn open_project(path: impl AsRef<Path>, mut open: Signal<bool>, mut co
             loop {
                 if !open() {
                     if confirmed() {
-                        initialize_project(&path, false).map_err(|e| anyhow::anyhow!("{e}"))?;
+                        initialize_project(&path).map_err(|e| anyhow::anyhow!("{e}"))?;
                         confirmed.set(false); //reset
                         return Ok::<_, anyhow::Error>(Some(open_project_inner(path.as_ref())?));
                     }
@@ -130,7 +134,10 @@ fn open_project_inner(path: &Path) -> anyhow::Result<ProjectInfo> {
 fn open_file(path: impl AsRef<Path>, router: RouterContext) {
     if path.as_ref().exists() {
         match read_node_type(&path) {
-            FileType::Workflow => router.push(format!("/workflow?path={}", path.as_ref().to_string_lossy())),
+            FileType::Workflow => router.push(format!(
+                "/workflow?path={}",
+                path.as_ref().to_string_lossy()
+            )),
             FileType::Other => router.push("/"),
             _ => router.push(format!("/tool?path={}", path.as_ref().to_string_lossy())),
         };
@@ -147,7 +154,10 @@ pub fn last_session_data() -> PathBuf {
     tmp.join("app_state.json")
 }
 
-pub async fn restore_last_session(open: Signal<bool>, confirmed: Signal<bool>) -> anyhow::Result<Option<ApplicationState>> {
+pub async fn restore_last_session(
+    open: Signal<bool>,
+    confirmed: Signal<bool>,
+) -> anyhow::Result<Option<ApplicationState>> {
     if last_session_data().exists() {
         let data = fs::read_to_string(last_session_data())?;
         let mut state: ApplicationState = serde_json::from_str(&data)?;
@@ -172,7 +182,11 @@ pub async fn restore_last_session(open: Signal<bool>, confirmed: Signal<bool>) -
 }
 
 //Saves AND commits a file
-pub fn save_file(working_dir: &Path, filename: impl AsRef<Path>, message: &str) -> anyhow::Result<()> {
+pub fn save_file(
+    working_dir: &Path,
+    filename: impl AsRef<Path>,
+    message: &str,
+) -> anyhow::Result<()> {
     let repo = Repository::open(working_dir)?;
     stage_file(&repo, filename)?;
     commit(&repo, message)?;
