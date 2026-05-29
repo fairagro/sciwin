@@ -98,11 +98,17 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
+    let cwd = env::current_dir()?.canonicalize()?;
+
     let path = if folder.is_absolute() {
         folder.to_path_buf()
     } else {
-        env::current_dir()?.join(folder)
+        cwd.join(folder)
     };
+
+    if !path.starts_with(cwd) {
+        anyhow::bail!("Provided path is outside of the current working directory: {path:?}");
+    }
 
     if path.exists() {
         if path.is_file() {
