@@ -9,6 +9,7 @@ use petgraph::graph::NodeIndex;
 use repository::{Repository, commit, stage_file};
 use s4n_core::{config::Config, project::initialize_project};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use std::env;
 use std::{
     env::temp_dir,
     fs,
@@ -107,7 +108,8 @@ pub async fn open_project(
             loop {
                 if !open() {
                     if confirmed() {
-                        initialize_project(&path).map_err(|e| anyhow::anyhow!("{e}"))?;
+                        env::set_current_dir(&path)?;
+                        initialize_project("").map_err(|e| anyhow::anyhow!("{e}"))?;
                         confirmed.set(false); //reset
                         return Ok::<_, anyhow::Error>(Some(open_project_inner(path.as_ref())?));
                     }
