@@ -157,26 +157,6 @@ Most commands need the context of a Git repo to work. Project initialization can
 ```bash
 s4n init -p <FOLDER/PROJECT NAME>
 ```
-Besides the minimal project structure, the creation of an ["Annotated Research Context"](https://arc-rdm.org/) or ARC is also possible.
-```bash
-s4n init -a -p <FOLDER/PROJECT NAME>
-```
-
-> [!IMPORTANT]
-> The commands have changed in v1.0.0 (**Breaking Change**). The mapping is as follows:
-> | Old Command               | New Command            |
->  |---------------------------|------------------------|
->  | s4n tool create           | s4n create             |
->  | s4n tool list             | s4n list               |
->  | s4n tool remove           | s4n remove             |
->  | s4n workflow create       | s4n create --name (optional!)|
->  | s4n workflow list         | s4n list               |
->  | s4n workflow remove       | s4n remove             |
->  | s4n workflow status       | s4n list [WORKFLOW_NAME]|
->  | s4n workflow connect      | s4n connect            |
->  | s4n workflow disconnect   | s4n disconnect         |
->  | s4n workflow visualize    | s4n visualize          |
->  | s4n workflow save         | s4n save               |
 
 ### Creation of CWL CommandLineTools
 To create [CWL](https://www.commonwl.org/) CommandLineTools which can be combined to workflows later a prefix command can be used. `s4n create` will execute any given command and creates a CWL CommandLineTool accordingly.

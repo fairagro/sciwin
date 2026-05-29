@@ -244,21 +244,11 @@ mod tests {
 
         //check if directories were created
         let expected_dirs = vec!["workflows"];
-        //check that other directories are not created
-        let unexpected_dirs = vec!["assays", "studies", "runs"];
 
         //assert minimal folders do exist
         for dir in &expected_dirs {
             let full_path = PathBuf::from(temp_dir.path()).join(dir);
             assert!(full_path.exists(), "Directory {dir} does not exist");
-        }
-        //assert other arc folders do not exist
-        for dir in &unexpected_dirs {
-            let full_path = PathBuf::from(temp_dir.path()).join(dir);
-            assert!(
-                !full_path.exists(),
-                "Directory {dir} does exist, but should not exist"
-            );
         }
     }
 
