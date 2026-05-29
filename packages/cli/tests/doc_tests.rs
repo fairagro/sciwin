@@ -22,7 +22,7 @@ fn setup() -> (PathBuf, TempDir) {
 
     //init
     check_git_user().unwrap();
-    initialize_project(&canonicalized).expect("Could not init s4n");
+    initialize_project("").expect("Could not init s4n");
 
     (current, dir)
 }

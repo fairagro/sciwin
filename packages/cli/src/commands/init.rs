@@ -1,7 +1,7 @@
 use anyhow::Context;
 use clap::Args;
 use log::info;
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 #[derive(Args, Debug, Default)]
 pub struct InitArgs {
@@ -12,7 +12,7 @@ pub struct InitArgs {
 pub fn handle_init_command(args: &InitArgs) -> anyhow::Result<()> {
     let base_dir = match &args.project {
         Some(folder) => PathBuf::from(folder),
-        None => env::current_dir()?,
+        None => PathBuf::new(),
     };
 
     s4n_core::project::initialize_project(&base_dir)
@@ -28,6 +28,7 @@ pub fn handle_init_command(args: &InitArgs) -> anyhow::Result<()> {
 mod tests {
     use super::*;
     use serial_test::serial;
+    use std::env;
     use tempfile::tempdir;
     use test_utils::check_git_user;
 

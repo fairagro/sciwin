@@ -3,14 +3,15 @@ use anyhow::{Context, Result};
 use repository::Repository;
 use repository::{commit, get_modified_files, initial_commit, stage_all};
 use std::env;
+use std::path::Component;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 use std::{fs::File, io::Write};
 
-pub fn initialize_project(folder: &Path) -> anyhow::Result<()> {
-    let folder = verify_base_dir(folder)?;
+pub fn initialize_project(folder: impl AsRef<Path>) -> anyhow::Result<()> {
+    let folder = verify_base_dir(folder.as_ref())?;
 
     let repo = if is_git_repo(&folder) {
         Repository::open(&folder)
@@ -94,56 +95,38 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
-    let cwd = dunce::canonicalize(env::current_dir()?)?;
+    if folder.is_absolute() {
+        anyhow::bail!("Provided path must be relative, got absolute path: {folder:?}");
+    }
 
-    let path = if folder.is_absolute() {
-        folder.to_path_buf()
-    } else {
-        cwd.join(folder)
-    };
-
-    let canonical_path = if path.exists() {
-        dunce::canonicalize(&path).with_context(|| format!("Could not canonicalize {path:?}"))?
-    } else {
-        // Anchor the ENTIRE remaining path against the canonical parent,
-        // stripping it component by component until we find an existing prefix.
-        let mut existing = path.as_path();
-        let mut suffix = vec![];
-
-        loop {
-            if existing.exists() {
-                break;
+    for component in folder.components() {
+        match component {
+            Component::ParentDir => {
+                anyhow::bail!("Provided path must not contain parent directory components ('..')");
             }
-            let name = existing
-                .file_name()
-                .context("Path has no filename while walking up")?
-                .to_owned();
-            suffix.push(name);
-            existing = existing
-                .parent()
-                .context("Reached filesystem root without finding existing parent")?;
+            Component::Prefix(_) => {
+                anyhow::bail!("Provided path contains an invalid path prefix");
+            }
+            Component::RootDir => {
+                anyhow::bail!("Provided path must not contain root directory components");
+            }
+            _ => {}
         }
-
-        let mut base = dunce::canonicalize(existing)
-            .with_context(|| format!("Could not canonicalize {existing:?}"))?;
-        // Re-apply suffix in reverse (it was collected leaf→root)
-        for component in suffix.into_iter().rev() {
-            base.push(component);
-        }
-        base
-    };
-
-    if !canonical_path.starts_with(&cwd) {
-        anyhow::bail!(
-            "Provided path is outside of the current working directory: \
-             {canonical_path:?}, working_dir is: {cwd:?}"
-        );
-    }
-    if canonical_path.exists() && canonical_path.is_file() {
-        anyhow::bail!("Provided path is a file, expected a directory: {canonical_path:?}");
     }
 
-    Ok(canonical_path)
+    let cwd = dunce::canonicalize(env::current_dir()?)?;
+    let mut path = cwd.join(folder);
+
+    if path.exists() {
+        path = dunce::canonicalize(&path)
+            .with_context(|| format!("Could not canonicalize {path:?}"))?;
+
+        if path.is_file() {
+            anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
+        }
+    }
+
+    Ok(path)
 }
 
 pub fn git_cleanup(folder_name: Option<String>) -> Result<()> {
@@ -253,13 +236,11 @@ mod tests {
             .unwrap();
         check_git_user().unwrap();
 
-        let base_folder = temp_dir.path();
-
         let cwd = env::current_dir().unwrap();
         env::set_current_dir(&temp_dir).unwrap();
 
         //call method with temp dir
-        let result = initialize_project(base_folder);
+        let result = initialize_project("");
         eprintln!("{result:#?}");
         assert!(result.is_ok(), "Expected successful initialization");
 
@@ -309,7 +290,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         env::set_current_dir(&temp_dir).unwrap();
         let test_folder = temp_dir.path().join("my_repo");
-        let result = initialize_project(test_folder.as_path());
+        let result = initialize_project("my_repo");
         if let Err(e) = &result {
             eprintln!("Error initializing git repo: {}", e);
         }
