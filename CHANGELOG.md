@@ -2,6 +2,7 @@
 ## 🚀 Features
 - Updated the underlying CWL libraries to our [`commonwl`](https://github.com/fairagro/commonwl) library #236
 - Removed `annotate` command due to lack of usage
+- Removed `init` Option `-a` which could be used to create ARCs - from a long term perspective the ARC spec may change - if we are not able to provide updates everytime this feature obsoletes anyway
 
 ## 🐛 Bugfixes
 - ramping up runner conformance from 223/378 to 376/378
