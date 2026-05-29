@@ -7,7 +7,11 @@ use std::{env, path::PathBuf};
 pub struct InitArgs {
     #[arg(short = 'p', long = "project", help = "Name of the project")]
     pub project: Option<String>,
-    #[arg(short = 'a', long = "arc", help = "Option to create basic arc folder structure")]
+    #[arg(
+        short = 'a',
+        long = "arc",
+        help = "Option to create basic arc folder structure"
+    )]
     pub arc: bool,
 }
 
@@ -43,13 +47,19 @@ mod tests {
 
         // Change current dir to the temporary directory to not create workflow folders etc in sciwin-client dir
         env::set_current_dir(temp_dir.path()).unwrap();
-        eprintln!("Current directory changed to: {}", env::current_dir().unwrap().display());
+        eprintln!(
+            "Current directory changed to: {}",
+            env::current_dir().unwrap().display()
+        );
 
         // test method without folder name and do not create arc folders
         let folder_name: Option<String> = None;
         let arc = true;
 
-        let result = handle_init_command(&InitArgs { project: folder_name, arc });
+        let result = handle_init_command(&InitArgs {
+            project: folder_name,
+            arc,
+        });
 
         // Assert results is ok and folders exist/ do not exist
         assert!(result.is_ok());
@@ -71,7 +81,10 @@ mod tests {
         let base_folder = Some(temp_dir.path().to_str().unwrap().to_string());
 
         //call method with temp dir
-        let result = handle_init_command(&InitArgs { project: base_folder, arc });
+        let result = handle_init_command(&InitArgs {
+            project: base_folder,
+            arc,
+        });
 
         assert!(result.is_ok(), "Expected successful initialization");
 

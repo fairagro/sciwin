@@ -13,7 +13,8 @@ pub fn initialize_project(folder: &Path, arc: bool) -> anyhow::Result<()> {
     let folder = verify_base_dir(folder)?;
 
     let repo = if is_git_repo(&folder) {
-        Repository::open(&folder).with_context(|| format!("Could not open Repository at {folder:?}"))?
+        Repository::open(&folder)
+            .with_context(|| format!("Could not open Repository at {folder:?}"))?
     } else {
         init_git_repo(&folder)?
     };
@@ -42,7 +43,11 @@ pub fn initialize_project(folder: &Path, arc: bool) -> anyhow::Result<()> {
 fn write_config(dir: &Path) -> anyhow::Result<()> {
     // create workflow toml
     let mut cfg = Config::default();
-    cfg.workflow.name = dir.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+    cfg.workflow.name = dir
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
     fs::write(dir.join("workflow.toml"), toml::to_string_pretty(&cfg)?)?;
 
     Ok(())
@@ -57,13 +62,16 @@ const GITIGNORE_CONTENT: &str = include_str!("../resources/default.gitignore");
 
 fn init_git_repo(base_dir: &Path) -> anyhow::Result<Repository> {
     if !base_dir.exists() {
-        fs::create_dir_all(base_dir).with_context(|| format!("Could not create Repository at {base_dir:?}"))?;
+        fs::create_dir_all(base_dir)
+            .with_context(|| format!("Could not create Repository at {base_dir:?}"))?;
     }
-    let repo = Repository::init(base_dir).with_context(|| format!("Could not init Repository at {base_dir:?}"))?;
+    let repo = Repository::init(base_dir)
+        .with_context(|| format!("Could not init Repository at {base_dir:?}"))?;
 
     let gitignore_path = base_dir.join(PathBuf::from(".gitignore"));
     if !gitignore_path.exists() {
-        fs::write(&gitignore_path, GITIGNORE_CONTENT).with_context(|| format!("Could not create .gitignore file in {base_dir:?}"))?;
+        fs::write(&gitignore_path, GITIGNORE_CONTENT)
+            .with_context(|| format!("Could not create .gitignore file in {base_dir:?}"))?;
     }
 
     //append .s4n folder to .gitignore, whatever it may contains
@@ -90,21 +98,34 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 }
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
-    if let Some(parent) = folder.parent()
-        && parent.exists()
-    {
-        let parent = parent.canonicalize().with_context(|| format!("Could not canonicalize {parent:?}"))?;
-        let foldername = folder.file_name().unwrap_or_default();
-        Ok(parent.join(foldername))
+    let path = if folder.is_absolute() {
+        folder.to_path_buf()
     } else {
-        Ok(env::current_dir()?.join(folder))
+        env::current_dir()?.join(folder)
+    };
+
+    if path.exists() {
+        if path.is_file() {
+            anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
+        }
+
+        return path
+            .canonicalize()
+            .with_context(|| format!("Could not canonicalize {path:?}"));
     }
+
+    let parent = path.parent().context("Path has to parent")?;
+    let parent = parent.canonicalize()?;
+    let foldername = path.file_name().context("Path has to filename")?;
+
+    Ok(parent.join(foldername))
 }
 
 fn create_arc_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
     // Create the base directory
     if !base_dir.exists() {
-        fs::create_dir_all(base_dir).with_context(|| format!("Could not create folder at {base_dir:?}"))?;
+        fs::create_dir_all(base_dir)
+            .with_context(|| format!("Could not create folder at {base_dir:?}"))?;
     }
 
     create_investigation_excel_file(base_dir.to_str().unwrap_or(""))?;
@@ -113,9 +134,11 @@ fn create_arc_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
     for dir_name in dirs {
         let dir = base_dir.join(dir_name);
         if !dir.exists() {
-            fs::create_dir_all(&dir).with_context(|| format!("Could not create folder at {dir:?}"))?;
+            fs::create_dir_all(&dir)
+                .with_context(|| format!("Could not create folder at {dir:?}"))?;
         }
-        File::create(dir.join(".gitkeep")).with_context(|| format!("Could not create .gitkeep at {dir:?}"))?;
+        File::create(dir.join(".gitkeep"))
+            .with_context(|| format!("Could not create .gitkeep at {dir:?}"))?;
     }
 
     Ok(())
@@ -129,7 +152,8 @@ fn create_investigation_excel_file(directory: &str) -> anyhow::Result<()> {
     let bin = include_bytes!("../resources/isa.investigation.xlsx");
 
     // Create the directory if it doesn't exist
-    fs::create_dir_all(excel_path.parent().unwrap()).with_context(|| format!("Could not create folder for {excel_path:?}"))?;
+    fs::create_dir_all(excel_path.parent().unwrap())
+        .with_context(|| format!("Could not create folder for {excel_path:?}"))?;
     // Write the binary content to the file
     fs::write(&excel_path, bin).with_context(|| format!("Could not create {excel_path:?}"))?;
 
@@ -182,7 +206,10 @@ mod tests {
         let _ = init_git_repo(repo_dir_pa);
         let result = is_git_repo(repo_dir_pa);
         // Assert that directory is a git repo
-        assert!(result, "Expected directory to be a git repo true, got false");
+        assert!(
+            result,
+            "Expected directory to be a git repo true, got false"
+        );
     }
 
     #[test]
@@ -235,7 +262,10 @@ mod tests {
     #[test]
     #[serial]
     fn test_init_s4n_minimal() {
-        let temp_dir = Builder::new().prefix("init_without_arc_test").tempdir().unwrap();
+        let temp_dir = Builder::new()
+            .prefix("init_without_arc_test")
+            .tempdir()
+            .unwrap();
         check_git_user().unwrap();
 
         let base_folder = temp_dir.path();
@@ -258,7 +288,10 @@ mod tests {
         //assert other arc folders do not exist
         for dir in &unexpected_dirs {
             let full_path = PathBuf::from(temp_dir.path()).join(dir);
-            assert!(!full_path.exists(), "Directory {dir} does exist, but should not exist");
+            assert!(
+                !full_path.exists(),
+                "Directory {dir} does exist, but should not exist"
+            );
         }
     }
 
@@ -284,7 +317,10 @@ mod tests {
         let sheets = workbook.sheet_names();
 
         //verify sheet name
-        assert_eq!(sheets[0], "isa_investigation", "Worksheet name is incorrect");
+        assert_eq!(
+            sheets[0], "isa_investigation",
+            "Worksheet name is incorrect"
+        );
     }
 
     #[test]
@@ -329,7 +365,10 @@ mod tests {
 
         // Change to the temporary directory
         env::set_current_dir(&temp_dir).unwrap();
-        eprintln!("Current directory changed to: {}", env::current_dir().unwrap().display());
+        eprintln!(
+            "Current directory changed to: {}",
+            env::current_dir().unwrap().display()
+        );
 
         let git_folder = ".git";
         std::fs::create_dir(git_folder).unwrap();
