@@ -95,32 +95,36 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
 
 fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
     let cwd = env::current_dir()?.canonicalize()?;
-
     let path = if folder.is_absolute() {
         folder.to_path_buf()
     } else {
         cwd.join(folder)
     };
 
-    if !path.starts_with(&cwd) {
-        anyhow::bail!("Provided path is outside of the current working directory: {path:?}, working_dir is: {cwd:?}");
-    }
-
-    if path.exists() {
-        if path.is_file() {
-            anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
-        }
-
-        return path
+    let canonical_path = if path.exists() {
+        path.canonicalize()
+            .with_context(|| format!("Could not canonicalize {path:?}"))?
+    } else {
+        let parent = path.parent().context("Path has no parent")?;
+        let canonical_parent = parent
             .canonicalize()
-            .with_context(|| format!("Could not canonicalize {path:?}"));
+            .with_context(|| format!("Could not canonicalize parent {parent:?}"))?;
+        let foldername = path.file_name().context("Path has no filename")?;
+        canonical_parent.join(foldername)
+    };
+
+    if !canonical_path.starts_with(&cwd) {
+        anyhow::bail!(
+            "Provided path is outside of the current working directory: \
+             {canonical_path:?}, working_dir is: {cwd:?}"
+        );
     }
 
-    let parent = path.parent().context("Path has to parent")?;
-    let parent = parent.canonicalize()?;
-    let foldername = path.file_name().context("Path has to filename")?;
+    if path.exists() && path.is_file() {
+        anyhow::bail!("Provided path is a file, expected a directory: {canonical_path:?}");
+    }
 
-    Ok(parent.join(foldername))
+    Ok(canonical_path)
 }
 
 pub fn git_cleanup(folder_name: Option<String>) -> Result<()> {

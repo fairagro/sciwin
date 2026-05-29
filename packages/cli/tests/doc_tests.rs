@@ -12,16 +12,17 @@ use test_utils::{check_git_user, setup_python};
 fn setup() -> (PathBuf, TempDir) {
     let dir = tempdir().unwrap();
 
-    //copy docs dit to tmp
+    //copy docs dir to tmp
     let test_folder = "../../testdata/docs";
     copy_dir(test_folder, dir.path()).unwrap();
 
     let current = env::current_dir().unwrap();
-    env::set_current_dir(dir.path()).unwrap();
+    let canonicalized = dir.path().canonicalize().unwrap();
+    env::set_current_dir(&canonicalized).unwrap();
 
     //init
     check_git_user().unwrap();
-    initialize_project(&dir.path().canonicalize().unwrap()).expect("Could not init s4n");
+    initialize_project(&canonicalized).expect("Could not init s4n");
 
     (current, dir)
 }
