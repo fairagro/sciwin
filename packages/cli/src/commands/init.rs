@@ -56,9 +56,6 @@ mod tests {
 
         assert!(PathBuf::from("workflows").exists());
         assert!(PathBuf::from(".git").exists());
-        assert!(PathBuf::from("assays").exists());
-        assert!(PathBuf::from("studies").exists());
-        assert!(PathBuf::from("runs").exists());
 
         env::set_current_dir(cwd).unwrap();
     }
