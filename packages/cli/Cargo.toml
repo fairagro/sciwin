@@ -32,7 +32,7 @@ tokio-util = { workspace = true }
 
 clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
 clap_complete = "4.5.61"
-ignore = "0.4.23"
+ignore = "0.4.26"
 prettytable-rs = "0.10.0"
 
 dunce.workspace = true

@@ -39,8 +39,8 @@ dioxus-free-icons = { version = "0.10.0", features = [
 ] }
 dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
 
-chrono = "0.4.42"
-ignore = "0.4.23"
+chrono = "0.4.45"
+ignore = "0.4.26"
 petgraph = "0.8.3"
 rust-sugiyama = "0.4.0"
 rfd = { version = "0.15.4", default-features = false, features = [
