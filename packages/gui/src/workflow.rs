@@ -299,7 +299,7 @@ impl VisualWorkflow {
     }
 
     fn save(&mut self) -> anyhow::Result<()> {
-        let mut yaml = serde_yaml::to_string(&self.workflow)?;
+        let mut yaml = serde_yaml::to_string(&CWLDocument::Workflow(self.workflow.clone()))?;
 
         yaml = format_cwl(&yaml).map_err(|e| anyhow::anyhow!("Could not format yaml: {e}"))?;
         let path = self.path.clone().unwrap();
@@ -316,7 +316,7 @@ impl VisualWorkflow {
 mod tests {
     use super::*;
     use commonwl::types::CWLType;
-use dircpy::copy_dir;
+    use dircpy::copy_dir;
     use repository::{Repository, initial_commit};
     use serial_test::serial;
     use std::env;
@@ -350,7 +350,11 @@ use dircpy::copy_dir;
         let path = dir.path().join("workflows/main/main.cwl");
         let mut wf = VisualWorkflow::from_file(path).unwrap();
 
-        wf.add_input("wurstbrot", OneOrMany::One(InputType::CWLType(CWLType::Any))).unwrap();
+        wf.add_input(
+            "wurstbrot",
+            OneOrMany::One(InputType::CWLType(CWLType::Any)),
+        )
+        .unwrap();
         assert!(wf.workflow.has_input("wurstbrot"));
 
         let ix = wf
