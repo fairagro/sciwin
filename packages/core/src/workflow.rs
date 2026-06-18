@@ -3,10 +3,14 @@ use commonwl::{
     OneOrMany,
     documents::{CWLDocument, StringOrDocument, Workflow, WorkflowStep},
     format::format_cwl,
-    inputs::{WorkflowInputParameter, WorkflowStepInput},
+    inputs::{InputSchema, InputType, WorkflowInputParameter, WorkflowStepInput},
     load_cwl_file,
-    outputs::{StringOrWorkflowStepOutput, WorkflowOutputParameter},
+    outputs::{
+        CommandOutputParameterType, CommandOutputSchema, CommandOutputType,
+        StringOrWorkflowStepOutput, WorkflowOutputParameter,
+    },
     requirements::{SubworkflowFeatureRequirement, WorkflowRequirements},
+    types::CWLType,
 };
 use std::{fs, path::Path};
 
@@ -328,4 +332,81 @@ pub fn remove_workflow_output_connection(
         output.output_source = None;
     }
     Ok(())
+}
+
+pub fn check_slot_compatibility(
+    input: &OneOrMany<InputType>,
+    output: &CommandOutputParameterType,
+) -> bool {
+    let produced = match output {
+        CommandOutputParameterType::Stdout | CommandOutputParameterType::Stderr => {
+            vec![CommandOutputType::CWLType(CWLType::File)]
+        }
+        CommandOutputParameterType::CommandOutputType(types) => types.as_many(),
+    };
+    let accepted: Vec<InputType> = input.as_many();
+
+    produced
+        .iter()
+        .all(|p| accepted.iter().any(|a| single_type_matches(p, a)))
+}
+
+fn single_type_matches(output: &CommandOutputType, input: &InputType) -> bool {
+    match (output, input) {
+        (CommandOutputType::CWLType(o), InputType::CWLType(i)) => o == i,
+        (CommandOutputType::CommandOutputSchema(o), InputType::InputSchema(i)) => {
+            schema_matches(o, i)
+        }
+        (CommandOutputType::String(o_name), InputType::String(i_name)) => {
+            local_name(o_name) == local_name(i_name)
+        }
+        _ => false,
+    }
+}
+
+fn schema_matches(output: &CommandOutputSchema, input: &InputSchema) -> bool {
+    match (output, input) {
+        (CommandOutputSchema::Array(o), InputSchema::Array(i)) => {
+            let produced = &o.items.as_many();
+            let accepted = &i.items.as_many();
+            produced
+                .iter()
+                .all(|p| accepted.iter().any(|a| single_type_matches(p, a)))
+        }
+        (CommandOutputSchema::Enum(o), InputSchema::Enum(i)) => {
+            let mut o_symbols = o.symbols.clone();
+            let mut i_symbols = i.symbols.clone();
+            o_symbols.sort();
+            i_symbols.sort();
+            o_symbols == i_symbols
+        }
+        (CommandOutputSchema::Record(o), InputSchema::Record(i)) => {
+            // Named schemas (the common case — defined once via $schemas/$graph
+            // and referenced by name) are compared by name only.
+            if let (Some(o_name), Some(i_name)) = (&o.name, &i.name) {
+                return local_name(o_name) == local_name(i_name);
+            }
+            // Otherwise fall back to a structural, field-by-field comparison.
+            match (&o.fields, &i.fields) {
+                (Some(o_fields), Some(i_fields)) => o_fields.iter().all(|of| {
+                    i_fields.iter().any(|inf| {
+                        of.name == inf.name
+                            && of.r#type.as_many().iter().all(|p| {
+                                inf.r#type
+                                    .as_many()
+                                    .iter()
+                                    .any(|a| single_type_matches(p, a))
+                            })
+                    })
+                }),
+                (None, None) => true,
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+fn local_name(name: &str) -> &str {
+    name.rsplit(['#', '/']).next().unwrap_or(name)
 }

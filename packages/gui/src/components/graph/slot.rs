@@ -67,7 +67,7 @@ pub fn SlotElement(props: SlotProps) -> Element {
 
                         && let Some(input) = target.inputs.iter().find(|i| i.id == props.slot.id)
                     {
-                        (input.type_ == output.type_, false)
+                        (input.type_.accepts(&output.type_), false)
                     } else if let Some(output) = source
                         .inputs
                         .iter()
@@ -77,7 +77,7 @@ pub fn SlotElement(props: SlotProps) -> Element {
                             .iter()
                             .find(|i| i.id == props.slot.id)
                     {
-                        (input.type_ == output.type_, true)
+                        (input.type_.accepts(&output.type_), true)
                     } else {
                         (false, false)
                     };

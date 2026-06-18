@@ -1,7 +1,11 @@
 use commonwl::{
-    Identifiable, OneOrMany, documents::CWLDocument, inputs::{InputType, WorkflowInputParameter}, outputs::{CommandOutputParameterType, WorkflowOutputParameter}
+    Identifiable, OneOrMany,
+    documents::CWLDocument,
+    inputs::{InputType, WorkflowInputParameter},
+    outputs::{CommandOutputParameterType, WorkflowOutputParameter},
 };
 use dioxus::html::geometry::euclid::Point2D;
+use s4n_core::workflow::check_slot_compatibility;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -35,6 +39,19 @@ impl NodeInstance {
 pub enum PortType {
     Input(OneOrMany<InputType>),
     Output(CommandOutputParameterType),
+}
+
+impl PortType {
+    pub fn accepts(&self, other: &PortType) -> bool {
+        match (self, other) {
+            (PortType::Input(lhs), PortType::Input(rhs)) => lhs == rhs,
+            (PortType::Output(lhs), PortType::Output(rhs)) => lhs == rhs,
+            (PortType::Input(input), PortType::Output(output))
+            | (PortType::Output(output), PortType::Input(input)) => {
+                check_slot_compatibility(input, output)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
