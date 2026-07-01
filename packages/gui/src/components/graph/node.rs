@@ -30,7 +30,7 @@ pub fn NodeElement(props: NodeProps) -> Element {
 
     rsx! {
         div {
-            class: "absolute border bg-zinc-700 rounded-md cursor-pointer w-48 z-2 text-white",
+            class: "absolute border bg-zinc-700 rounded-md cursor-pointer min-w-48 w-max max-w-md z-2 text-white",
             left: "{pos_x}px",
             top: "{pos_y}px",
             onclick: move |e| {
@@ -50,19 +50,21 @@ pub fn NodeElement(props: NodeProps) -> Element {
                     drag_state.write().dragging = Some(DragState::Node(props.id));
                 },
 
-                class: "{top_color} rounded-t-md p-1 overflow-hidden",
+                class: "{top_color} rounded-t-md p-1 overflow-hidden whitespace-nowrap",
                 "{node.instance.id()}"
             }
             div { class: "p-1",
 
                 div {
                     for slot in node.outputs.iter() {
-                        div { class: "flex justify-end items-center",
-                            "{slot.id}"
-                            SlotElement {
-                                slot: slot.clone(),
-                                node_id: props.id,
-                                slot_type: SlotType::Output,
+                        div { class: "flex justify-end items-center gap-1",
+                            span { class: "whitespace-nowrap", "{slot.id}" }
+                            div { class: "flex-shrink-0",
+                                SlotElement {
+                                    slot: slot.clone(),
+                                    node_id: props.id,
+                                    slot_type: SlotType::Output,
+                                }
                             }
                         }
                     }
@@ -70,13 +72,15 @@ pub fn NodeElement(props: NodeProps) -> Element {
 
                 div {
                     for slot in node.inputs.iter() {
-                        div { class: "flex justify-start items-center",
-                            SlotElement {
-                                slot: slot.clone(),
-                                node_id: props.id,
-                                slot_type: SlotType::Input,
+                        div { class: "flex justify-start items-center gap-1",
+                            div { class: "flex-shrink-0",
+                                SlotElement {
+                                    slot: slot.clone(),
+                                    node_id: props.id,
+                                    slot_type: SlotType::Input,
+                                }
                             }
-                            "{slot.id}"
+                            span { class: "whitespace-nowrap", "{slot.id}" }
                         }
                     }
                 }
