@@ -566,7 +566,7 @@ pub async fn test_example_project() {
     //connect second step
     connect_workflow_nodes(&ConnectWorkflowArgs {
         name: name.clone(),
-        from: "calculation/results".to_string(),
+        from: "calculation/results_csv".to_string(),
         to: "plot/results".to_string(),
     })
     .expect("Could not add input to plot/results");
@@ -574,7 +574,7 @@ pub async fn test_example_project() {
     //connect output
     connect_workflow_nodes(&ConnectWorkflowArgs {
         name: name.clone(),
-        from: "plot/o_results".to_string(),
+        from: "plot/results_svg".to_string(),
         to: "@outputs/out".to_string(),
     })
     .expect("Could not add input to output/out");

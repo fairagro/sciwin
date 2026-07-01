@@ -1,4 +1,3 @@
-use crate::io::get_filename_without_extension;
 use commonwl::{
     OneOrMany,
     outputs::{CommandOutputBinding, CommandOutputParameter},
@@ -10,7 +9,12 @@ pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
     files
         .iter()
         .map(|f| {
-            let filename = get_filename_without_extension(f);
+            let file_id = f
+                .trim_start_matches(|c: char| !c.is_alphabetic())
+                .trim_end_matches('/')
+                .to_string()
+                .replace(['.', '/'], "_")
+                .to_lowercase();
             let output_type = if Path::new(f).extension().is_some() {
                 CWLType::File
             } else {
@@ -18,7 +22,7 @@ pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
             };
             CommandOutputParameter::builder()
                 .r#type(output_type)
-                .id(&filename)
+                .id(&file_id)
                 .output_binding(CommandOutputBinding {
                     glob: Some(OneOrMany::One(f.to_string())),
                     ..Default::default()
@@ -38,7 +42,7 @@ mod tests {
         let expected = vec![
             CommandOutputParameter::builder()
                 .r#type(CWLType::File)
-                .id("my-file")
+                .id("my-file_txt")
                 .output_binding(CommandOutputBinding {
                     glob: Some(OneOrMany::One("my-file.txt".to_string())),
                     ..Default::default()
@@ -46,7 +50,7 @@ mod tests {
                 .build(),
             CommandOutputParameter::builder()
                 .r#type(CWLType::File)
-                .id("archive")
+                .id("archive_tar_gz")
                 .output_binding(CommandOutputBinding {
                     glob: Some(OneOrMany::One("archive.tar.gz".to_string())),
                     ..Default::default()
