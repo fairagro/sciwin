@@ -1,4 +1,3 @@
-use crate::io::get_filename_without_extension;
 use commonwl::{
     CWLType, SingularPlural,
     outputs::{CommandOutputBinding, CommandOutputParameter},
@@ -9,7 +8,12 @@ pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
     files
         .iter()
         .map(|f| {
-            let filename = get_filename_without_extension(f);
+            let file_id = f
+                .trim_start_matches(|c: char| !c.is_alphabetic())
+                .trim_end_matches('/')
+                .to_string()
+                .replace(['.', '/'], "_")
+                .to_lowercase();
             let output_type = if Path::new(f).extension().is_some() {
                 CWLType::File
             } else {
@@ -17,7 +21,7 @@ pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
             };
             CommandOutputParameter::default()
                 .with_type(output_type)
-                .with_id(&filename)
+                .with_id(&file_id)
                 .with_binding(CommandOutputBinding {
                     glob: Some(SingularPlural::Singular(f.to_string())),
                     ..Default::default()
