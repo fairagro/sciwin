@@ -1,14 +1,12 @@
 use crate::{
     components::graph::{Line, styling},
+    graph::{estimate_node_size},
     types::VisualNode,
-    use_app_state,
+    use_app_state, use_slot_positions, SlotType,
 };
 use dioxus::{html::input_data::MouseButton, prelude::*};
 use petgraph::graph::EdgeIndex;
-
-pub const HEADER_OFFSET: f32 = 18.0 + 4.0 + 6.0; //padding + height
-pub const ITEM_HEIGHT: f32 = 28.0;
-pub const NODE_WIDTH: f32 = 190.0;
+use crate::{HEADER_OFFSET, ITEM_HEIGHT};
 
 pub(crate) fn calculate_source_position(source_node: &VisualNode, slot_id: &str) -> (f32, f32) {
     //get positions in array
@@ -17,11 +15,12 @@ pub(crate) fn calculate_source_position(source_node: &VisualNode, slot_id: &str)
         .iter()
         .position(|o| o.id == slot_id)
         .unwrap_or_default();
+    let (width, _) = estimate_node_size(source_node);
     let y_source = HEADER_OFFSET
         + (fix as f32 * ITEM_HEIGHT)
         + (ITEM_HEIGHT / 2.0 + 5.0)
         + source_node.position.y;
-    let x_source = NODE_WIDTH + source_node.position.x;
+    let x_source = width + source_node.position.x;
     (x_source, y_source)
 }
 
@@ -49,16 +48,29 @@ pub struct EdgeProps {
 #[component]
 pub fn EdgeElement(props: EdgeProps) -> Element {
     let mut app_state = use_app_state();
+    let slot_positions = use_slot_positions();
 
     let graph = app_state().workflow.graph;
-    let (from_node_id, to_node_id) = graph.edge_endpoints(props.id).unwrap(); //TODO!
+    let (from_node_id, to_node_id) = graph.edge_endpoints(props.id).unwrap();
     let from_node = &graph[from_node_id];
     let to_node = &graph[to_node_id];
 
     let edge = &graph[props.id];
 
-    let (x_source, y_source) = calculate_source_position(from_node, &edge.source_port);
-    let (x_target, y_target) = calculate_target_position(to_node, &edge.target_port);
+    let fallback_source = calculate_source_position(from_node, &edge.source_port);
+    let fallback_target = calculate_target_position(to_node, &edge.target_port);
+
+    let positions = slot_positions.read();
+
+    let (x_source, y_source) = positions
+        .get(&(from_node_id, edge.source_port.clone(), SlotType::Output))
+        .copied()
+        .unwrap_or(fallback_source);
+
+    let (x_target, y_target) = positions
+        .get(&(to_node_id, edge.target_port.clone(), SlotType::Input))
+        .copied()
+        .unwrap_or(fallback_target);
 
     let slot_type = to_node
         .inputs

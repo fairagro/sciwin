@@ -60,7 +60,7 @@ pub struct Slot {
     pub type_: PortType,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Eq, Hash, PartialEq, Clone)] 
 pub enum SlotType {
     Input,
     Output,

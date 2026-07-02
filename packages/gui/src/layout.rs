@@ -241,7 +241,7 @@ pub fn Layout() -> Element {
                         open: show_confirm_dialog,
                         confirmed: confirmed_dialog,
                     }
-                    div { class: "z-100 bg-fairagro-mid-200 absolute right-10 bottom-10 rounded-full flex flex-col",
+                    div { class: "z-100 bg-fairagro-mid-200 absolute right-10 bottom-10 rounded-full flex flex-col gap-2",
                         if *show_add_actions.read() {
                             div { class: "flex relative mb-3",
                                 div { class: "absolute text-center right-11 top-3 py-0.5 px-1 bg-fairagro-dark-500 rounded-md text-[.6rem] text-white ring-1 ring-fairagro-dark-300/40",
@@ -251,7 +251,7 @@ pub fn Layout() -> Element {
                                     title: "Add new Workflow",
                                     onclick: move |_| {
                                         show_add_actions.set(false);
-                                        show_create_dialog.set(true)
+                                        show_create_dialog.set(true);
                                     },
                                     Icon {
                                         width: 16,
@@ -278,19 +278,21 @@ pub fn Layout() -> Element {
                                 }
                             }
                         }
-                        div { class: "flex relative mb-3",
-                            RoundActionButton {
-                                title: "Add new CWL File",
-                                onclick: move |_| { show_add_actions.set(!show_add_actions()) },
-                                Icon { width: 16, height: 16, icon: GoPlus }
-                            }
+
+                        RoundActionButton {
+                            title: "Add new CWL File",
+                            onclick: move |_| {
+                                show_add_actions.set(!show_add_actions());
+                            },
+                            Icon { width: 16, height: 16, icon: GoPlus }
                         }
-                        div { class: "flex relative mb-3",
-                            RoundActionButton {
-                                title: "Open Terminal",
-                                onclick: move |_| { navigator().push(Route::GlobalTerminal); },
-                                Icon { width: 16, height: 16, icon: GoTerminal }
-                            }
+
+                        RoundActionButton {
+                            title: "Open Terminal",
+                            onclick: move |_| {
+                                navigator().push(Route::GlobalTerminal);
+                            },
+                            Icon { width: 16, height: 16, icon: GoTerminal }
                         }
                     }
                 }

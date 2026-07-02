@@ -2,10 +2,11 @@ use crate::{
     DragState,
     components::graph::styling,
     types::{Slot, SlotType},
-    use_app_state, use_drag,
+    use_app_state, use_drag, use_slot_positions, use_canvas_frame,
 };
 use dioxus::prelude::*;
 use petgraph::graph::NodeIndex;
+use std::rc::Rc;
 
 #[derive(Props, Clone, PartialEq)]
 pub(crate) struct SlotProps {
@@ -16,7 +17,10 @@ pub(crate) struct SlotProps {
 
 #[component]
 pub fn SlotElement(props: SlotProps) -> Element {
+    let app_state = use_app_state();
     let mut drag_state = use_drag();
+    let mut slot_positions = use_slot_positions();
+    let canvas_frame = use_canvas_frame();
 
     let margin = match props.slot_type {
         SlotType::Input => "ml-[-9px]",
@@ -28,15 +32,52 @@ pub fn SlotElement(props: SlotProps) -> Element {
     let border = styling::slot_border(&props.slot.type_);
 
     let node_id = props.node_id;
-    let slot_id = props.slot.id.clone();
+    let slot_type = props.slot_type;
+    let slot_id_for_measure = props.slot.id.clone();
+    let slot_id_for_events = props.slot.id.clone();
+
+    let node_position = use_memo(move || app_state().workflow.graph[node_id].position);
+
+    let mut mounted: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
+
+    use_effect(move || {
+        let _ = node_position();
+
+        let frame = canvas_frame();
+        let mounted_data = mounted();
+
+        let node_id = node_id;
+        let slot_id = slot_id_for_measure.clone();
+        let slot_type = slot_type.clone();
+
+        if let Some(m) = mounted_data {
+            spawn(async move {
+                if let Ok(rect) = m.get_client_rect().await {
+                    let center_x = rect.origin.x + rect.size.width / 2.0;
+                    let center_y = rect.origin.y + rect.size.height / 2.0;
+
+                    let x = (center_x - frame.origin.0) + frame.scroll.0;
+                    let y = (center_y - frame.origin.1) + frame.scroll.1;
+
+                    slot_positions
+                        .write()
+                        .insert((node_id, slot_id, slot_type), (x as f32, y as f32));
+                }
+            });
+        }
+    });
 
     rsx! {
         div {
-            onmousedown: move |_| {
-                drag_state.write().dragging = Some(DragState::Connection {
-                    source_node: node_id,
-                    source_port: slot_id.clone(),
-                });
+            onmounted: move |e| mounted.set(Some(e.data())),
+            onmousedown: {
+                let slot_id = slot_id_for_events.clone();
+                move |_| {
+                    drag_state.write().dragging = Some(DragState::Connection {
+                        source_node: node_id,
+                        source_port: slot_id.clone(),
+                    });
+                }
             },
             onmouseup: move |_| {
                 //check whether we are in connection mode and node/port has changed

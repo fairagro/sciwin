@@ -12,6 +12,15 @@ use std::{
     collections::{HashMap, VecDeque},
     path::Path,
 };
+use crate::{HEADER_OFFSET, ITEM_HEIGHT};
+
+pub const CHAR_WIDTH: f32 = 7.0;
+pub const HORIZONTAL_PADDING: f32 = 16.0;
+pub const SLOT_DOT_AND_GAP: f32 = 24.0;
+pub const MIN_WIDTH: f32 = 192.0;
+pub const MAX_WIDTH: f32 = 448.0;
+pub const LAYOUT_MARGIN_X: f32 = 60.0;
+pub const LAYOUT_MARGIN_Y: f32 = 40.0;
 
 pub type WorkflowGraph = StableDiGraph<VisualNode, VisualEdge>;
 
@@ -198,12 +207,41 @@ impl WorkflowGraphBuilder {
     }
 }
 
+pub fn estimate_node_size(node: &VisualNode) -> (f32, f32) {
+    let title_len = node.instance.id().chars().count();
+    let longest_slot_len = node
+        .inputs
+        .iter()
+        .chain(node.outputs.iter())
+        .map(|s| s.id.chars().count())
+        .max()
+        .unwrap_or(0);
+
+    let longest = title_len.max(longest_slot_len) as f32;
+    let width = (longest * CHAR_WIDTH + HORIZONTAL_PADDING + SLOT_DOT_AND_GAP)
+        .clamp(MIN_WIDTH, MAX_WIDTH);
+
+    let row_count = (node.inputs.len() + node.outputs.len()).max(1) as f32;
+    let height = HEADER_OFFSET + row_count * ITEM_HEIGHT;
+
+    (width, height)
+}
+
+fn layout_node_size(node: &VisualNode) -> (f32, f32) {
+    let (w, h) = estimate_node_size(node);
+    (w + LAYOUT_MARGIN_X, h + LAYOUT_MARGIN_Y)
+}
+
+
 pub fn auto_layout(graph: &mut WorkflowGraph) {
     let node_indices: Vec<_> = graph.node_indices().collect();
 
     let positions = rust_sugiyama::from_graph(
         graph,
-        &(|_, _| (120.0, 190.0)),
+        &(|_, node: &VisualNode| {
+            let (w, h) = layout_node_size(node);
+            (h as f64, w as f64)
+        }),
         &rust_sugiyama::configure::Config {
             vertex_spacing: 30.0,
             ..Default::default()

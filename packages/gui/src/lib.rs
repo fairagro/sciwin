@@ -2,6 +2,7 @@ use crate::components::ExecutionType;
 use crate::{
     components::files::{FileType, read_node_type},
     workflow::VisualWorkflow,
+    types::SlotType,
 };
 use dioxus::{html::geometry::ClientPoint, prelude::*, router::RouterContext};
 use pathdiff::diff_paths;
@@ -15,6 +16,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     time::Duration,
+    collections::HashMap,
 };
 
 pub mod components;
@@ -24,6 +26,9 @@ pub mod layout;
 pub mod reana_integration;
 pub mod types;
 pub mod workflow;
+
+pub const HEADER_OFFSET: f32 = 18.0 + 4.0 + 6.0; //padding + height
+pub const ITEM_HEIGHT: f32 = 28.0;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct ApplicationState {
@@ -92,6 +97,23 @@ pub fn use_app_state() -> Signal<ApplicationState> {
 pub fn use_drag() -> Signal<DragContext> {
     use_context::<Signal<DragContext>>()
 }
+
+pub type SlotPositions = HashMap<(NodeIndex, String, SlotType), (f32, f32)>;
+
+#[derive(Default, Clone, Copy, Debug)]
+pub struct CanvasFrame {
+    pub origin: (f64, f64),
+    pub scroll: (f64, f64),
+}
+
+pub fn use_slot_positions() -> Signal<SlotPositions> {
+    use_context::<Signal<SlotPositions>>()
+}
+
+pub fn use_canvas_frame() -> Signal<CanvasFrame> {
+    use_context::<Signal<CanvasFrame>>()
+}
+
 pub async fn open_project(
     path: impl AsRef<Path>,
     mut open: Signal<bool>,

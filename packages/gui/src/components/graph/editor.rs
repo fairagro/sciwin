@@ -1,5 +1,5 @@
 use crate::{
-    DragContext, DragState,
+    CanvasFrame, DragContext, DragState, SlotPositions,
     components::{
         ICON_SIZE, SmallRoundActionButton,
         files::Node,
@@ -9,6 +9,7 @@ use crate::{
         },
     },
     graph::auto_layout,
+    types::SlotType,
     use_app_state,
     workflow::VisualWorkflow,
 };
@@ -21,7 +22,7 @@ use dioxus::prelude::*;
 use dioxus_free_icons::{Icon, icons::md_maps_icons::MdCleaningServices};
 use petgraph::visit::IntoNodeIdentifiers;
 use serde_json::Value;
-use std::{path::PathBuf, rc::Rc};
+use std::{collections::HashMap, path::PathBuf, rc::Rc};
 
 #[component]
 pub fn GraphEditor(path: String) -> Element {
@@ -34,27 +35,34 @@ pub fn GraphEditor(path: String) -> Element {
         drag_offset,
         dragging,
     });
+    let mut slot_positions: Signal<SlotPositions> = use_signal(HashMap::new);
+    use_context_provider(|| slot_positions);
+ 
+    let mut canvas_frame = use_signal(CanvasFrame::default);
+    use_context_provider(|| canvas_frame);
+ 
     use_context_provider(|| drag_state);
-
+ 
     let mut mouse_pos = use_signal(ClientPoint::zero);
     let mut open_add_menu = use_signal(|| false);
-
+ 
     {
         use_effect(move || {
             let path = path();
             let data = load_cwl_file(&path, true).unwrap();
             if let CWLDocument::Workflow(_) = data {
+                slot_positions.write().clear();
                 let workflow = VisualWorkflow::from_file(path).unwrap();
                 app_state.write().workflow = workflow;
             }
         });
     }
-
+ 
     let graph = app_state().workflow.graph;
-
+ 
     let mut new_line = use_signal(|| None::<LineProps>);
     let mut div_ref: Signal<Option<Rc<MountedData>>> = use_signal(|| None);
-
+ 
     struct DivDims {
         rect: Rect<f64, Pixels>,
         scroll_offset: PixelsVector2D,
@@ -68,19 +76,23 @@ pub fn GraphEditor(path: String) -> Element {
             scroll_size: div.get_scroll_size().await.ok()?,
         })
     };
-
+ 
     let mut dim_w = use_signal(|| 0.0);
     let mut dim_h = use_signal(|| 0.0);
-
+ 
     let update_dims = move || {
         spawn(async move {
             if let Some(dims) = read_dims().await {
                 dim_w.set(dims.scroll_size.width);
                 dim_h.set(dims.scroll_size.height);
+                canvas_frame.set(CanvasFrame {
+                    origin: (dims.rect.origin.x, dims.rect.origin.y),
+                    scroll: (dims.scroll_offset.x, dims.scroll_offset.y),
+                });
             }
         });
     };
-
+ 
     let get_position_relative = move |current_pos: Point2D<f64, _>| async move {
         let dims = read_dims().await.unwrap();
         let rect = dims.rect;
@@ -167,11 +179,9 @@ pub fn GraphEditor(path: String) -> Element {
                             let x_target = (base_pos.0) as f32;
                             let y_target = (base_pos.1) as f32;
 
-                            let source_node = &app_state.read().workflow.graph[source_node];
-                            let (x_source, y_source) = calculate_source_position(
-                                source_node,
-                                &source_port,
-                            );
+                            let source_node_id = source_node;
+                            let state = app_state.read();
+                            let source_node = &state.workflow.graph[source_node_id];
                             if let Some(cwl_type) = source_node
                                 .outputs
                                 .iter()
@@ -179,6 +189,16 @@ pub fn GraphEditor(path: String) -> Element {
                                 .map(|i| i.type_.clone())
                             {
                                 let stroke = styling::get_stroke_from_port_type(&cwl_type);
+                                let measured_source = slot_positions
+                                    .read()
+                                    .get(
+                                        &(source_node_id, source_port.clone(), SlotType::Output),
+                                    )
+                                    .copied();
+                                let (x_source, y_source) = measured_source
+                                    .unwrap_or_else(|| {
+                                        calculate_source_position(source_node, &source_port)
+                                    });
                                 new_line
                                     .set(
                                         Some(LineProps {
@@ -198,10 +218,14 @@ pub fn GraphEditor(path: String) -> Element {
                                     .map(|i| i.type_.clone())
                                     .unwrap();
                                 let stroke = styling::get_stroke_from_port_type(&cwl_type);
-                                let (x_source, y_source) = calculate_target_position(
-                                    source_node,
-                                    &source_port,
-                                );
+                                let measured_source = slot_positions
+                                    .read()
+                                    .get(&(source_node_id, source_port.clone(), SlotType::Input))
+                                    .copied();
+                                let (x_source, y_source) = measured_source
+                                    .unwrap_or_else(|| {
+                                        calculate_target_position(source_node, &source_port)
+                                    });
                                 new_line
                                     .set(
                                         Some(LineProps {
