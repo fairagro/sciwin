@@ -30,9 +30,10 @@ pub fn handle_process(process: &mut Child, timelimit: u64) -> Result<Output, Box
     let stdout_handle = thread::spawn(move || {
         let mut reader = BufReader::new(stdout);
         let mut line = String::new();
-        while reader.read_line(&mut line).unwrap() > 0 {
-            eprint!("{line}");
-            stdout_buf_clone.lock().unwrap().push_str(&line);
+        while reader.read_until(b'\n', &mut line).unwrap() > 0 {
+            let line_str = String::from_utf8_lossy(&line);
+            eprint!("{line_str}");
+            stdout_buf_clone.lock().unwrap().push_str(&line_str);
             line.clear();
         }
     });
@@ -41,9 +42,10 @@ pub fn handle_process(process: &mut Child, timelimit: u64) -> Result<Output, Box
     let stderr_handle = thread::spawn(move || {
         let mut reader = BufReader::new(stderr);
         let mut line = String::new();
-        while reader.read_line(&mut line).unwrap() > 0 {
-            eprint!("{line}");
-            stderr_buf_clone.lock().unwrap().push_str(&line);
+        while reader.read_until(b'\n', &mut line).unwrap() > 0 {
+            let line_str = String::from_utf8_lossy(&line);
+            eprint!("{line_str}");
+            stderr_buf_clone.lock().unwrap().push_str(&line_str);
             line.clear();
         }
     });
