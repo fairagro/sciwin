@@ -40,14 +40,14 @@ mod tests {
         let expected = vec![
             CommandOutputParameter::default()
                 .with_type(CWLType::File)
-                .with_id("my-file")
+                .with_id("my-file_txt")
                 .with_binding(CommandOutputBinding {
                     glob: Some(commonwl::SingularPlural::Singular("my-file.txt".to_string())),
                     ..Default::default()
                 }),
             CommandOutputParameter::default()
                 .with_type(CWLType::File)
-                .with_id("archive")
+                .with_id("archive_tar_gz")
                 .with_binding(CommandOutputBinding {
                     glob: Some(commonwl::SingularPlural::Singular("archive.tar.gz".to_string())),
                     ..Default::default()

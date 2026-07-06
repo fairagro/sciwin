@@ -536,9 +536,9 @@ pub fn test_example_project() {
     assert!(workflow.has_step("plot"));
     assert!(workflow.has_step_input("speakers"));
     assert!(workflow.has_step_input("population"));
-    assert!(workflow.has_step_input("calculation/results"));
-    assert!(workflow.has_step_output("calculation/results"));
-    assert!(workflow.has_step_output("plot/o_results"));
+    assert!(workflow.has_step_input("calculation/results_csv"));
+    assert!(workflow.has_step_output("calculation/results_csv"));
+    assert!(workflow.has_step_output("plot/results_svg"));
 
     //workflow status
     handle_list_command(&ListCWLArgs {
