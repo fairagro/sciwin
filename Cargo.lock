@@ -5863,6 +5863,7 @@ dependencies = [
  "dioxus-free-icons",
  "dioxus-primitives",
  "fstest",
+ "futures-util",
  "ignore",
  "pathdiff",
  "petgraph",
