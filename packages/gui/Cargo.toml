@@ -49,6 +49,7 @@ rfd = { version = "0.15.4", default-features = false, features = [
 ] }
 tokio = { version = "1.48.0", features = ["time"] }
 tokio-util = "0.7.18"
+futures-util = "0.3.32"
 dircpy.workspace = true
 
 [dev-dependencies]
