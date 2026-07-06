@@ -7993,6 +7993,7 @@ dependencies = [
  "dioxus-primitives",
  "dircpy",
  "fstest",
+ "futures-util",
  "ignore",
  "keyring",
  "pathdiff",
