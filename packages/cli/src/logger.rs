@@ -1,5 +1,5 @@
 use colored::Colorize;
-use tracing::{Event, Level, Subscriber};
+use tracing::{Event, Level, Subscriber, level_filters::LevelFilter};
 use tracing_subscriber::{
     fmt::{FormatEvent, FormatFields},
     layer::SubscriberExt,
@@ -7,14 +7,14 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
 };
 
-pub fn init_logger() {
+pub fn init_logger(level: LevelFilter) {
     let format_layer = tracing_subscriber::fmt::layer()
         .event_format(CustomFormatter)
         .with_writer(std::io::stderr);
 
     tracing_subscriber::registry()
         .with(format_layer)
-        .with(tracing_subscriber::filter::LevelFilter::INFO)
+        .with(level)
         .init();
 }
 

@@ -118,28 +118,6 @@ pub async fn test_execute_local_outdir() {
 
 #[tokio::test]
 #[serial]
-pub async fn test_execute_local_is_quiet() {
-    let dir = tempdir().unwrap();
-    let args = LocalExecuteArgs {
-        out_dir: Some(dir.path().to_path_buf()),
-        is_quiet: true,
-        file: PathBuf::from("../../testdata/echo.cwl")
-            .canonicalize()
-            .unwrap(),
-        ..Default::default()
-    };
-
-    execute_local(&args)
-        .await
-        .expect("Could not execute CommandLineTool");
-
-    //does not really test if it is quiet but rather that the process works
-    let file = dir.path().join("results.txt");
-    assert!(file.exists());
-}
-
-#[tokio::test]
-#[serial]
 //docker not working on MacOS Github Actions
 #[cfg_attr(target_os = "macos", ignore)]
 pub async fn test_execute_local_workflow() {
@@ -180,7 +158,6 @@ pub async fn test_execute_local_tool_default_cwl() {
 
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
-        is_quiet: true,
         file: path.clone(),
         ..Default::default()
     };
@@ -188,7 +165,6 @@ pub async fn test_execute_local_tool_default_cwl() {
     let override_path = root.join("../../testdata/input.txt");
     let args_override = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
-        is_quiet: true,
         file: path,
         args: vec![
             "--file1".to_string(),
@@ -218,7 +194,6 @@ pub async fn test_execute_local_workflow_no_steps() {
 
     let args = LocalExecuteArgs {
         out_dir: Some(out_dir),
-        is_quiet: true,
         file: path,
         ..Default::default()
     };
@@ -241,7 +216,6 @@ pub async fn test_execute_local_workflow_in_param() {
     let input_file_path = root.join("../../testdata/input.txt");
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
-        is_quiet: true,
         file: path,
         args: vec![
             "--pop".to_string(),
@@ -269,7 +243,6 @@ pub async fn test_execute_local_workflow_dir_out() {
 
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
-        is_quiet: true,
         file: path,
         ..Default::default()
     };
@@ -292,7 +265,6 @@ pub async fn test_execute_local_workflow_file_out() {
 
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
-        is_quiet: true,
         file: path,
         ..Default::default()
     };
@@ -312,7 +284,6 @@ pub async fn test_execute_local_workflow_directory_out() {
 
     let args = LocalExecuteArgs {
         out_dir: Some(out_dir),
-        is_quiet: true,
         file: path,
         args: vec!["--dirname".to_string(), "test_directory".to_string()],
         ..Default::default()
@@ -335,7 +306,6 @@ pub async fn test_execute_local_with_binary_input() {
 
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
-        is_quiet: true,
         file: path,
         ..Default::default()
     };

@@ -10,12 +10,10 @@ use s4n::{
     logger::init_logger,
 };
 use std::process::exit;
-use tracing::error;
+use tracing::{error, level_filters::LevelFilter};
 
 #[tokio::main]
 async fn main() {
-    init_logger();
-
     if let Err(e) = run().await {
         error!("{e}");
         if let Some(src) = e.source() {
@@ -29,6 +27,12 @@ async fn main() {
 
 async fn run() -> anyhow::Result<()> {
     let args = Cli::parse();
+    if args.quiet {
+        init_logger(LevelFilter::ERROR);
+    } else {
+        init_logger(LevelFilter::INFO);
+    }
+
     check_git_config()?;
     match &args.command {
         Commands::Init(args) => handle_init_command(args),
