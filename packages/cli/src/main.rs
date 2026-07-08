@@ -1,33 +1,19 @@
 use clap::{CommandFactory, Parser};
-use log::{LevelFilter, error};
 use s4n::{
     ExitCode,
     cli::{Cli, Commands, generate_completions},
     commands::{
-        check_git_config,
-        connect_workflow_nodes,
-        disconnect_workflow_nodes,
-        //handle_annotation_command,
-        handle_create_command,
-        handle_execute_commands,
-        handle_init_command,
-        handle_list_command,
-        handle_remove_command,
-        install_package,
-        remove_package,
-        save_workflow,
-        visualize,
+        check_git_config, connect_workflow_nodes, disconnect_workflow_nodes, handle_create_command,
+        handle_execute_commands, handle_init_command, handle_list_command, handle_remove_command,
+        install_package, remove_package, save_workflow, visualize,
     },
-    logger::LOGGER,
+    logger::init_logger,
 };
 use std::process::exit;
+use tracing::{error, level_filters::LevelFilter};
 
 #[tokio::main]
 async fn main() {
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(LevelFilter::Info))
-        .unwrap();
-
     if let Err(e) = run().await {
         error!("{e}");
         if let Some(src) = e.source() {
@@ -41,6 +27,12 @@ async fn main() {
 
 async fn run() -> anyhow::Result<()> {
     let args = Cli::parse();
+    if args.quiet {
+        init_logger(LevelFilter::ERROR);
+    } else {
+        init_logger(LevelFilter::INFO);
+    }
+
     check_git_config()?;
     match &args.command {
         Commands::Init(args) => handle_init_command(args),

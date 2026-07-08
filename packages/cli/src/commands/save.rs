@@ -1,12 +1,15 @@
 use clap::Args;
-use log::info;
 use repository::Repository;
 use repository::{commit, stage_file};
 use s4n_core::io::get_workflows_folder;
+use tracing::info;
 
 #[derive(Args, Debug)]
 pub struct SaveArgs {
-    #[arg(help = "Name of the workflow to be saved", value_name = "WORKFLOW_NAME")]
+    #[arg(
+        help = "Name of the workflow to be saved",
+        value_name = "WORKFLOW_NAME"
+    )]
     pub name: String,
 }
 

@@ -1,6 +1,6 @@
 use commonwl::documents::{CWLDocument, Workflow};
 use dialoguer::{Select, theme::ColorfulTheme};
-use log::info;
+use tracing::info;
 use repository::Repository;
 use repository::submodule::get_submodule_paths;
 use s4n_core::io::get_workflows_folder;

@@ -23,6 +23,9 @@ Version: {}"#, env!("CARGO_PKG_VERSION"))
 pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
+
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
 }
 
 #[derive(Debug, Subcommand)]
