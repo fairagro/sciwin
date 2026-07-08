@@ -6,7 +6,7 @@ use crate::{
 use anyhow::anyhow;
 use clap::Args;
 use commonwl::{documents::CWLDocument, format::format_cwl, load_cwl_file};
-use log::info;
+use tracing::info;
 use s4n_core::io::get_workflows_folder;
 use std::{fs, io::Write, path::Path};
 

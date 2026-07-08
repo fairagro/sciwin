@@ -1,6 +1,6 @@
 use clap::Args;
 use colored::Colorize;
-use log::info;
+use tracing::info;
 use repository::{
     Repository,
     submodule::{add_submodule, remove_submodule},

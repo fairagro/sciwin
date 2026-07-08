@@ -1,32 +1,20 @@
 use clap::{CommandFactory, Parser};
-use log::{LevelFilter, error};
 use s4n::{
     ExitCode,
     cli::{Cli, Commands, generate_completions},
     commands::{
-        check_git_config,
-        connect_workflow_nodes,
-        disconnect_workflow_nodes,
-        //handle_annotation_command,
-        handle_create_command,
-        handle_execute_commands,
-        handle_init_command,
-        handle_list_command,
-        handle_remove_command,
-        install_package,
-        remove_package,
-        save_workflow,
-        visualize,
+        check_git_config, connect_workflow_nodes, disconnect_workflow_nodes, handle_create_command,
+        handle_execute_commands, handle_init_command, handle_list_command, handle_remove_command,
+        install_package, remove_package, save_workflow, visualize,
     },
-    logger::LOGGER,
+    logger::init_logger,
 };
 use std::process::exit;
+use tracing::error;
 
 #[tokio::main]
 async fn main() {
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(LevelFilter::Info))
-        .unwrap();
+    init_logger();
 
     if let Err(e) = run().await {
         error!("{e}");

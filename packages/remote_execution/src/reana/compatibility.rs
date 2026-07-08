@@ -6,7 +6,7 @@ use commonwl::requirements::{
     DockerRequirement, InitialWorkDirRequirement, ListingItems, StringOrInclude, ToolRequirements,
     WorkDirItems,
 };
-use log::{info, warn};
+use tracing::{info, warn};
 use reana_ext::parser::WorkflowJson;
 use s4n_core::append_requirement;
 use s4n_core::parser::SCRIPT_EXECUTORS;

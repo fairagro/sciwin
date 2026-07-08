@@ -17,7 +17,12 @@ use remote_execution::{check_status, download_results, export_rocrate, logout};
 use s4n_core::parser::guess_type;
 use serde_json::{Number, Value};
 use std::{
-    collections::HashMap, env, error::Error, fs, path::{Path, PathBuf}, sync::Arc
+    collections::HashMap,
+    env,
+    error::Error,
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -154,9 +159,10 @@ pub enum RemoteSubcommands {
 
 #[allow(clippy::disallowed_macros)]
 pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error> {
-    if args.is_quiet {
-        log::set_max_level(log::LevelFilter::Error);
-    }
+    //ignore this for now
+    //if args.is_quiet {
+    //    log::set_max_level(log::LevelFilter::Error);
+    //}
 
     let container_engine = if args.podman {
         ContainerEngine::Podman
