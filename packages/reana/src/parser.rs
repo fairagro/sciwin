@@ -8,7 +8,7 @@ use commonwl::{
     packed::{PackedCWL, pack_workflow},
     types::CWLType,
 };
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::{
     collections::HashMap,
