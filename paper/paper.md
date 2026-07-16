@@ -82,6 +82,15 @@ The tool's Git-native design ensures transparent versioning of both data and wor
 
 The source code is openly available at https://github.com/fairagro/sciwin under a permissive license, and the project welcomes community contributions.
 
+# CRediT authorship contribution statement
+
+**Jens Krumsieck**: Conceptualization, Methodology, Software, Validation, Writing - Original Draft, Writing - Review & Editing, Visualization, 
+**Antonia Leidel**: Conceptualization, Methodology, Software, Validation, Writing - Original Draft, Writing - Review & Editing, Visualization, 
+**Xaver Stiensmeier**: Conceptualization, Methodology, Validation, Writing - Original Draft, Writing - Review & Editing, 
+**Patrick König**: Conceptualization, Methodology, Project administration, 
+**Florian Hoedt**: Conceptualization, Funding acquisition, 
+**Harald von Waldow**: Conceptualization, Methodology, Writing - Original Draft, Writing - Review & Editing, Supervision, Project administration
+
 # Acknowledgements 
 We gratefully acknowledge the financial support of the German Research Foundation (DFG) – project number 501899475.
 
