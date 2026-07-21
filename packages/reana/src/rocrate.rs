@@ -929,7 +929,7 @@ pub fn create_ro_crate_metadata_json(
     let re = Regex::new(r"cwltool (\d+\.\d+\.\d+)")?;
     let instrument_id = generate_id_with_hash();
     if let Some(caps) = re.captures(logs)? {
-        let version = format!("cwltool {}", &caps[1].split_whitespace().next().unwrap_or(&caps[1]));
+        let version = format!("cwltool {}", caps[1].split_whitespace().next().unwrap_or(&caps[1]));
         //add instrument
         let instrument = create_instruments(&instrument_id, "SoftwareApplication", &version);
         graph.push(instrument.clone());
