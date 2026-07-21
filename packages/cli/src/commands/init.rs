@@ -1,6 +1,6 @@
 use anyhow::Context;
 use clap::Args;
-use log::info;
+use tracing::info;
 use std::path::PathBuf;
 
 #[derive(Args, Debug, Default)]

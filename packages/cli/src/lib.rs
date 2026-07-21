@@ -4,7 +4,7 @@ pub mod cwl;
 pub mod logger;
 
 use colored::Colorize;
-use log::info;
+use tracing::info;
 use similar::{ChangeTag, TextDiff};
 use std::fmt;
 

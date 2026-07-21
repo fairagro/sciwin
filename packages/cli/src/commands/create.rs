@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail};
 use clap::Args;
 use colored::Colorize;
 use commonwl::{documents::CommandLineTool, engine::ContainerEngine};
-use log::{info, warn};
+use tracing::{info, warn};
 use s4n_core::{
     io::{get_qualified_filename, get_workflows_folder},
     tool::ToolCreationOptions,

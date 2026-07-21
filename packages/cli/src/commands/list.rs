@@ -7,7 +7,7 @@ use commonwl::{
     requirements::DockerRequirement,
 };
 use ignore::WalkBuilder;
-use log::info;
+use tracing::info;
 use prettytable::{Cell, Row, Table, row};
 use s4n_core::default_to_string;
 use std::{

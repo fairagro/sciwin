@@ -5,7 +5,7 @@ use commonwl::documents::Workflow;
 use commonwl::load_cwl_file;
 use dialoguer::Confirm;
 use ignore::WalkBuilder;
-use log::{info, warn};
+use tracing::{info, warn};
 use repository::Repository;
 use repository::commit;
 use std::{env, fs, path::Path};

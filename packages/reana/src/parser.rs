@@ -8,7 +8,7 @@ use commonwl::{
     packed::{PackedCWL, pack_workflow},
     types::CWLType,
 };
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::{
     collections::HashMap,
@@ -41,45 +41,6 @@ pub struct WorkflowInputs {
     directories: Vec<String>,
     files: Vec<String>,
     parameters: serde_yaml::Value,
-}
-
-#[derive(Serialize, Clone, Debug)]
-pub struct Parameter {
-    pub r#class: String,
-    pub location: String,
-}
-
-impl<'de> Deserialize<'de> for Parameter {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        struct Helper {
-            #[serde(rename = "class")]
-            r#class: String,
-            location: Option<String>,
-            path: Option<String>,
-        }
-
-        let helper = Helper::deserialize(deserializer)?;
-        let location = helper
-            .location
-            .or(helper.path)
-            .ok_or_else(|| de::Error::missing_field("location or path"))?;
-
-        Ok(Parameter {
-            r#class: helper.r#class,
-            location,
-        })
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub enum ParameterValue {
-    Structured(Parameter),
-    Scalar(String),
 }
 
 pub fn generate_workflow_json_from_cwl(

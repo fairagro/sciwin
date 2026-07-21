@@ -91,7 +91,8 @@ cargo nextest --workspace           # Run all tests
 <img src=".github/studio.png" alt="Screenshot of SciWIn Studio" width=750>
 
 ### Running SciWIn-Studio
-To run SciWIn-Studio in Development mode, you need to [install the Dioxus CLI `dx`](https://dioxuslabs.com/learn/0.7/getting_started/):
+Builds of SciWIn-Studio can be found in the [Actions-Tab](https://github.com/fairagro/sciwin/actions/workflows/bundle.yml) until it is released properly.
+To run SciWIn-Studio in **Development mode**, you need to [install the Dioxus CLI `dx`](https://dioxuslabs.com/learn/0.7/getting_started/):
 ```bash
 # Install requirements
 sudo apt-get update 

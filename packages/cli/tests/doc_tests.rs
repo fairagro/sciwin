@@ -610,7 +610,6 @@ pub async fn test_example_project() {
 
     //execute workflow
     execute_local(&LocalExecuteArgs {
-        is_quiet: false,
         file: wf_path,
         args: vec!["inputs.yml".to_string()],
         ..Default::default()

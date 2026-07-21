@@ -1,5 +1,5 @@
 use dialoguer::{Input, theme::ColorfulTheme};
-use log::warn;
+use tracing::warn;
 use repository::Config;
 
 mod connect;
