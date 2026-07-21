@@ -333,7 +333,7 @@ mod tests {
         let res = client
             .post(format!(
                 "{}/api/workflows/{}/start?access_token={}",
-                &server.base_url(),
+                server.base_url(),
                 workflow_id,
                 token
             ))
@@ -389,7 +389,7 @@ mod tests {
 
         let client = Client::new();
         let res = client
-            .post(format!("{}/api/workflows/{}/start?access_token={}", &server.url(), workflow_id, token))
+            .post(format!("{}/api/workflows/{}/start?access_token={}", server.url(), workflow_id, token))
             .header("authorization", "Bearer test_token")
             .header("content-type", "application/json")
             .json(&expected_json)

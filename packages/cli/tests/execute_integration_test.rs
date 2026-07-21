@@ -153,8 +153,8 @@ pub async fn test_execute_local_tool_default_cwl() {
     let path = PathBuf::from("../../testdata/default.cwl");
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
-    let out_file = format!("{}/file.wtf", &out_dir);
-    let out_file2 = format!("{}/file_2.wtf", &out_dir);
+    let out_file = format!("{out_dir}/file.wtf");
+    let out_file2 = format!("{out_dir}/file_2.wtf");
 
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
@@ -210,7 +210,7 @@ pub async fn test_execute_local_workflow_in_param() {
         .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
-    let out_file = format!("{}/file.wtf", &out_dir);
+    let out_file = format!("{out_dir}/file.wtf");
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let input_file_path = root.join("../../testdata/input.txt");
@@ -239,7 +239,7 @@ pub async fn test_execute_local_workflow_dir_out() {
         .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
-    let out_path = format!("{}/test_dir", &out_dir);
+    let out_path = format!("{out_dir}/test_dir");
 
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
@@ -302,7 +302,7 @@ pub async fn test_execute_local_with_binary_input() {
         .unwrap();
     let dir = tempdir().unwrap();
     let out_dir = dir.path().to_string_lossy().into_owned();
-    let out_path = format!("{}/output.txt", &out_dir);
+    let out_path = format!("{out_dir}/output.txt");
 
     let args = LocalExecuteArgs {
         out_dir: Some(dir.path().to_path_buf()),
