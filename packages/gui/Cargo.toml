@@ -43,8 +43,7 @@ chrono = "0.4.42"
 ignore = "0.4.23"
 petgraph = "0.8.3"
 rust-sugiyama = "0.4.0"
-rfd = { version = "0.15.4", default-features = false, features = [
-    "tokio",
+rfd = { version = "0.17.2", default-features = false, features = [
     "xdg-portal",
 ] }
 tokio = { version = "1.48.0", features = ["time"] }
