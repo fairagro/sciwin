@@ -199,11 +199,16 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
 pub struct ReanaRunner {
     client: Arc<ReanaClient>,
 }
+
 impl ReanaRunner {
     pub fn new(client: ReanaClient) -> Self {
         Self {
             client: Arc::new(client),
         }
+    }
+
+    pub fn get_client(&self) -> Arc<ReanaClient> {
+        self.client.clone()
     }
 
     pub async fn wait_for_completion_with_interval(
@@ -283,8 +288,9 @@ impl WorkflowRunner for ReanaRunner {
         Ok(res.logs)
     }
 
-    async fn cancel(&self, _id: &RunId) -> Result<(), RunnerError> {
-        todo!()
+    async fn cancel(&self, id: &RunId) -> Result<(), RunnerError> {
+        reana::client::stop(self.client.clone(), id).await?;
+        Ok(())
     }
 
     async fn outputs(
@@ -470,5 +476,60 @@ mod tests {
         let status = runner.wait_for_completion(&run_id).await.unwrap();
 
         assert!(matches!(status, RunStatus::Finished));
+    }
+
+    /// This test needs a valid REANA Instance running and token defined by .env file
+    /// The test is ignored in CI runs and can only start manually
+    #[tokio::test]
+    #[ignore]
+    async fn test_cancel_reana() {
+        dotenvy::dotenv().unwrap();
+
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                    format!(
+                        "{}=debug,reana=debug,reqwest=info",
+                        env!("CARGO_CRATE_NAME")
+                    )
+                    .into()
+                }),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+
+        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_TOKEN").unwrap()));
+        let server_url = Url::parse(&env::var("REANA_URL").unwrap()).unwrap();
+        let client = ReanaClient::new(server_url.join("api").unwrap(), token);
+        let runner = ReanaRunner::new(client);
+
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let specification_path = root.join("../../testdata/hello_world/workflows/main/main.cwl");
+        let base_path = specification_path.parent().unwrap();
+        let inputs_path = root.join("../../testdata/hello_world/inputs.yml");
+
+        let inputs = load_input_file_from_file(inputs_path, base_path).unwrap();
+
+        let run_id = runner
+            .submit(&specification_path, inputs, None)
+            .await
+            .unwrap();
+
+        let client = runner.get_client();
+        //wait for run as reana only accepts cancel if running
+        loop {
+            let status = reana::client::status(client.clone(), &run_id).await.unwrap();
+            if status == WorkflowStatus::Running {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+
+        runner.cancel(&run_id).await.unwrap();
+
+        let status = runner.wait_for_completion(&run_id).await.unwrap();
+
+        //reana has no cancel state
+        assert!(matches!(status, RunStatus::Stopped));
     }
 }
