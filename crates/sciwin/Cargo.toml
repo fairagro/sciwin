@@ -1,0 +1,29 @@
+[package]
+name = "sciwin"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+commonwl.workspace = true
+reana.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+futures.workspace = true
+url.workspace = true
+miette.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tempfile.workspace = true
+walkdir.workspace = true
+
+[lints]
+workspace = true
