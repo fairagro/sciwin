@@ -10,11 +10,15 @@ use futures::future::try_join_all;
 use reana::{
     api::{client::ReanaClient, response::WorkflowStatus},
     client::CreatedWorkspace,
+    logs::get_log_outputs,
 };
+use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
+    env,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -52,6 +56,7 @@ impl From<WorkflowStatus> for RunStatus {
             WorkflowStatus::Failed => RunStatus::Failed,
             WorkflowStatus::Stopped => RunStatus::Stopped,
             WorkflowStatus::Queued => RunStatus::Queued,
+            WorkflowStatus::Pending => RunStatus::Queued,
         }
     }
 }
@@ -80,30 +85,13 @@ pub trait WorkflowRunner {
         &self,
         id: &RunId,
     ) -> Result<Option<HashMap<String, DefaultValue>>, RunnerError>;
+    async fn wait_for_completion(&self, id: &RunId) -> Result<RunStatus, RunnerError>;
 }
 
 #[derive(Debug)]
 pub struct TaskRunner<T: TaskBackend> {
     jobs: Arc<Mutex<HashMap<RunId, JobHandle>>>,
     backend: Arc<T>,
-}
-
-impl<T: TaskBackend> TaskRunner<T> {
-    pub async fn wait_for_completion(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
-        let mut rx = {
-            let jobs = self.jobs.lock().unwrap();
-            let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
-            job.status.subscribe()
-        };
-
-        loop {
-            let status = rx.borrow().clone();
-            if status.is_terminal() {
-                return Ok(status.clone());
-            }
-            rx.changed().await.map_err(|_| RunnerError::JobPanicked)?;
-        }
-    }
 }
 
 #[async_trait::async_trait]
@@ -163,14 +151,17 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
 
         Ok(run_id)
     }
+
     async fn status(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
         let jobs = self.jobs.lock().unwrap();
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
         Ok(job.status.borrow().clone())
     }
+
     async fn logs(&self, _id: &RunId) -> Result<String, RunnerError> {
         todo!()
     }
+
     async fn cancel(&self, id: &RunId) -> Result<(), RunnerError> {
         let jobs = self.jobs.lock().unwrap();
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
@@ -178,6 +169,7 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
 
         Ok(())
     }
+
     async fn outputs(
         &self,
         id: &RunId,
@@ -186,10 +178,47 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
         Ok(job.outputs.lock().unwrap().clone())
     }
+
+    async fn wait_for_completion(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
+        let mut rx = {
+            let jobs = self.jobs.lock().unwrap();
+            let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
+            job.status.subscribe()
+        };
+
+        loop {
+            let status = rx.borrow().clone();
+            if status.is_terminal() {
+                return Ok(status.clone());
+            }
+            rx.changed().await.map_err(|_| RunnerError::JobPanicked)?;
+        }
+    }
 }
 
 pub struct ReanaRunner {
     client: Arc<ReanaClient>,
+}
+impl ReanaRunner {
+    pub fn new(client: ReanaClient) -> Self {
+        Self {
+            client: Arc::new(client),
+        }
+    }
+
+    pub async fn wait_for_completion_with_interval(
+        &self,
+        id: &RunId,
+        interval: std::time::Duration,
+    ) -> Result<RunStatus, RunnerError> {
+        loop {
+            let status = self.status(id).await?;
+            if status.is_terminal() {
+                return Ok(status);
+            }
+            tokio::time::sleep(interval).await;
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -242,23 +271,83 @@ impl WorkflowRunner for ReanaRunner {
 
         Ok(workflow_id)
     }
+
     async fn status(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
         let status = reana::client::status(self.client.clone(), id).await?;
         Ok(status.into())
     }
+
     async fn logs(&self, id: &RunId) -> Result<String, RunnerError> {
         let res = reana::client::logs(self.client.clone(), id).await?;
 
         Ok(res.logs)
     }
+
     async fn cancel(&self, _id: &RunId) -> Result<(), RunnerError> {
         todo!()
     }
+
     async fn outputs(
         &self,
-        _id: &RunId,
+        id: &RunId,
     ) -> Result<Option<HashMap<String, DefaultValue>>, RunnerError> {
-        todo!()
+        let res = reana::client::specification(self.client.clone(), id).await?;
+        let outputs = res.specification.outputs;
+
+        let mut files = vec![];
+        for out in outputs.files {
+            files.extend(reana::storage::glob(self.client.clone(), id, &out).await?);
+        }
+
+        let working_directory = env::current_dir()?;
+        let futures = files.into_iter().map(|f| {
+            let working_directory = working_directory.clone();
+            async move {
+                reana::client::download_file(self.client.clone(), id, &f, &working_directory).await
+            }
+        });
+        try_join_all(futures).await?;
+
+        let logs = reana::client::logs(self.client.clone(), id).await?;
+        let mut outputs = get_log_outputs(&logs)?;
+        if let Some(o) = outputs.as_mut() {
+            update_locations(o, &working_directory);
+        }
+
+        let outputs = outputs.map(serde_json::from_value).transpose()?;
+
+        Ok(outputs)
+    }
+
+    async fn wait_for_completion(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
+        self.wait_for_completion_with_interval(id, Duration::from_secs(15))
+            .await
+    }
+}
+
+fn update_locations(value: &mut Value, local_outputs: &Path) {
+    match value {
+        Value::Object(map) => {
+            if let Some(Value::String(location)) = map.get_mut("location")
+                && let Some((_, rel)) = location.rsplit_once("/outputs/")
+            {
+                *location = local_outputs
+                    .join("outputs")
+                    .join(rel)
+                    .to_string_lossy()
+                    .into_owned();
+            }
+
+            for v in map.values_mut() {
+                update_locations(v, local_outputs);
+            }
+        }
+        Value::Array(arr) => {
+            for v in arr {
+                update_locations(v, local_outputs);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -269,8 +358,11 @@ mod tests {
         engine::{ContainerEngine, LocalBackend, load_input_file_from_file},
         storage::{StorageBackend, StoragePath},
     };
+    use reana::auth::ReanaAccessToken;
     use std::env::{self};
     use tempfile::tempdir;
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+    use url::Url;
 
     #[tokio::test]
     async fn test_execution_commonwl() {
@@ -337,5 +429,46 @@ mod tests {
         let status = runner.wait_for_completion(&run_id).await.unwrap();
 
         assert!(matches!(status, RunStatus::Cancelled));
+    }
+
+    /// This test needs a valid REANA Instance running and token defined by .env file
+    /// The test is ignored in CI runs and can only start manually
+    #[tokio::test]
+    #[ignore]
+    async fn test_execution_reana() {
+        dotenvy::dotenv().unwrap();
+
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                    format!(
+                        "{}=debug,reana=debug,reqwest=info",
+                        env!("CARGO_CRATE_NAME")
+                    )
+                    .into()
+                }),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+
+        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_TOKEN").unwrap()));
+        let server_url = Url::parse(&env::var("REANA_URL").unwrap()).unwrap();
+        let client = ReanaClient::new(server_url.join("api").unwrap(), token);
+        let runner = ReanaRunner::new(client);
+
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let specification_path = root.join("../../testdata/hello_world/workflows/main/main.cwl");
+        let base_path = specification_path.parent().unwrap();
+        let inputs_path = root.join("../../testdata/hello_world/inputs.yml");
+
+        let inputs = load_input_file_from_file(inputs_path, base_path).unwrap();
+
+        let run_id = runner
+            .submit(&specification_path, inputs, None)
+            .await
+            .unwrap();
+        let status = runner.wait_for_completion(&run_id).await.unwrap();
+
+        assert!(matches!(status, RunStatus::Finished));
     }
 }

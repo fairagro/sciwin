@@ -20,6 +20,10 @@ pub enum RunnerError {
     #[error(transparent)]
     IO(#[from] io::Error),
 
+    #[diagnostic(code = "serde_json::Error")]
+    #[error(transparent)]
+    JSON(#[from] serde_json::Error),
+
     //add Runner Error in commonwl: https://github.com/fairagro/commonwl/issues/15
     #[diagnostic(code = "anyhow::Error")]
     #[error(transparent)]

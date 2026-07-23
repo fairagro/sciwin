@@ -72,6 +72,7 @@ thiserror = "2.0.19"
 miette = "7.6.0"
 
 # util
+dotenvy = "0.15.7"
 fancy-regex = "0.18.0"
 keyring = { version = "3.6.3", features = [
     "apple-native",
