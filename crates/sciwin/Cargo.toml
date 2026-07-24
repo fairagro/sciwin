@@ -11,6 +11,7 @@ path = "lib.rs"
 
 [dependencies]
 async-trait.workspace = true
+async-stream.workspace = true
 commonwl.workspace = true
 reana.workspace = true
 uuid.workspace = true
@@ -25,6 +26,7 @@ tracing.workspace = true
 tempfile.workspace = true
 walkdir.workspace = true
 serde_json.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 dotenvy.workspace = true
