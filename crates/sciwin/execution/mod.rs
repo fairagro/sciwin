@@ -18,7 +18,6 @@ mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;
 pub use reana_runner::ReanaRunner;
-mod logging;
 
 pub type RunId = String;
 
@@ -156,22 +155,27 @@ pub trait WorkflowRunner {
     ) -> miette::Result<()> {
         let run_id = self.submit(cwlfile, inputs, out_dir).await?;
 
-        let mut log_stream = self.logs(&run_id).await?;
-        let log_task = tokio::spawn(async move {
-            use futures::StreamExt;
-            while let Some(line) = log_stream.next().await {
-                if let Ok(l) = line {
-                    info!(
-                        "[{}] {}",
-                        l.step.as_deref().unwrap_or("workflow"),
-                        l.message
-                    );
+        let log_task = match self.logs(&run_id).await {
+            Ok(mut stream) => Some(tokio::spawn(async move {
+                use futures::StreamExt;
+                while let Some(line) = stream.next().await {
+                    if let Ok(l) = line {
+                        info!(
+                            "[{}] {}",
+                            l.step.as_deref().unwrap_or("workflow"),
+                            l.message
+                        );
+                    }
                 }
-            }
-        });
+            })),
+            Err(RunnerError::NotSupported(_)) => None, // backend has no separate log stream — fine
+            Err(e) => return Err(e.into()),
+        };
 
         let status = self.wait_for_completion(&run_id).await?;
-        log_task.abort();
+        if let Some(task) = log_task {
+            task.abort();
+        }
 
         #[allow(clippy::disallowed_macros)]
         if matches!(status, RunStatus::Finished)

@@ -28,6 +28,10 @@ pub enum RunnerError {
     #[error(transparent)]
     JSON(#[from] serde_json::Error),
 
+    #[diagnostic(code = "sciwin::error::RunnerError::NotSupported")]
+    #[error("Unsupported")]
+    NotSupported(&'static str),
+
     //add Runner Error in commonwl: https://github.com/fairagro/commonwl/issues/15
     #[diagnostic(code = "anyhow::Error")]
     #[error(transparent)]

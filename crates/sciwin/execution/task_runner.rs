@@ -1,9 +1,6 @@
 use crate::{
     error::RunnerError,
-    execution::{
-        JobHandle, LogStream, RunId, RunStatus, WorkflowRunner,
-        logging::{LogSink, RunLogLayer},
-    },
+    execution::{JobHandle, LogStream, RunId, RunStatus, WorkflowRunner},
 };
 use commonwl::{
     engine::{
@@ -17,7 +14,7 @@ use std::{
     path::Path,
     sync::{Arc, Mutex},
 };
-use tokio::sync::{broadcast, watch};
+use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
@@ -25,7 +22,6 @@ use tracing::Instrument;
 pub struct TaskRunner<T: TaskBackend> {
     backend: Arc<T>,
     jobs: Arc<Mutex<HashMap<RunId, JobHandle>>>,
-    log_sinks: Arc<Mutex<HashMap<RunId, LogSink>>>,
 }
 
 impl<T: TaskBackend> TaskRunner<T> {
@@ -33,13 +29,6 @@ impl<T: TaskBackend> TaskRunner<T> {
         Self {
             backend,
             jobs: Arc::new(Mutex::new(HashMap::new())),
-            log_sinks: Arc::new(Mutex::new(HashMap::new())),
-        }
-    }
-
-    pub fn tracing_layer(&self) -> RunLogLayer {
-        RunLogLayer {
-            sinks: self.log_sinks.clone(),
         }
     }
 }
@@ -55,13 +44,6 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         let run_id: RunId = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
         let (status_tx, _) = watch::channel(RunStatus::Queued);
-        self.log_sinks.lock().unwrap().insert(
-            run_id.clone(),
-            LogSink {
-                history: Arc::new(Mutex::new(Vec::new())),
-                live: broadcast::channel(1024).0,
-            },
-        );
 
         let request = create_execution_request_with_inputs(cwlfile, inputs, out_dir, None)?;
 
@@ -115,29 +97,10 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         Ok(job.status.borrow().clone())
     }
 
-    async fn logs(&self, id: &RunId) -> Result<LogStream, RunnerError> {
-        let sink = {
-            let sinks = self.log_sinks.lock().unwrap();
-            sinks.get(id).ok_or(RunnerError::JobNotFound)?.clone()
-        };
-
-        let history = sink.history.lock().unwrap().clone();
-        let mut rx = sink.live.subscribe();
-
-        let stream = async_stream::stream! {
-            for line in history {
-                yield Ok(line);
-            }
-            loop {
-                match rx.recv().await {
-                    Ok(line) => yield Ok(line),
-                    Err(broadcast::error::RecvError::Lagged(_)) => yield Err(RunnerError::LogLagged),
-                    Err(broadcast::error::RecvError::Closed) => break,
-                }
-            }
-        };
-
-        Ok(LogStream::new(stream))
+    async fn logs(&self, _id: &RunId) -> Result<LogStream, RunnerError> {
+        Err(RunnerError::NotSupported(
+            "local runner logs are only available live via run_workflow's console output",
+        ))
     }
 
     async fn cancel(&self, id: &RunId) -> Result<(), RunnerError> {
@@ -184,8 +147,7 @@ mod tests {
     };
     use std::env::{self};
     use tempfile::tempdir;
-    use tracing::level_filters::LevelFilter;
-    use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
+    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
     #[tokio::test]
     async fn test_execution_commonwl() {
@@ -200,7 +162,6 @@ mod tests {
         let runner = TaskRunner::<LocalBackend>::new(backend);
 
         tracing_subscriber::registry()
-            .with(runner.tracing_layer().with_filter(LevelFilter::DEBUG))
             .with(
                 tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
                     format!(
