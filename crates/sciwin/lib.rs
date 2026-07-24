@@ -5,5 +5,4 @@ pub mod reana {
     pub use reana::*; //add a prelude to reana lib
 }
 
-pub mod error;
 pub mod execution;

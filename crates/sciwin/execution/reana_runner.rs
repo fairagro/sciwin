@@ -1,7 +1,4 @@
-use crate::{
-    error::RunnerError,
-    execution::{LogCursor, LogStream, RunId, RunStatus, WorkflowRunner},
-};
+use crate::execution::{LogCursor, LogStream, RunId, RunStatus, RunnerError, WorkflowRunner};
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::future::try_join_all;
 use reana::{

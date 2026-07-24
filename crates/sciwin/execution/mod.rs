@@ -1,4 +1,6 @@
-use crate::error::RunnerError;
+use miette::Diagnostic;
+use std::io;
+use thiserror::Error;
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::Stream;
 use miette::IntoDiagnostic;
@@ -18,6 +20,38 @@ mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;
 pub use reana_runner::ReanaRunner;
+
+#[derive(Error, Diagnostic, Debug)]
+pub enum RunnerError {
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    REANA(#[from] reana::error::ClientError),
+
+    #[diagnostic(code = "sciwin::error::RunnerError::JobNotFound")]
+    #[error("Could not find requested job")]
+    JobNotFound,
+
+    #[diagnostic(code = "sciwin::error::RunnerError::JobPanicked")]
+    #[error("A worker got into panic")]
+    JobPanicked,
+
+    #[diagnostic(code = "std::io::Error")]
+    #[error(transparent)]
+    IO(#[from] io::Error),
+
+    #[diagnostic(code = "serde_json::Error")]
+    #[error(transparent)]
+    JSON(#[from] serde_json::Error),
+
+    #[diagnostic(code = "sciwin::error::RunnerError::NotSupported")]
+    #[error("Unsupported")]
+    NotSupported(&'static str),
+
+    //add Runner Error in commonwl: https://github.com/fairagro/commonwl/issues/15
+    #[diagnostic(code = "anyhow::Error")]
+    #[error(transparent)]
+    Unknown(#[from] anyhow::Error),
+}
 
 pub type RunId = String;
 

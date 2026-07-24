@@ -1,7 +1,4 @@
-use crate::{
-    error::RunnerError,
-    execution::{JobHandle, LogStream, RunId, RunStatus, WorkflowRunner},
-};
+use crate::execution::{JobHandle, LogStream, RunId, RunStatus, RunnerError, WorkflowRunner};
 use commonwl::{
     engine::{
         EngineStatus, InputObject, TaskBackend, create_execution_request_with_inputs,
@@ -104,10 +101,27 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
     }
 
     async fn cancel(&self, id: &RunId) -> Result<(), RunnerError> {
-        let jobs = self.jobs.lock().unwrap();
-        let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
-        job.cancel.cancel();
+        let mut status_rx = {
+            let jobs = self.jobs.lock().unwrap();
+            let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
+            job.cancel.cancel();
+            job.status.subscribe()
+        };
 
+        let cooperative = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            status_rx.wait_for(RunStatus::is_terminal),
+        )
+        .await;
+
+        //hard exit as fallback
+        if cooperative.is_err() {
+            let jobs = self.jobs.lock().unwrap();
+            if let Some(job) = jobs.get(id) {
+                job.task.abort();
+                let _ = job.status.send(RunStatus::Cancelled);
+            }
+        }
         Ok(())
     }
 
