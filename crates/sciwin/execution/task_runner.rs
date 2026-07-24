@@ -1,6 +1,9 @@
 use crate::{
     error::RunnerError,
-    execution::{JobHandle, LogStream, RunId, RunStatus, WorkflowRunner},
+    execution::{
+        JobHandle, LogStream, RunId, RunStatus, WorkflowRunner,
+        logging::{LogSink, RunLogLayer},
+    },
 };
 use commonwl::{
     engine::{
@@ -14,14 +17,31 @@ use std::{
     path::Path,
     sync::{Arc, Mutex},
 };
-use tokio::sync::watch;
+use tokio::sync::{broadcast, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 
 #[derive(Debug)]
 pub struct TaskRunner<T: TaskBackend> {
-    jobs: Arc<Mutex<HashMap<RunId, JobHandle>>>,
     backend: Arc<T>,
+    jobs: Arc<Mutex<HashMap<RunId, JobHandle>>>,
+    log_sinks: Arc<Mutex<HashMap<RunId, LogSink>>>,
+}
+
+impl<T: TaskBackend> TaskRunner<T> {
+    pub fn new(backend: Arc<T>) -> Self {
+        Self {
+            backend,
+            jobs: Arc::new(Mutex::new(HashMap::new())),
+            log_sinks: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub fn tracing_layer(&self) -> RunLogLayer {
+        RunLogLayer {
+            sinks: self.log_sinks.clone(),
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -35,6 +55,13 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         let run_id: RunId = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
         let (status_tx, _) = watch::channel(RunStatus::Queued);
+        self.log_sinks.lock().unwrap().insert(
+            run_id.clone(),
+            LogSink {
+                history: Arc::new(Mutex::new(Vec::new())),
+                live: broadcast::channel(1024).0,
+            },
+        );
 
         let request = create_execution_request_with_inputs(cwlfile, inputs, out_dir, None)?;
 
@@ -88,8 +115,29 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         Ok(job.status.borrow().clone())
     }
 
-    async fn logs(&self, _id: &RunId) -> Result<LogStream, RunnerError> {
-        todo!()
+    async fn logs(&self, id: &RunId) -> Result<LogStream, RunnerError> {
+        let sink = {
+            let sinks = self.log_sinks.lock().unwrap();
+            sinks.get(id).ok_or(RunnerError::JobNotFound)?.clone()
+        };
+
+        let history = sink.history.lock().unwrap().clone();
+        let mut rx = sink.live.subscribe();
+
+        let stream = async_stream::stream! {
+            for line in history {
+                yield Ok(line);
+            }
+            loop {
+                match rx.recv().await {
+                    Ok(line) => yield Ok(line),
+                    Err(broadcast::error::RecvError::Lagged(_)) => yield Err(RunnerError::LogLagged),
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        };
+
+        Ok(LogStream::new(stream))
     }
 
     async fn cancel(&self, id: &RunId) -> Result<(), RunnerError> {
@@ -136,6 +184,8 @@ mod tests {
     };
     use std::env::{self};
     use tempfile::tempdir;
+    use tracing::level_filters::LevelFilter;
+    use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
     #[tokio::test]
     async fn test_execution_commonwl() {
@@ -147,10 +197,21 @@ mod tests {
             data_store,
         ));
 
-        let runner = TaskRunner::<LocalBackend> {
-            jobs: Arc::new(Mutex::new(HashMap::new())),
-            backend,
-        };
+        let runner = TaskRunner::<LocalBackend>::new(backend);
+
+        tracing_subscriber::registry()
+            .with(runner.tracing_layer().with_filter(LevelFilter::DEBUG))
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                    format!(
+                        "{}=debug,cwl_engine=info,crankshaft=warn",
+                        env!("CARGO_CRATE_NAME")
+                    )
+                    .into()
+                }),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
 
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let specification_path = root.join("../../testdata/hello_world/workflows/main/main.cwl");
@@ -161,14 +222,11 @@ mod tests {
 
         //dumpster for outputs
         let tmpdir = tempdir().unwrap();
+        let result = runner
+            .run_workflow(&specification_path, inputs, Some(tmpdir.path()))
+            .await;
 
-        let run_id = runner
-            .submit(&specification_path, inputs, Some(tmpdir.path()))
-            .await
-            .unwrap();
-        let status = runner.wait_for_completion(&run_id).await.unwrap();
-
-        assert!(matches!(status, RunStatus::Finished));
+        assert!(result.is_ok());
     }
 
     #[tokio::test]
@@ -181,10 +239,7 @@ mod tests {
             data_store,
         ));
 
-        let runner = TaskRunner::<LocalBackend> {
-            jobs: Arc::new(Mutex::new(HashMap::new())),
-            backend,
-        };
+        let runner = TaskRunner::<LocalBackend>::new(backend);
 
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let specification_path = root.join("../../testdata/hello_world/workflows/main/main.cwl");

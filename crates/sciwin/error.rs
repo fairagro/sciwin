@@ -16,6 +16,10 @@ pub enum RunnerError {
     #[error("A worker got into panic")]
     JobPanicked,
 
+    #[diagnostic(code = "sciwin::error::RunnerError::LogLagged")]
+    #[error("Error streaming Logs")]
+    LogLagged,
+
     #[diagnostic(code = "std::io::Error")]
     #[error(transparent)]
     IO(#[from] io::Error),

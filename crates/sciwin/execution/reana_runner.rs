@@ -128,10 +128,6 @@ impl WorkflowRunner for ReanaRunner {
                 yield Ok(line);
             }
 
-            for line in cursor.diff(&parsed) {
-                yield Ok(line);
-            }
-
             let status = reana::client::status(client.clone(), &id).await
                 .map(|s| s.into())
                 .unwrap_or(RunStatus::Running);

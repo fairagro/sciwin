@@ -594,9 +594,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea94a9ff8464016338c851e24b472d7131c388c88898a502e781815b2ee6045"
+checksum = "07505b34e8f4b3591a4fa69e9792b52289b95488dbbc68c3c0075b7bedb245e1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http",
@@ -620,9 +620,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.13.0"
+version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22ed1ebe6e0a95ea84570225f5a8208dec4b8f77e61a9b0d6f51773fcb4612f0"
+checksum = "3b98f2e1fd67ec06618f9c291e5e495a468e60519e44c9c1979cd0521f3affdb"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
@@ -1239,9 +1239,9 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3c79bd67e72b11017aa35b93d66fc28bd02b7a352dc407d2c0ae62ad93f9c3"
+checksum = "e4971cdaf4a9a4f071d4fffc69d5d36beedd4a6c0aaa301a6608cc103729a4a6"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -1628,9 +1628,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8184d6a2b60a0b3d7a1dba1ba6d36840e438798c71b1fe4d49458f2a5fbdcd0f"
+checksum = "8b76a2f37cd4035bdc1cf9ff6df10f791b1d0b17a76daa13169145ed088d2041"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -1650,9 +1650,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c38e1f8bfc92f5bbf40a03b49323fcb1287682dde1634c70e0cc3cafd08d744"
+checksum = "9b08fd579ef5255835a650b9273ad3fc9452ef6a8aba212c7ea26c2ff18e1508"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1690,9 +1690,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "786da8d96e87195cf87ae7d580add5de6bb94f14c1da568656e0799ba0387322"
+checksum = "22515459428e537de6d12748b0350e2882dc1815bdbb33bfd669ee925a84ab59"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1712,9 +1712,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f782ee26de05212daf6d7f860827e832f191153a34b6dc6902936fdd38d01af9"
+checksum = "ba3d7a0247024c9cf1f6679015f999bebab09d8046bc18227d0ee943475a516d"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -1724,9 +1724,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4822ff8da4818ad846fc972fb420a23ced0db78527eb4550c2b04b4ae1a301f"
+checksum = "540bb65dbf9d84a55cc970c5862f7c4cf4fd69a0b6a880eca05238c67ebc4c71"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4720,9 +4720,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.15.0"
+version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "764899a24af3980067ee14bc143654f297b22eaebfe3c7b6b211920a5a59b046"
+checksum = "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96"
 dependencies = [
  "web-time",
  "zeroize",

@@ -18,6 +18,7 @@ mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;
 pub use reana_runner::ReanaRunner;
+mod logging;
 
 pub type RunId = String;
 
