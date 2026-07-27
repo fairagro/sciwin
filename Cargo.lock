@@ -1472,9 +1472,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.3"
+version = "4.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fb99565819980999fb7b4a1796046a5c949e6d4ff132cf5fadf5a641e20d776"
+checksum = "d91e0c145792ef73a6ad36d27c75ac09f1832222a3c209689d90f534685ee5b7"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1504,14 +1504,14 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.6.3"
+version = "4.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32f2392eae7f16557a3d727ef3a12e57b2b2ca6f98566a5f4fb41ffe305df077"
+checksum = "d012d2b9d65aca7f18f4d9878a045bc17899bba951561ba5ec3c2ba1eed9a061"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.2",
 ]
 
 [[package]]
@@ -1597,9 +1597,9 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3c79bd67e72b11017aa35b93d66fc28bd02b7a352dc407d2c0ae62ad93f9c3"
+checksum = "e4971cdaf4a9a4f071d4fffc69d5d36beedd4a6c0aaa301a6608cc103729a4a6"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -3575,7 +3575,7 @@ checksum = "f7df26654850049f639e99ea1a9c3a04c17a94efde8799a2b1af9b4d402386b2"
 dependencies = [
  "fstest_macro",
  "git2 0.20.4",
- "serial_test",
+ "serial_test 3.5.0",
  "tempfile",
 ]
 
@@ -7807,7 +7807,7 @@ dependencies = [
  "s4n_core",
  "serde-saphyr",
  "serde_json",
- "serial_test",
+ "serial_test 4.0.1",
  "shlex 2.0.1",
  "similar 3.1.1",
  "syntect",
@@ -7835,7 +7835,7 @@ dependencies = [
  "serde",
  "serde-saphyr",
  "serde_json",
- "serial_test",
+ "serial_test 4.0.1",
  "shlex 2.0.1",
  "slugify",
  "smart-default",
@@ -7918,7 +7918,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "serial_test",
+ "serial_test 4.0.1",
  "shlex 2.0.1",
  "tempfile",
  "tokio",
@@ -8255,7 +8255,21 @@ dependencies = [
  "log",
  "once_cell",
  "parking_lot",
- "serial_test_derive",
+ "serial_test_derive 3.5.0",
+]
+
+[[package]]
+name = "serial_test"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6df5ed973ad8d834e09f824f9e9f449af6b9a3745f78dec7cc752770bd3bf11"
+dependencies = [
+ "futures-executor",
+ "futures-util",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "serial_test_derive 4.0.1",
 ]
 
 [[package]]
@@ -8267,6 +8281,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a22144e767da4ddd8416dbf383700542ffd8a5dc493dfecedfe1fe3ad03c98ae"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.2",
 ]
 
 [[package]]

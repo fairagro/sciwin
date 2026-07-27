@@ -64,7 +64,7 @@ uuid = { version = "1.21.0", features = ["v4"] }
 test_utils = { path = "packages/test_utils" }
 rstest = "0.26.1"
 fstest = "0.4.0"
-serial_test = "3.4.0"
+serial_test = "4.0.1"
 
 [workspace.lints.clippy]
 case_sensitive_file_extension_comparisons = "warn"
