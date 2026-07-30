@@ -19,6 +19,7 @@ pub fn add_submodule(
     url: &str,
     branch: &Option<String>,
     path: &Path,
+    commit_msg: &str,
 ) -> RepositoryResult<()> {
     //clone and initialize submodule
     if let Some(branch) = branch {
@@ -45,19 +46,12 @@ pub fn add_submodule(
 
     //commit
     module.add_finalize()?;
-    let name = module.name().unwrap_or("");
-    commit(
-        repo,
-        &format!(
-            "📦 Installed Package {}",
-            name.strip_prefix("packages/").unwrap_or(name)
-        ),
-    )?;
+    commit(repo, commit_msg)?;
     Ok(())
 }
 
 /// Removes a submodule from the current repository, stages the changes, and commits them.
-pub fn remove_submodule(repo: &Repository, name: &str) -> RepositoryResult<()> {
+pub fn remove_submodule(repo: &Repository, name: &str, commit_msg: &str) -> RepositoryResult<()> {
     let module = repo.find_submodule(name)?;
     let repo_base_path = repo
         .path()
@@ -77,13 +71,7 @@ pub fn remove_submodule(repo: &Repository, name: &str) -> RepositoryResult<()> {
 
     //stage and commit
     stage_all(repo)?;
-    commit(
-        repo,
-        &format!(
-            "📦 Removed Package {}",
-            name.strip_prefix("packages/").unwrap_or(name)
-        ),
-    )?;
+    commit(repo, commit_msg)?;
     Ok(())
 }
 
@@ -104,13 +92,14 @@ mod tests {
             "https://github.com/JensKrumsieck/PorphyStruct",
             &Some("docs".to_string()),
             Path::new("ps"),
+            "added submodule ps",
         );
         assert!(result.is_ok());
 
         //check whether a file is present
         assert!(fs::exists("ps/LICENSE").unwrap());
 
-        let result = remove_submodule(&repo, "ps");
+        let result = remove_submodule(&repo, "ps", "removed submodule ps");
         assert!(result.is_ok());
 
         //check whether a file is absent
