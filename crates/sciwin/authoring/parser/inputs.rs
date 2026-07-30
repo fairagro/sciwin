@@ -1,13 +1,12 @@
 use std::path::Path;
 
-use super::BAD_WORDS;
+use super::{BAD_WORDS, staging};
 use crate::authoring::AuthoringResult;
 use commonwl::{
     IntegerOrExpression,
     documents::CommandLineTool,
-    files::{Directory, Dirent, File, FileOrDirectory},
+    files::{Directory, File, FileOrDirectory},
     inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
-    requirements::{InitialWorkDirRequirement, ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
     types::CWLType,
 };
 use rand::{RngExt, distr::Alphanumeric};
@@ -145,7 +144,7 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> A
 
         //todo: add requiement for directory also or add new --mount param and remove block from here
         if matches!(type_, CWLType::File) {
-            stage_fixed_input(tool, input);
+            staging::stage_fixed_input(tool, input);
         }
 
         let default = match type_ {
@@ -169,43 +168,6 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> A
     }
 
     Ok(())
-}
-
-/// Stages a fixed File input into the working dir 
-fn stage_fixed_input(tool: &mut CommandLineTool, input: &str) {
-    let dirent = Dirent::builder()
-        .entry(StringOrInclude::String(get_entry_name(input)))
-        .entryname(input)
-        .build();
-
-    if let Some(req) = tool.get_requirement_mut::<InitialWorkDirRequirement>() {
-        match &mut req.listing {
-            WorkDirItems::Expression(expr) => {
-                req.listing = WorkDirItems::ListingItems(vec![
-                    ListingItems::Dirent(dirent),
-                    ListingItems::Expression(expr.clone()),
-                ]);
-            }
-            WorkDirItems::ListingItems(items) => {
-                items.push(ListingItems::Dirent(dirent));
-            }
-        }
-    } else {
-        tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(
-            InitialWorkDirRequirement {
-                listing: WorkDirItems::ListingItems(vec![ListingItems::Dirent(dirent)]),
-            },
-        ));
-    }
-}
-
-fn get_entry_name(input: &str) -> String {
-    let trimmed = input.trim_start_matches(|c: char| !c.is_alphabetic());
-    // an all-non-alphabetic name (e.g. a bare "123") trims to "" — fall back to
-    // the untrimmed input rather than emitting the invalid "$(inputs.)"
-    let base = if trimmed.is_empty() { input } else { trimmed };
-    let name = base.replace(['.', '/'], "_").to_lowercase();
-    format!("$(inputs.{name})")
 }
 
 /// Tries to guess the CWLType of a given value
@@ -251,6 +213,7 @@ pub fn guess_type(value: &str) -> CWLType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use commonwl::requirements::{InitialWorkDirRequirement, ToolRequirements, WorkDirItems};
     use serde_json::Number;
 
     #[test]
@@ -363,12 +326,6 @@ mod tests {
     #[test]
     pub fn test_guess_type_malformed_yaml_does_not_panic() {
         assert_eq!(guess_type("{unclosed"), CWLType::String);
-    }
-
-    #[test]
-    pub fn test_get_entry_name_numeric_only() {
-        // an all-numeric filename must not produce the invalid "$(inputs.)"
-        assert_eq!(get_entry_name("123"), "$(inputs.123)");
     }
 
     #[test]

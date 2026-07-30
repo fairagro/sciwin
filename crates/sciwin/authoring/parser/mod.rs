@@ -1,26 +1,35 @@
+//! Turning raw command-line tokens into a CWL `CommandLineTool`.
+//!
+//! [`parse_command_line`] is the entry point and orchestrates the sub-modules:
+//! [`command`] finds the base command, [`shell`] handles pipes and redirections, [`inputs`]
+//! and [`outputs`] derive the parameters, and [`staging`] declares files the tool needs in
+//! its working directory. [`postprocess`] then runs over the assembled tool.
+
 use commonwl::{
-    IntegerOrExpression, OneOrMany,
-    documents::{Argument, CommandLineTool},
+    OneOrMany,
+    documents::CommandLineTool,
     files::{Directory, FileOrDirectory},
-    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
+    inputs::{CommandInputParameter, DefaultValue},
     requirements::{
         InitialWorkDirRequirement, ShellCommandRequirement, ToolRequirements, WorkDirItems,
     },
     types::CWLType,
 };
-use std::{fs, path::Path};
+use std::path::Path;
 
+mod command;
 mod inputs;
 mod outputs;
 mod postprocess;
-pub use inputs::*;
-pub(crate) use outputs::*;
+mod shell;
+mod staging;
+
+pub use inputs::guess_type;
+pub(crate) use command::{get_base_command, matches_script_executor, matches_script_modifier};
+pub(crate) use inputs::add_fixed_inputs;
+pub(crate) use outputs::get_outputs;
 pub(crate) use postprocess::post_process_cwl;
 
-//TODO complete list
-pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "node"];
-pub static SCRIPT_MODIFIERS: &[&str] = &["-e", "-m"];
-static SPECIAL_CHARS: &[&str] = &["|", ">", "2>"];
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 
 pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
@@ -32,74 +41,29 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     };
     let tool = CommandLineTool::builder().base_command(base_command.clone());
 
-    let mut tool = if !remainder.is_empty() {
-        let (cmd, piped) = split_vec_at(remainder, &"|");
+    let mut tool = if remainder.is_empty() {
+        tool.build()
+    } else {
+        let (cmd, piped) = shell::split_at_first(remainder, "|");
 
         let stdout_pos = cmd.iter().position(|i| *i == ">").unwrap_or(cmd.len());
         let stderr_pos = cmd.iter().position(|i| *i == "2>").unwrap_or(cmd.len());
         let first_redir_pos = usize::min(stdout_pos, stderr_pos);
 
-        let stdout = handle_redirection(&cmd[stdout_pos..]);
-        let stderr = handle_redirection(&cmd[stderr_pos..]);
+        let stdout = shell::handle_redirection(&cmd[stdout_pos..]);
+        let stderr = shell::handle_redirection(&cmd[stderr_pos..]);
 
-        let inputs = get_inputs(&cmd[..first_redir_pos]);
-
-        let args = collect_arguments(&piped, &inputs);
+        let inputs = inputs::get_inputs(&cmd[..first_redir_pos]);
+        let args = shell::collect_arguments(piped, &inputs);
 
         tool.inputs(inputs)
             .maybe_stdout(stdout)
             .maybe_stderr(stderr)
             .maybe_arguments(args)
             .build()
-    } else {
-        tool.build()
     };
 
-    //add working dir items
-    tool = match base_command {
-        OneOrMany::One(cmd) => {
-            //if command is an existing file, add to requirements
-            if let Some(req) = iwdr_for_existing_file(&cmd) {
-                tool.append_requirement_mut(req);
-            }
-            tool
-        }
-        OneOrMany::Many(ref vec) => {
-            //usual command `python script-file.py`
-            if let Some(req) = iwdr_for_existing_file(&vec[1]) {
-                tool.append_requirement_mut(req);
-            }
-            //command with `R -e script.R`
-            if vec.len() > 2
-                && SCRIPT_MODIFIERS.contains(&vec[1].as_str())
-                && let Some(req) = iwdr_for_existing_file(&vec[2])
-            {
-                tool.append_requirement_mut(req);
-            }
-            //command with `python -m folder`
-            if vec.len() > 2
-                && SCRIPT_MODIFIERS.contains(&vec[1].as_str())
-                && fs::exists(&vec[2]).unwrap_or_default()
-                && Path::new(&vec[2]).is_dir()
-            {
-                tool.inputs.push(
-                    CommandInputParameter::builder()
-                        .id("module")
-                        .r#type(CWLType::Directory)
-                        .default(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
-                            Directory::builder().location(&vec[2]).build(),
-                        )))
-                        .build(),
-                );
-                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(
-                    InitialWorkDirRequirement {
-                        listing: WorkDirItems::Expression("$(inputs.module)".to_string()),
-                    },
-                ));
-            }
-            tool
-        }
-    };
+    stage_base_command(&mut tool, &base_command);
 
     if tool.arguments.is_some() {
         tool.append_requirement_mut(ToolRequirements::ShellCommandRequirement(
@@ -109,133 +73,62 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     tool
 }
 
-/// Whether a token names a script interpreter, allowing a version suffix (`python3.11`).
-pub(crate) fn matches_script_executor(token: &str) -> bool {
-    SCRIPT_EXECUTORS.iter().any(|&exec| {
-        token == exec
-            || (token.starts_with(exec)
-                && token[exec.len()..]
-                    .chars()
-                    .next()
-                    .is_some_and(|c| !c.is_alphabetic()))
-    })
-}
+/// Declares whatever the base command runs -- a script file, or a module directory -- as
+/// staged, so it exists inside the tool's working directory at runtime.
+fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<String>) {
+    let tokens = match base_command {
+        //if command is an existing file, add to requirements
+        OneOrMany::One(cmd) => std::slice::from_ref(cmd),
+        OneOrMany::Many(vec) => vec.as_slice(),
+    };
 
-/// Whether a token is an interpreter modifier that shifts the payload one position right,
-/// as in `python -m module` or `R -e script.R`.
-pub(crate) fn matches_script_modifier(token: &str) -> bool {
-    SCRIPT_MODIFIERS.iter().any(|&modif| token.starts_with(modif))
-}
-
-pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
-    if command.is_empty() {
-        return OneOrMany::One(String::new());
+    //usual command `python script-file.py`, or a bare `./script.sh`
+    let script = if tokens.len() > 1 { &tokens[1] } else { &tokens[0] };
+    if let Some(req) = staging::iwdr_for_existing_file(script) {
+        tool.append_requirement_mut(req);
     }
 
-    let mut base_command = vec![command[0].to_string()];
-
-    if command.len() > 1 && matches_script_executor(command[0]) {
-        if command.len() > 2 && matches_script_modifier(command[1]) {
-            base_command.push(command[1].to_string()); //the modifier
-            base_command.push(command[2].to_string()); //the package
-        } else {
-            base_command.push(command[1].to_string());
-        }
+    //command with `R -e script.R`
+    let Some(payload) = tokens.get(2) else { return };
+    if !matches_script_modifier(&tokens[1]) {
+        return;
+    }
+    if let Some(req) = staging::iwdr_for_existing_file(payload) {
+        tool.append_requirement_mut(req);
     }
 
-    match base_command.len() {
-        1 => OneOrMany::One(command[0].to_string()),
-        _ => OneOrMany::Many(base_command),
+    //command with `python -m folder`
+    if Path::new(payload).is_dir() {
+        tool.inputs.push(
+            CommandInputParameter::builder()
+                .id("module")
+                .r#type(CWLType::Directory)
+                .default(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+                    Directory::builder().location(payload).build(),
+                )))
+                .build(),
+        );
+        tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(
+            InitialWorkDirRequirement {
+                listing: WorkDirItems::Expression("$(inputs.module)".to_string()),
+            },
+        ));
     }
-}
-
-fn handle_redirection(remaining_args: &[&str]) -> Option<String> {
-    //hopefully? most cases are only `some_command > some_file.out`
-    //redirect token comes at pos 0, discard that; pos 1 is the filename, if present
-    //(absent e.g. for a trailing dangling `>` with nothing after it)
-    remaining_args.get(1).map(|out_file| out_file.to_string())
-}
-
-fn collect_arguments(piped: &[&str], inputs: &[CommandInputParameter]) -> Option<Vec<Argument>> {
-    if piped.is_empty() {
-        return None;
-    }
-
-    let piped_args = piped.iter().enumerate().map(|(i, &x)| {
-        let shell_quote = if SPECIAL_CHARS.contains(&x) {
-            Some(false)
-        } else {
-            None
-        };
-        Argument::Binding(CommandLineBinding {
-            position: Some(IntegerOrExpression::Int(
-                (inputs.len() + i).try_into().unwrap(),
-            )),
-            value_from: Some(x.to_string()),
-            shell_quote,
-            ..Default::default()
-        })
-    });
-
-    let mut args = vec![Argument::Binding(CommandLineBinding {
-        position: Some(IntegerOrExpression::Int(
-            inputs.len().try_into().unwrap_or_default(),
-        )),
-        value_from: Some("|".to_string()),
-        shell_quote: Some(false),
-        ..Default::default()
-    })];
-    args.extend(piped_args);
-
-    Some(args)
-}
-
-fn split_vec_at<T: PartialEq + Clone, C: AsRef<[T]>>(vec: C, split_at: &T) -> (Vec<T>, Vec<T>) {
-    let slice = vec.as_ref();
-    if let Some(index) = slice.iter().position(|x| x == split_at) {
-        let lhs = slice[..index].to_vec();
-        let rhs = slice[index + 1..].to_vec();
-        (lhs, rhs)
-    } else {
-        (slice.to_vec(), vec![])
-    }
-}
-
-fn iwdr_for_existing_file(path: &str) -> Option<ToolRequirements> {
-    (fs::exists(path).unwrap_or_default() && Path::new(path).is_file()).then(|| {
-        ToolRequirements::InitialWorkDirRequirement(
-            InitialWorkDirRequirement::new_from_filename_include(path),
-        )
-    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonwl::inputs::CommandLineBinding;
+    use commonwl::{
+        documents::Argument,
+        inputs::{CommandInputParameter, CommandLineBinding},
+    };
     use rstest::rstest;
     use serde_json::Value;
-    use serial_test::serial;
 
     fn parse_command(command: &str) -> CommandLineTool {
         let cmd = shlex::split(command).unwrap();
         parse_command_line(&cmd.iter().map(|s| s.as_str()).collect::<Vec<_>>())
-    }
-
-    #[rstest]
-    #[case("python script.py --arg1 hello", OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()]))]
-    #[case("echo 'Hello World!'", OneOrMany::One("echo".to_string()))]
-    #[case("Rscript lol.R", OneOrMany::Many(vec!["Rscript".to_string(), "lol.R".to_string()]))]
-    #[case("", OneOrMany::One(String::new()))]
-    #[case("python", OneOrMany::One("python".to_string()))]
-    #[case("Rake build", OneOrMany::One("Rake".to_string()))]
-    #[case("python3.11 script.py", OneOrMany::Many(vec!["python3.11".to_string(), "script.py".to_string()]))]
-    pub fn test_get_base_command(#[case] command: &str, #[case] expected: OneOrMany<String>) {
-        let args = shlex::split(command).unwrap();
-        let args_slice: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
-
-        let result = get_base_command(&args_slice);
-        assert_eq!(result, expected);
     }
 
     #[rstest]
@@ -275,7 +168,7 @@ mod tests {
                     .input_binding(CommandLineBinding::builder().prefix("--option1").build())
                     .default(DefaultValue::Any(Value::String("value1".to_string()))).build()
             ]).build()
-            
+
     )]
     pub fn test_parse_command_line(#[case] input: &str, #[case] expected: CommandLineTool) {
         let result = parse_command(input);
@@ -335,22 +228,5 @@ mod tests {
             .expect("a secret_* input must be generated");
         // the credential itself must not be written into the tool file
         assert!(secret_input.default.is_none());
-    }
-
-    #[test]
-    #[serial]
-    pub fn test_python_module() {
-        let args = shlex::split("python3 -m my_module").unwrap();
-        let args_slice: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
-
-        let result = get_base_command(&args_slice);
-        assert_eq!(
-            result,
-            OneOrMany::Many(vec![
-                "python3".to_string(),
-                "-m".to_string(),
-                "my_module".to_string()
-            ])
-        );
     }
 }
