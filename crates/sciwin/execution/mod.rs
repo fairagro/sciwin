@@ -1,10 +1,9 @@
-use miette::Diagnostic;
-use std::io;
-use thiserror::Error;
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::Stream;
+use miette::Diagnostic;
 use miette::IntoDiagnostic;
 use reana::{api::response::WorkflowStatus, logs::ReanaLogMessage};
+use std::io;
 use std::{
     collections::HashMap,
     path::Path,
@@ -12,6 +11,7 @@ use std::{
     sync::{Arc, Mutex},
     task::{Context, Poll},
 };
+use thiserror::Error;
 use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{Level, info};
@@ -20,6 +20,8 @@ mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;
 pub use reana_runner::ReanaRunner;
+
+pub type RunnerResult<T> = Result<T, RunnerError>;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum RunnerError {
@@ -98,18 +100,18 @@ struct JobHandle {
     task: JoinHandle<()>,
     outputs: Arc<Mutex<Option<HashMap<String, DefaultValue>>>>,
 }
-pub struct LogStream(Pin<Box<dyn Stream<Item = Result<LogLine, RunnerError>> + Send>>);
+pub struct LogStream(Pin<Box<dyn Stream<Item = RunnerResult<LogLine>> + Send>>);
 impl LogStream {
     pub fn new<S>(stream: S) -> Self
     where
-        S: Stream<Item = Result<LogLine, RunnerError>> + Send + 'static,
+        S: Stream<Item = RunnerResult<LogLine>> + Send + 'static,
     {
         Self(Box::pin(stream))
     }
 }
 
 impl Stream for LogStream {
-    type Item = Result<LogLine, RunnerError>;
+    type Item = RunnerResult<LogLine>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.0.as_mut().poll_next(cx)
     }
@@ -171,16 +173,16 @@ pub trait WorkflowRunner {
         cwlfile: &Path,
         inputs: InputObject,
         out_dir: Option<&Path>,
-    ) -> Result<RunId, RunnerError>;
-    async fn status(&self, id: &RunId) -> Result<RunStatus, RunnerError>;
-    async fn logs(&self, id: &RunId) -> Result<LogStream, RunnerError>;
-    async fn cancel(&self, id: &RunId) -> Result<(), RunnerError>;
+    ) -> RunnerResult<RunId>;
+    async fn status(&self, id: &RunId) -> RunnerResult<RunStatus>;
+    async fn logs(&self, id: &RunId) -> RunnerResult<LogStream>;
+    async fn cancel(&self, id: &RunId) -> RunnerResult<()>;
     async fn outputs(
         &self,
         id: &RunId,
         out_dir: Option<&Path>,
-    ) -> Result<Option<HashMap<String, DefaultValue>>, RunnerError>;
-    async fn wait_for_completion(&self, id: &RunId) -> Result<RunStatus, RunnerError>;
+    ) -> RunnerResult<Option<HashMap<String, DefaultValue>>>;
+    async fn wait_for_completion(&self, id: &RunId) -> RunnerResult<RunStatus>;
     async fn run_workflow(
         &self,
         cwlfile: &Path,

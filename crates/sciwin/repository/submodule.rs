@@ -1,19 +1,25 @@
-use git2::{Error, Repository, build::RepoBuilder};
+use super::{commit, ini, stage_all};
+use crate::repository::RepositoryResult;
+use git2::{Repository, build::RepoBuilder};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-use super::{commit, ini, stage_all};
 
 /// Returns a list of paths of all submodules in the repository.
-pub fn get_submodule_paths(repo: &Repository) -> Result<Vec<PathBuf>, Error> {
+pub fn get_submodule_paths(repo: &Repository) -> RepositoryResult<Vec<PathBuf>> {
     let submodules = repo.submodules()?;
     let paths = submodules.iter().map(|s| s.path().to_path_buf()).collect();
     Ok(paths)
 }
 
 /// Adds a submodule to the current repository, stages the changes, and commits them.
-pub fn add_submodule(repo: &mut Repository, url: &str, branch: &Option<String>, path: &Path) -> Result<(), Error> {
+pub fn add_submodule(
+    repo: &mut Repository,
+    url: &str,
+    branch: &Option<String>,
+    path: &Path,
+) -> RepositoryResult<()> {
     //clone and initialize submodule
     if let Some(branch) = branch {
         RepoBuilder::new().branch(branch).clone(url, path)?;
@@ -33,19 +39,25 @@ pub fn add_submodule(repo: &mut Repository, url: &str, branch: &Option<String>, 
     //set correct branch to submodule
     if let Some(branch) = branch {
         let mut repo = Repository::open(repo.path())?;
-        repo.submodule_set_branch(module.name().unwrap(), branch)?;
+        repo.submodule_set_branch(module.name().unwrap_or(""), branch)?;
         module.sync()?;
     }
 
     //commit
     module.add_finalize()?;
     let name = module.name().unwrap_or("");
-    commit(repo, &format!("📦 Installed Package {}", name.strip_prefix("packages/").unwrap_or(name)))?;
+    commit(
+        repo,
+        &format!(
+            "📦 Installed Package {}",
+            name.strip_prefix("packages/").unwrap_or(name)
+        ),
+    )?;
     Ok(())
 }
 
 /// Removes a submodule from the current repository, stages the changes, and commits them.
-pub fn remove_submodule(repo: &Repository, name: &str) -> Result<(), Error> {
+pub fn remove_submodule(repo: &Repository, name: &str) -> RepositoryResult<()> {
     let module = repo.find_submodule(name)?;
     let repo_base_path = repo
         .path()
@@ -58,12 +70,20 @@ pub fn remove_submodule(repo: &Repository, name: &str) -> Result<(), Error> {
 
     //remove ksubmodule config
     let prefix = format!("submodule \"{name}\"");
-    ini::remove_section(repo.path().join("config"), &prefix).map_err(|_| git2::Error::from_str("Could not delete config entry"))?;
-    ini::remove_section(repo_base_path.join(".gitmodules"), &prefix).map_err(|_| git2::Error::from_str("Could not delete .gitmodulesg entry"))?;
+    ini::remove_section(repo.path().join("config"), &prefix)
+        .map_err(|_| git2::Error::from_str("Could not delete config entry"))?;
+    ini::remove_section(repo_base_path.join(".gitmodules"), &prefix)
+        .map_err(|_| git2::Error::from_str("Could not delete .gitmodulesg entry"))?;
 
     //stage and commit
     stage_all(repo)?;
-    commit(repo, &format!("📦 Removed Package {}", name.strip_prefix("packages/").unwrap_or(name)))?;
+    commit(
+        repo,
+        &format!(
+            "📦 Removed Package {}",
+            name.strip_prefix("packages/").unwrap_or(name)
+        ),
+    )?;
     Ok(())
 }
 

@@ -1,4 +1,6 @@
-use crate::execution::{JobHandle, LogStream, RunId, RunStatus, RunnerError, WorkflowRunner};
+use crate::execution::{
+    JobHandle, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner,
+};
 use commonwl::{
     engine::{
         EngineStatus, InputObject, TaskBackend, create_execution_request_with_inputs,
@@ -37,7 +39,7 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         cwlfile: &Path,
         inputs: InputObject,
         out_dir: Option<&Path>,
-    ) -> Result<RunId, RunnerError> {
+    ) -> RunnerResult<RunId> {
         let run_id: RunId = uuid::Uuid::new_v4().to_string();
         let cancel = CancellationToken::new();
         let (status_tx, _) = watch::channel(RunStatus::Queued);
@@ -88,19 +90,19 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         Ok(run_id)
     }
 
-    async fn status(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
+    async fn status(&self, id: &RunId) -> RunnerResult<RunStatus> {
         let jobs = self.jobs.lock().unwrap();
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
         Ok(job.status.borrow().clone())
     }
 
-    async fn logs(&self, _id: &RunId) -> Result<LogStream, RunnerError> {
+    async fn logs(&self, _id: &RunId) -> RunnerResult<LogStream> {
         Err(RunnerError::NotSupported(
             "local runner logs are only available live via run_workflow's console output",
         ))
     }
 
-    async fn cancel(&self, id: &RunId) -> Result<(), RunnerError> {
+    async fn cancel(&self, id: &RunId) -> RunnerResult<()> {
         let mut status_rx = {
             let jobs = self.jobs.lock().unwrap();
             let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
@@ -129,13 +131,13 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         &self,
         id: &RunId,
         _out_dir: Option<&Path>,
-    ) -> Result<Option<HashMap<String, DefaultValue>>, RunnerError> {
+    ) -> RunnerResult<Option<HashMap<String, DefaultValue>>> {
         let jobs = self.jobs.lock().unwrap();
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
         Ok(job.outputs.lock().unwrap().clone())
     }
 
-    async fn wait_for_completion(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
+    async fn wait_for_completion(&self, id: &RunId) -> RunnerResult<RunStatus> {
         let mut rx = {
             let jobs = self.jobs.lock().unwrap();
             let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;

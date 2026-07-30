@@ -1,4 +1,6 @@
-use crate::execution::{LogCursor, LogStream, RunId, RunStatus, RunnerError, WorkflowRunner};
+use crate::execution::{
+    LogCursor, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner,
+};
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::future::try_join_all;
 use reana::{
@@ -53,7 +55,7 @@ impl WorkflowRunner for ReanaRunner {
         cwlfile: &Path,
         inputs: InputObject,
         _out_dir: Option<&Path>,
-    ) -> Result<RunId, RunnerError> {
+    ) -> RunnerResult<RunId> {
         let name = "workflow"; //todo: set
 
         let CreatedWorkspace {
@@ -97,13 +99,13 @@ impl WorkflowRunner for ReanaRunner {
         Ok(workflow_id)
     }
 
-    async fn status(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
+    async fn status(&self, id: &RunId) -> RunnerResult<RunStatus> {
         let status = reana::client::status(self.client.clone(), id).await?;
         info!("[{id}] {:?}", status);
         Ok(status.into())
     }
 
-    async fn logs(&self, id: &RunId) -> Result<LogStream, RunnerError> {
+    async fn logs(&self, id: &RunId) -> RunnerResult<LogStream> {
         let client = self.client.clone();
         let id = id.clone();
 
@@ -140,7 +142,7 @@ impl WorkflowRunner for ReanaRunner {
         Ok(LogStream::new(stream))
     }
 
-    async fn cancel(&self, id: &RunId) -> Result<(), RunnerError> {
+    async fn cancel(&self, id: &RunId) -> RunnerResult<()> {
         reana::client::stop(self.client.clone(), id).await?;
         Ok(())
     }
@@ -149,7 +151,7 @@ impl WorkflowRunner for ReanaRunner {
         &self,
         id: &RunId,
         out_dir: Option<&Path>,
-    ) -> Result<Option<HashMap<String, DefaultValue>>, RunnerError> {
+    ) -> RunnerResult<Option<HashMap<String, DefaultValue>>> {
         let res = reana::client::specification(self.client.clone(), id).await?;
         let outputs = res.specification.outputs;
 
@@ -176,7 +178,7 @@ impl WorkflowRunner for ReanaRunner {
         Ok(outputs)
     }
 
-    async fn wait_for_completion(&self, id: &RunId) -> Result<RunStatus, RunnerError> {
+    async fn wait_for_completion(&self, id: &RunId) -> RunnerResult<RunStatus> {
         self.wait_for_completion_with_interval(id, Duration::from_secs(15))
             .await
     }
