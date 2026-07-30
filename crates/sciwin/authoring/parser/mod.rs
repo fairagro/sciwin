@@ -1,9 +1,12 @@
 //! Turning raw command-line tokens into a CWL `CommandLineTool`.
 //!
-//! [`parse_command_line`] is the entry point and orchestrates the sub-modules:
-//! [`command`] finds the base command, [`shell`] handles pipes and redirections, [`inputs`]
-//! and [`outputs`] derive the parameters, and [`staging`] declares files the tool needs in
-//! its working directory. [`postprocess`] then runs over the assembled tool.
+//! `parse_command_line` is the entry point and orchestrates the sub-modules: `command` finds
+//! the base command, `shell` handles pipes and redirections, `inputs` and `outputs` derive
+//! the parameters, and `staging` declares files the tool needs in its working directory.
+//! `postprocess` then runs over the assembled tool.
+//!
+//! Only [`guess_type`] is public; the rest is reached through
+//! [`crate::authoring::tool::create_tool`].
 
 use commonwl::{
     OneOrMany,

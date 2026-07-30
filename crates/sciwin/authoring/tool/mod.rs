@@ -1,11 +1,13 @@
 //! Turning a shell command into a CWL `CommandLineTool`.
 //!
-//! The pipeline, in order:
+//! [`create_tool`] is the entry point. The pipeline, in order:
 //!
-//! 1. [`parser::parse_command_line`] turns the raw tokens into a `CommandLineTool`
-//! 2. [`probe`] optionally runs it once to discover which files it produces
-//! 3. [`requirements`] attaches container, network, environment and mount requirements
-//! 4. [`save`] post-processes, rebases paths on the target location, and serializes
+//! 1. `parser::parse_command_line` turns the raw tokens into a `CommandLineTool`
+//! 2. `probe` optionally runs it once to discover which files it produces
+//! 3. `requirements` attaches container, network, environment and mount requirements
+//! 4. `save` post-processes, rebases paths on the target location, and serializes
+//!
+//! See [`crate::authoring`] for the same pipeline drawn out.
 
 mod probe;
 mod requirements;

@@ -1,3 +1,15 @@
+//! Running CWL documents, locally or on a remote REANA instance.
+//!
+//! [`WorkflowRunner`] is the one interface both backends implement -- submit, poll status,
+//! stream logs, cancel, collect outputs -- so a frontend writes the same code either way:
+//!
+//! - [`TaskRunner`] executes through [`commonwl::engine`] on this machine
+//! - [`ReanaRunner`] submits to a REANA cluster through the `reana` client
+//!
+//! Progress is reported by streaming, not printing: [`LogStream`] yields [`LogLine`]s as they
+//! arrive, and an internal cursor tracks how far a consumer has read so polling only ever
+//! yields what is new.
+
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::Stream;
 use miette::Diagnostic;

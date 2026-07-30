@@ -1,3 +1,8 @@
+//! A thin wrapper over [`git2`], covering what authoring and execution need: inspecting the
+//! working tree, staging, committing, and managing submodules.
+//!
+//! Paths handed to the staging functions may be absolute or relative to the work tree.
+
 mod commit;
 mod ini;
 pub mod submodule;
