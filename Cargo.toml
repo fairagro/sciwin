@@ -27,8 +27,8 @@ authors = [
 
 [workspace.dependencies]
 # core packages
-reana = { version = "0.2.0", path = "../reana-client-rs/crates/reana" }
-commonwl = { version = "0.8.5", features = ["engine"] }
+reana = { version = "0.2.0" }
+commonwl = { version = "0.9.0", features = ["engine"] }
 git2 = { version = "0.21.0", features = ["vendored-openssl"] }
 
 # serialization
