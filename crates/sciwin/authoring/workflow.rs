@@ -11,7 +11,11 @@ use commonwl::{
 use std::{fs, path::Path};
 
 pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> Result<String> {
-    let wf = CWLDocument::Workflow(Workflow::default());
+    let mut wf = Workflow {
+        cwl_version: Some("v1.2".to_string()),
+        ..Default::default()
+    };
+    let wf = CWLDocument::Workflow(wf);
     let filename = filename.as_ref();
 
     let mut yaml = serde_saphyr::to_string(&wf)?;
@@ -90,7 +94,11 @@ pub fn add_workflow_input_connection(
 
     //register input
     if !workflow.has_input(from_input) {
-        workflow.add_workflow_input_mut(from_input, to_slot.r#type.clone(), to_slot.default.clone());
+        workflow.add_workflow_input_mut(
+            from_input,
+            to_slot.r#type.clone(),
+            to_slot.default.clone(),
+        );
     }
 
     add_workflow_step(workflow, to_name, to_filename, &to_cwl);
