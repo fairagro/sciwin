@@ -11,7 +11,7 @@ use commonwl::{
 use std::{fs, path::Path};
 
 pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> Result<String> {
-    let mut wf = Workflow {
+    let wf = Workflow {
         cwl_version: Some("v1.2".to_string()),
         ..Default::default()
     };
