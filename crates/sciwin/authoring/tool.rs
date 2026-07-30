@@ -1,8 +1,7 @@
 use crate::{
     authoring::{
-        AuthoringError, AuthoringResult,
-        io::{self, resolve_path},
-        parser,
+        AuthoringError, AuthoringResult, parser,
+        paths::{self, resolve_path},
     },
     repository::{self, Repository},
 };
@@ -97,10 +96,10 @@ pub async fn create_tool(
         .map(Path::to_path_buf)
         .unwrap_or_else(|| {
             // default as in 1.x
-            Path::new(&io::get_workflows_folder())
-                .join(io::derive_tool_name(base_command, name.as_deref()))
+            Path::new(paths::WORKFLOWS_FOLDER)
+                .join(paths::derive_tool_name(base_command, name.as_deref()))
         });
-    let path = io::get_qualified_filename(base_command, name.as_deref(), output_dir);
+    let path = paths::get_qualified_filename(base_command, name.as_deref(), output_dir);
     let yaml = finalize_tool(&mut cwl, &path)?;
 
     if save {
@@ -114,18 +113,20 @@ pub async fn create_tool(
 
 fn save_tool_to_disk(
     yaml: &str,
-    path: &String,
+    path: &Path,
     repo: &Repository,
     commit: bool,
 ) -> AuthoringResult<()> {
-    let parent = Path::new(path).parent().unwrap();
-    fs::create_dir_all(parent)
-        .with_context(|| format!("Failed to create directories for {parent:?}"))?;
-    fs::write(path, yaml).with_context(|| format!("Creation of file {path} failed"))?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directories for {}", parent.display()))?;
+    }
+    fs::write(path, yaml)
+        .with_context(|| format!("Creation of file {} failed", path.display()))?;
 
     if commit {
         repository::stage_file(repo, path)?;
-        repository::commit(repo, &format!("🪄 Creation of `{path}`"))?;
+        repository::commit(repo, &format!("🪄 Creation of `{}`", path.display()))?;
     }
     Ok(())
 }
@@ -312,7 +313,7 @@ fn append_container_requirement_mut(cwl: &mut CommandLineTool, container: Option
     }
 }
 
-fn finalize_tool(cwl: &mut CommandLineTool, path: &str) -> AuthoringResult<String> {
+fn finalize_tool(cwl: &mut CommandLineTool, path: &Path) -> AuthoringResult<String> {
     parser::post_process_cwl(cwl)?;
     let mut yaml = prepare_save(cwl, path)?;
     yaml = format_cwl(&yaml)
@@ -320,7 +321,7 @@ fn finalize_tool(cwl: &mut CommandLineTool, path: &str) -> AuthoringResult<Strin
     Ok(yaml)
 }
 
-fn prepare_save(tool: &mut CommandLineTool, path: &str) -> AuthoringResult<String> {
+fn prepare_save(tool: &mut CommandLineTool, path: &Path) -> AuthoringResult<String> {
     //rewire paths to new location
     for input in &mut tool.inputs {
         if let Some(DefaultValue::FileOrDirectory(FileOrDirectory::File(value))) =
@@ -518,7 +519,7 @@ mod tests {
             ])
             .build();
 
-        prepare_save(&mut clt, "workflows/tool/tool.cwl").unwrap();
+        prepare_save(&mut clt, Path::new("workflows/tool/tool.cwl")).unwrap();
 
         //check if paths are rewritten upon tool saving
 

@@ -1,10 +1,13 @@
+//! Deriving tool names and file locations. Pure path arithmetic -- nothing here touches the
+//! filesystem.
+
 use crate::authoring::parser::{matches_script_executor, matches_script_modifier};
 use commonwl::OneOrMany;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub fn get_workflows_folder() -> String {
-    "workflows/".to_string()
-}
+/// Conventional folder a project keeps its CWL documents in. Callers are free to save
+/// elsewhere -- [`get_qualified_filename`] takes the base directory as an argument.
+pub const WORKFLOWS_FOLDER: &str = "workflows";
 
 /// Derives the tool's base name (no extension) from its command line, or from `name`
 pub fn derive_tool_name(command: &OneOrMany<String>, name: Option<&str>) -> String {
@@ -49,13 +52,9 @@ pub fn get_qualified_filename(
     command: &OneOrMany<String>,
     the_name: Option<&str>,
     base_dir: impl AsRef<Path>,
-) -> String {
+) -> PathBuf {
     let filename = format!("{}.cwl", derive_tool_name(command, the_name));
-    base_dir
-        .as_ref()
-        .join(filename)
-        .to_string_lossy()
-        .into_owned()
+    base_dir.as_ref().join(filename)
 }
 
 pub(crate) fn get_filename_without_extension(relative_path: impl AsRef<Path>) -> String {
@@ -67,6 +66,9 @@ pub(crate) fn get_filename_without_extension(relative_path: impl AsRef<Path>) ->
     filename.split('.').next().unwrap_or(&filename).to_string()
 }
 
+/// Rewrites `filename` to be relative to `relative_to`. Returns a `String` rather than a
+/// `PathBuf` because every caller assigns the result straight into a CWL `location`/`include`
+/// field, which the schema types as a string.
 pub(crate) fn resolve_path<P: AsRef<Path>, Q: AsRef<Path>>(filename: P, relative_to: Q) -> String {
     let path = filename.as_ref();
     let relative_path = Path::new(relative_to.as_ref());
@@ -119,11 +121,6 @@ mod tests {
         assert_eq!(resolve_path(path, relative_to), os_path(expected));
     }
 
-    #[test]
-    pub fn test_get_workflows_folder() {
-        //could be variable in future
-        assert_eq!(get_workflows_folder(), "workflows/");
-    }
 
     #[rstest]
     #[case(OneOrMany::Many(vec!["python3".to_string(), "test/data/script.py".to_string()]), "script")]
@@ -176,8 +173,8 @@ mod tests {
     #[case(OneOrMany::One("echo".to_string()), "workflows/echo.cwl")]
     fn test_get_qualified_filename(#[case] command: OneOrMany<String>, #[case] expected: &str) {
         assert_eq!(
-            get_qualified_filename(&command, None, get_workflows_folder()),
-            expected
+            get_qualified_filename(&command, None, WORKFLOWS_FOLDER),
+            Path::new(&os_path(expected))
         );
     }
 
@@ -187,9 +184,9 @@ mod tests {
             get_qualified_filename(
                 &OneOrMany::One("echo".to_string()),
                 Some("hello"),
-                get_workflows_folder()
+                WORKFLOWS_FOLDER
             ),
-            "workflows/hello.cwl"
+            Path::new(&os_path("workflows/hello.cwl"))
         );
     }
 
@@ -198,7 +195,7 @@ mod tests {
         // the base directory is entirely the caller's decision, not derived here
         assert_eq!(
             get_qualified_filename(&OneOrMany::One("echo".to_string()), None, "out/dir"),
-            "out/dir/echo.cwl"
+            Path::new(&os_path("out/dir/echo.cwl"))
         );
     }
 
@@ -209,11 +206,11 @@ mod tests {
         let shared = "workflows/my_group";
         assert_eq!(
             get_qualified_filename(&OneOrMany::One("tool_a".to_string()), None, shared),
-            "workflows/my_group/tool_a.cwl"
+            Path::new(&os_path("workflows/my_group/tool_a.cwl"))
         );
         assert_eq!(
             get_qualified_filename(&OneOrMany::One("tool_b".to_string()), None, shared),
-            "workflows/my_group/tool_b.cwl"
+            Path::new(&os_path("workflows/my_group/tool_b.cwl"))
         );
     }
 }

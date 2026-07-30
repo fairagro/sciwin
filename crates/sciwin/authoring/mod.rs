@@ -3,8 +3,8 @@ use miette::Diagnostic;
 use std::path::PathBuf;
 use thiserror::Error;
 
-pub mod io;
 pub mod parser;
+pub mod paths;
 pub mod tool;
 
 pub type AuthoringResult<T> = Result<T, AuthoringError>;
