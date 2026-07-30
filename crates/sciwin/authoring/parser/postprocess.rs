@@ -125,8 +125,8 @@ fn post_process_variables(tool: &mut CommandLineTool) {
         }
     }
 
-    if processed_once && let Some(reqs) = &mut tool.requirements {
-        reqs.push(ToolRequirements::InlineJavascriptRequirement(
+    if processed_once {
+        tool.append_requirement_mut(ToolRequirements::InlineJavascriptRequirement(
             InlineJavascriptRequirement::default(),
         ));
     }
@@ -149,7 +149,11 @@ fn post_process_ids(tool: &mut CommandLineTool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonwl::inputs::CommandInputParameter;
+    use commonwl::{
+        files::{File, FileOrDirectory},
+        inputs::CommandInputParameter,
+        outputs::{CommandOutputBinding, CommandOutputParameter},
+    };
     use serde_json::Value;
 
     #[test]
@@ -208,5 +212,39 @@ mod tests {
 
         let other = &tool.inputs[1];
         assert_eq!(other.r#type, CWLType::Int.into());
+    }
+
+    #[test]
+    pub fn test_post_process_variables_adds_requirement_when_none_exist() {
+        let mut tool = CommandLineTool::builder()
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id("infile")
+                    .r#type(CWLType::File)
+                    .default(DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                        File::builder().location("foo.txt").build(),
+                    )))
+                    .build(),
+            ])
+            .outputs(vec![
+                CommandOutputParameter::builder()
+                    .id("out")
+                    .r#type(CWLType::File)
+                    .output_binding(CommandOutputBinding {
+                        glob: Some(OneOrMany::One("foo.txt".to_string())),
+                        ..Default::default()
+                    })
+                    .build(),
+            ])
+            .build();
+
+        assert!(tool.requirements.is_none());
+        post_process_variables(&mut tool);
+
+        assert!(tool.has_requirement::<InlineJavascriptRequirement>());
+        assert_eq!(
+            tool.outputs[0].output_binding.as_ref().unwrap().glob,
+            Some(OneOrMany::One("$(inputs.infile.path)".to_string()))
+        );
     }
 }

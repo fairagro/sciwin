@@ -1,6 +1,6 @@
 use crate::{
     authoring::{
-        AuthoringError, AuthoringResult,
+        AuthoringContext, AuthoringError, AuthoringResult,
         io::{self, resolve_path},
         parser,
     },
@@ -121,45 +121,25 @@ fn save_tool_to_disk(
     commit: bool,
 ) -> AuthoringResult<()> {
     let parent = Path::new(path).parent().unwrap();
-    fs::create_dir_all(parent).map_err(|e| {
-        AuthoringError::Unknown(anyhow::anyhow!(
-            "Failed to create directories for {parent:?}: {e}"
-        ))
-    })?;
-    match fs::write(path, yaml) {
-        Ok(()) => {
-            if commit {
-                repository::stage_file(repo, path)?;
-                repository::commit(repo, &format!("🪄 Creation of `{path}`"))?;
-            }
-        }
-        Err(e) => {
-            return Err(AuthoringError::Unknown(anyhow::anyhow!(
-                "Creation of File {path} failed: {e}"
-            )));
-        }
+    fs::create_dir_all(parent).with_context(|| format!("Failed to create directories for {parent:?}"))?;
+    fs::write(path, yaml).with_context(|| format!("Creation of file {path} failed"))?;
+
+    if commit {
+        repository::stage_file(repo, path)?;
+        repository::commit(repo, &format!("🪄 Creation of `{path}`"))?;
     }
     Ok(())
 }
 
 async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<CommandLineTool> {
-    let command: &[String] = options.command;
-    let outputs: &[String] = options.outputs;
-    let inputs: &[String] = options.inputs;
-    let no_run: bool = options.no_run;
-    let cleanup: bool = options.cleanup;
-    let commit: bool = options.commit;
-    let clear_defaults: bool = options.clear_defaults;
-    let run_container = options.run_container;
-
-    let command = command.iter().map(String::as_str).collect::<Vec<_>>();
+    let command = options.command.iter().map(String::as_str).collect::<Vec<_>>();
     let current_working_dir = env::current_dir()?;
 
     //check for modified files and fail if there are any
     let repo = Repository::open(&current_working_dir)?;
     let modified = repository::get_modified_files(&repo)?;
 
-    if !no_run && !modified.is_empty() {
+    if !options.no_run && !modified.is_empty() {
         return Err(AuthoringError::Unknown(anyhow::anyhow!(
             "Uncommitted changes detected: {:?}",
             modified
@@ -171,25 +151,25 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<
     cwl.cwl_version = Some("v1.2".to_string());
 
     // handle outputs
-    if !outputs.is_empty() {
-        cwl.outputs = parser::get_outputs(outputs);
+    if !options.outputs.is_empty() {
+        cwl.outputs = parser::get_outputs(options.outputs);
     }
 
-    if !inputs.is_empty() {
+    if !options.inputs.is_empty() {
         parser::add_fixed_inputs(
             &mut cwl,
-            &inputs.iter().map(String::as_str).collect::<Vec<_>>(),
+            &options.inputs.iter().map(String::as_str).collect::<Vec<_>>(),
         )?;
     }
-    if !no_run {
+    if !options.no_run {
         let storage = Arc::new(StorageBackend::new());
         let backend = Arc::new(LocalBackend::new(
-            run_container.unwrap_or(ContainerEngine::Docker),
+            options.run_container.unwrap_or(ContainerEngine::Docker),
             storage,
             StoragePath::from_local(&env::temp_dir()),
         ));
 
-        if run_container.is_some() {
+        if options.run_container.is_some() {
             cwl = add_tool_requirements(
                 cwl,
                 options.container.as_ref(),
@@ -240,13 +220,13 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<
         let mut files = repository::get_modified_files(&repo)?;
         files.retain(|f| !modified.contains(f));
 
-        if cleanup {
+        if options.cleanup {
             for file in &files {
-                remove_file(file)?;
+                remove_file(file).with_context(|| format!("Failed to remove {file}"))?;
             }
         }
 
-        if commit {
+        if options.commit {
             for file in &files {
                 let path = Path::new(file);
                 if path.exists() {
@@ -259,13 +239,13 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<
             }
         }
 
-        if outputs.is_empty() {
+        if options.outputs.is_empty() {
             cwl.outputs = parser::get_outputs(&files);
         }
     }
 
     // Clear defaults if requested
-    if clear_defaults {
+    if options.clear_defaults {
         for input in &mut cwl.inputs {
             input.default = None;
         }
@@ -372,7 +352,7 @@ fn prepare_save(tool: &mut CommandLineTool, path: &str) -> AuthoringResult<Strin
 }
 
 fn read_env(path: &Path) -> AuthoringResult<HashMap<String, String>> {
-    let f = fs::File::open(path)?;
+    let f = fs::File::open(path).with_context(|| format!("Failed to open env file {path:?}"))?;
     let reader = BufReader::new(f);
 
     let mut map = HashMap::new();
@@ -386,14 +366,8 @@ fn read_env(path: &Path) -> AuthoringResult<HashMap<String, String>> {
 
 fn filter_output(cwl: &CommandLineTool) -> String {
     let staged_roots = get_iwdr_roots(cwl);
-    let staged_js = format!(
-        "[{}]",
-        staged_roots
-            .iter()
-            .map(|s| format!("\"{}\"", s))
-            .collect::<Vec<_>>()
-            .join(",")
-    );
+    // serde_json::to_string escapes quotes/backslashes in root names
+    let staged_js = serde_json::to_string(&staged_roots).unwrap_or_else(|_| "[]".to_string());
     format!(
         "${{ var staged = {staged_js}; \
        return self.filter(function(f) {{ \

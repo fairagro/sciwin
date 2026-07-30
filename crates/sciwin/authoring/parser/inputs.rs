@@ -7,7 +7,7 @@ use commonwl::{
     documents::CommandLineTool,
     files::{Directory, Dirent, File, FileOrDirectory},
     inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
-    requirements::{ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
+    requirements::{InitialWorkDirRequirement, ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
     types::CWLType,
 };
 use rand::{RngExt, distr::Alphanumeric};
@@ -45,26 +45,31 @@ fn is_flag_like(s: &str) -> bool {
 
 fn get_positional(current: &str, index: isize) -> CommandInputParameter {
     let (current, cwl_type) = parse_input(current);
-    let default_value = parse_default_value(current, &cwl_type);
 
-    //check id for bad words
-    let mut id = slugify!(&current, separator = "_");
-    if BAD_WORDS
+    // detected before building id/default -- a secret must never reach the default
+    // value either, only its presence (behind a random id) may be recorded
+    let is_secret = BAD_WORDS
         .iter()
-        .any(|&word| current.to_lowercase().contains(word))
-    {
+        .any(|&word| current.to_lowercase().contains(word));
+
+    let id = if is_secret {
         let rnd: String = rand::rng()
             .sample_iter(&Alphanumeric)
             .take(2)
             .map(char::from)
             .collect();
-        id = format!("secret_{rnd}");
-    }
+        format!("secret_{rnd}")
+    } else {
+        slugify!(&current, separator = "_")
+    };
+
+    // secrets are left without a default
+    let default_value = (!is_secret).then(|| parse_default_value(current, &cwl_type));
 
     CommandInputParameter::builder()
         .id(&id)
         .r#type(cwl_type)
-        .default(default_value)
+        .maybe_default(default_value)
         .input_binding(
             CommandLineBinding::builder()
                 .position(IntegerOrExpression::Int(index as i32))
@@ -74,24 +79,22 @@ fn get_positional(current: &str, index: isize) -> CommandInputParameter {
 }
 
 fn get_flag(current: &str) -> CommandInputParameter {
-    let id = current.replace('-', "");
+    // slugify already strips leading `-`/`--`
     CommandInputParameter::builder()
         .input_binding(CommandLineBinding::builder().prefix(current).build())
-        .id(slugify!(&id, separator = "_").as_str())
+        .id(slugify!(current, separator = "_").as_str())
         .r#type(CWLType::Boolean)
         .default(DefaultValue::Any(Value::Bool(true)))
         .build()
 }
 
 fn get_option(current: &str, next: &str) -> CommandInputParameter {
-    let id = current.replace('-', "");
-
     let (next, cwl_type) = parse_input(next);
     let default_value = parse_default_value(next, &cwl_type);
 
     CommandInputParameter::builder()
         .input_binding(CommandLineBinding::builder().prefix(current).build())
-        .id(slugify!(&id, separator = "_").as_str())
+        .id(slugify!(current, separator = "_").as_str())
         .r#type(cwl_type)
         .default(default_value)
         .build()
@@ -136,37 +139,13 @@ fn parse_input(input: &str) -> (&str, CWLType) {
     }
 }
 
-pub(crate) fn add_fixed_inputs(
-    tool: &mut CommandLineTool,
-    inputs: &[&str],
-) -> AuthoringResult<()> {
+pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> AuthoringResult<()> {
     for input in inputs {
         let (input, type_) = parse_input(input);
 
         //todo: add requiement for directory also or add new --mount param and remove block from here
-        if matches!(type_, CWLType::File)
-            && let Some(requirements) = &mut tool.requirements
-        {
-            for item in requirements {
-                if let ToolRequirements::InitialWorkDirRequirement(req) = item {
-                    let dirent = Dirent::builder()
-                        .entry(StringOrInclude::String(get_entry_name(input)))
-                        .entryname(input)
-                        .build();
-                    match &mut req.listing {
-                        WorkDirItems::Expression(expr) => {
-                            req.listing = WorkDirItems::ListingItems(vec![
-                                ListingItems::Dirent(dirent),
-                                ListingItems::Expression(expr.to_string()),
-                            ]);
-                        }
-                        WorkDirItems::ListingItems(items) => {
-                            items.push(ListingItems::Dirent(dirent));
-                        }
-                    }
-                    break;
-                }
-            }
+        if matches!(type_, CWLType::File) {
+            stage_fixed_input(tool, input);
         }
 
         let default = match type_ {
@@ -190,6 +169,34 @@ pub(crate) fn add_fixed_inputs(
     }
 
     Ok(())
+}
+
+/// Stages a fixed File input into the working dir 
+fn stage_fixed_input(tool: &mut CommandLineTool, input: &str) {
+    let dirent = Dirent::builder()
+        .entry(StringOrInclude::String(get_entry_name(input)))
+        .entryname(input)
+        .build();
+
+    if let Some(req) = tool.get_requirement_mut::<InitialWorkDirRequirement>() {
+        match &mut req.listing {
+            WorkDirItems::Expression(expr) => {
+                req.listing = WorkDirItems::ListingItems(vec![
+                    ListingItems::Dirent(dirent),
+                    ListingItems::Expression(expr.clone()),
+                ]);
+            }
+            WorkDirItems::ListingItems(items) => {
+                items.push(ListingItems::Dirent(dirent));
+            }
+        }
+    } else {
+        tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(
+            InitialWorkDirRequirement {
+                listing: WorkDirItems::ListingItems(vec![ListingItems::Dirent(dirent)]),
+            },
+        ));
+    }
 }
 
 fn get_entry_name(input: &str) -> String {
@@ -385,6 +392,61 @@ mod tests {
         for input in inputs {
             let t = guess_type(input.0);
             assert_eq!(t, input.1);
+        }
+    }
+
+    #[test]
+    pub fn test_get_flag_multiword_id_keeps_word_boundary() {
+        // regression: get_flag/get_option used to `current.replace('-', "")` before
+        // slugify, which for a multi-word flag stripped the internal dash *before*
+        // slugify could turn it into the separator -- "--dry-run" became id "dryrun"
+        // instead of "dry_run". slugify already handles leading/internal dashes itself.
+        let result = get_inputs(&["--dry-run"]);
+        assert_eq!(result[0].id.as_deref(), Some("dry_run"));
+    }
+
+    #[test]
+    pub fn test_get_option_multiword_id_keeps_word_boundary() {
+        let result = get_inputs(&["--max-retries", "3"]);
+        assert_eq!(result[0].id.as_deref(), Some("max_retries"));
+    }
+
+    #[test]
+    pub fn test_add_fixed_inputs_creates_requirement_when_none_exist() {
+        // regression: the File-staging block in add_fixed_inputs used to only mutate an
+        // existing InitialWorkDirRequirement and silently do nothing when tool.requirements
+        // was None (e.g. base command isn't a script file that pre-created one)
+        let mut tool = CommandLineTool::builder().build();
+        assert!(tool.requirements.is_none());
+
+        add_fixed_inputs(&mut tool, &["f:foo.txt"]).unwrap();
+
+        let req = tool
+            .get_requirement::<InitialWorkDirRequirement>()
+            .expect("InitialWorkDirRequirement must be created");
+        match &req.listing {
+            WorkDirItems::ListingItems(items) => assert_eq!(items.len(), 1),
+            WorkDirItems::Expression(_) => panic!("expected ListingItems"),
+        }
+    }
+
+    #[test]
+    pub fn test_add_fixed_inputs_merges_into_existing_requirement() {
+        let mut tool = CommandLineTool::builder()
+            .requirements(vec![ToolRequirements::InitialWorkDirRequirement(
+                InitialWorkDirRequirement {
+                    listing: WorkDirItems::ListingItems(vec![]),
+                },
+            )])
+            .build();
+
+        add_fixed_inputs(&mut tool, &["f:foo.txt", "f:bar.txt"]).unwrap();
+
+        assert_eq!(tool.requirements.as_ref().unwrap().len(), 1);
+        let req = tool.get_requirement::<InitialWorkDirRequirement>().unwrap();
+        match &req.listing {
+            WorkDirItems::ListingItems(items) => assert_eq!(items.len(), 2),
+            WorkDirItems::Expression(_) => panic!("expected ListingItems"),
         }
     }
 }

@@ -12,7 +12,11 @@ pub(crate) fn get_outputs(files: &[String]) -> Vec<CommandOutputParameter> {
             let trimmed = f.trim_start_matches(|c: char| !c.is_alphabetic());
             // an all-non-alphabetic name (e.g. a bare "123") trims to "" — fall back to
             // the untrimmed name rather than emitting an empty CWL id
-            let base = if trimmed.is_empty() { f.as_str() } else { trimmed };
+            let base = if trimmed.is_empty() {
+                f.as_str()
+            } else {
+                trimmed
+            };
             let file_id = base
                 .trim_end_matches('/')
                 .to_string()

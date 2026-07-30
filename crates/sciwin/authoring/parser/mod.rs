@@ -1,8 +1,13 @@
-use commonwl::{IntegerOrExpression, OneOrMany, documents::{Argument, CommandLineTool}, 
-    files::{Directory, Dirent, FileOrDirectory}, 
-    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue}, 
-    requirements::{Include, InitialWorkDirRequirement, ListingItems, ShellCommandRequirement, StringOrInclude, ToolRequirements, WorkDirItems}, 
-    types::CWLType};
+use commonwl::{
+    IntegerOrExpression, OneOrMany,
+    documents::{Argument, CommandLineTool},
+    files::{Directory, FileOrDirectory},
+    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
+    requirements::{
+        InitialWorkDirRequirement, ShellCommandRequirement, ToolRequirements, WorkDirItems,
+    },
+    types::CWLType,
+};
 use std::{fs, path::Path};
 
 mod inputs;
@@ -22,8 +27,8 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     let base_command = get_base_command(commands);
 
     let remainder = match &base_command {
-       OneOrMany::One(_) => &commands[1..],
-       OneOrMany::Many(vec) => &commands[vec.len()..],
+        OneOrMany::One(_) => &commands[1..],
+        OneOrMany::Many(vec) => &commands[vec.len()..],
     };
     let tool = CommandLineTool::builder().base_command(base_command.clone());
 
@@ -41,8 +46,12 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
 
         let args = collect_arguments(&piped, &inputs);
 
-        tool.inputs(inputs).maybe_stdout(stdout).maybe_stderr(stderr).maybe_arguments(args).build()
-    }else {
+        tool.inputs(inputs)
+            .maybe_stdout(stdout)
+            .maybe_stderr(stderr)
+            .maybe_arguments(args)
+            .build()
+    } else {
         tool.build()
     };
 
@@ -50,43 +59,56 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     tool = match base_command {
         OneOrMany::One(cmd) => {
             //if command is an existing file, add to requirements
-            if fs::exists(&cmd).unwrap_or_default() {
-                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(&cmd)));
+            if let Some(req) = iwdr_for_existing_file(&cmd) {
+                tool.append_requirement_mut(req);
             }
             tool
         }
         OneOrMany::Many(ref vec) => {
-            //usual command `pyton script-file.py`
-            if fs::exists(&vec[1]).unwrap_or_default() && Path::new(&vec[1]).is_file() {
-                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
-                    &vec[1],
-                )));
+            //usual command `python script-file.py`
+            if let Some(req) = iwdr_for_existing_file(&vec[1]) {
+                tool.append_requirement_mut(req);
             }
             //command with `R -e script.R`
-            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_file() {
-               tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
-                    &vec[2],
-                )));
+            if vec.len() > 2
+                && SCRIPT_MODIFIERS.contains(&vec[1].as_str())
+                && let Some(req) = iwdr_for_existing_file(&vec[2])
+            {
+                tool.append_requirement_mut(req);
             }
             //command with `python -m folder`
-            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {
-                tool.inputs.push(CommandInputParameter::builder().id("module").r#type(CWLType::Directory).default(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(&vec[2]).build()))).build());
-                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: WorkDirItems::Expression("$(inputs.module)".to_string()) }));
+            if vec.len() > 2
+                && SCRIPT_MODIFIERS.contains(&vec[1].as_str())
+                && fs::exists(&vec[2]).unwrap_or_default()
+                && Path::new(&vec[2]).is_dir()
+            {
+                tool.inputs.push(
+                    CommandInputParameter::builder()
+                        .id("module")
+                        .r#type(CWLType::Directory)
+                        .default(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+                            Directory::builder().location(&vec[2]).build(),
+                        )))
+                        .build(),
+                );
+                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(
+                    InitialWorkDirRequirement {
+                        listing: WorkDirItems::Expression("$(inputs.module)".to_string()),
+                    },
+                ));
             }
             tool
         }
     };
 
     if tool.arguments.is_some() {
-        tool.append_requirement_mut(ToolRequirements::ShellCommandRequirement(ShellCommandRequirement));
+        tool.append_requirement_mut(ToolRequirements::ShellCommandRequirement(
+            ShellCommandRequirement,
+        ));
     }
     tool
 }
 
-/// `command[0].starts_with(exec)` alone false-positives on unrelated commands that
-/// happen to share a prefix (e.g. "R" matching "Rake", "Restore-Item"). Require the
-/// character right after the matched prefix to be non-alphabetic (digit/dot/end of
-/// string), so "python3.11" still matches "python3" but "pythonic" does not.
 fn matches_script_executor(token: &str) -> bool {
     SCRIPT_EXECUTORS.iter().any(|&exec| {
         token == exec
@@ -106,7 +128,11 @@ pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
     let mut base_command = vec![command[0].to_string()];
 
     if command.len() > 1 && matches_script_executor(command[0]) {
-        if command.len() > 2 && SCRIPT_MODIFIERS.iter().any(|&modif| command[1].starts_with(modif)) {
+        if command.len() > 2
+            && SCRIPT_MODIFIERS
+                .iter()
+                .any(|&modif| command[1].starts_with(modif))
+        {
             base_command.push(command[1].to_string()); //the modifier
             base_command.push(command[2].to_string()); //the package
         } else {
@@ -135,9 +161,13 @@ fn collect_arguments(piped: &[&str], inputs: &[CommandInputParameter]) -> Option
     let piped_args = piped.iter().enumerate().map(|(i, &x)| {
         let shell_quote = if SPECIAL_CHARS.contains(&x) {
             Some(false)
-        } else{None};
+        } else {
+            None
+        };
         Argument::Binding(CommandLineBinding {
-            position: Some(IntegerOrExpression::Int((inputs.len() + i).try_into().unwrap())),
+            position: Some(IntegerOrExpression::Int(
+                (inputs.len() + i).try_into().unwrap(),
+            )),
             value_from: Some(x.to_string()),
             shell_quote,
             ..Default::default()
@@ -145,7 +175,9 @@ fn collect_arguments(piped: &[&str], inputs: &[CommandInputParameter]) -> Option
     });
 
     let mut args = vec![Argument::Binding(CommandLineBinding {
-        position: Some(IntegerOrExpression::Int(inputs.len().try_into().unwrap_or_default())),
+        position: Some(IntegerOrExpression::Int(
+            inputs.len().try_into().unwrap_or_default(),
+        )),
         value_from: Some("|".to_string()),
         shell_quote: Some(false),
         ..Default::default()
@@ -166,24 +198,12 @@ fn split_vec_at<T: PartialEq + Clone, C: AsRef<[T]>>(vec: C, split_at: &T) -> (V
     }
 }
 
-fn iwdr_by_file(filename: &str) -> InitialWorkDirRequirement {
-    InitialWorkDirRequirement::builder()
-    .listing(
-        WorkDirItems::ListingItems(
-            vec![
-                    ListingItems::Dirent(
-                        Dirent::builder().
-                        entry(StringOrInclude::Include(
-                            Include{include: filename.to_string()})
-                        )
-                        .entryname(filename)
-                        .build()
-                    )
-                    ]
-                )
-            )
-    
-    .build()
+fn iwdr_for_existing_file(path: &str) -> Option<ToolRequirements> {
+    (fs::exists(path).unwrap_or_default() && Path::new(path).is_file()).then(|| {
+        ToolRequirements::InitialWorkDirRequirement(
+            InitialWorkDirRequirement::new_from_filename_include(path),
+        )
+    })
 }
 
 #[cfg(test)]
@@ -298,17 +318,20 @@ mod tests {
 
     #[test]
     pub fn test_badwords() {
-        let tool = parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql");
+        let tool =
+            parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql");
         // no generated input id should leak a bad word — it must have been redacted to "secret_*"
         assert!(tool.inputs.iter().all(|i| {
             let id = i.id.as_ref().unwrap().to_lowercase();
             !BAD_WORDS.iter().any(|&word| id.contains(word))
         }));
-        assert!(
-            tool.inputs
-                .iter()
-                .any(|i| i.id.as_ref().unwrap().starts_with("secret_"))
-        );
+        let secret_input = tool
+            .inputs
+            .iter()
+            .find(|i| i.id.as_ref().unwrap().starts_with("secret_"))
+            .expect("a secret_* input must be generated");
+        // the credential itself must not be written into the tool file
+        assert!(secret_input.default.is_none());
     }
 
     #[test]
@@ -320,7 +343,11 @@ mod tests {
         let result = get_base_command(&args_slice);
         assert_eq!(
             result,
-            OneOrMany::Many(vec!["python3".to_string(), "-m".to_string(), "my_module".to_string()])
+            OneOrMany::Many(vec![
+                "python3".to_string(),
+                "-m".to_string(),
+                "my_module".to_string()
+            ])
         );
     }
 }
