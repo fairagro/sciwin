@@ -48,6 +48,7 @@ use thiserror::Error;
 pub mod parser;
 pub mod paths;
 pub mod tool;
+pub mod workflow;
 
 /// Result alias for this module. See [`crate::Result`] for code spanning several modules.
 pub type AuthoringResult<T> = Result<T, AuthoringError>;
