@@ -6,3 +6,4 @@ pub mod reana {
 }
 
 pub mod execution;
+pub mod repository;

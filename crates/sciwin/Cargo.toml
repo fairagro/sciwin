@@ -10,10 +10,11 @@ authors.workspace = true
 path = "lib.rs"
 
 [dependencies]
-async-trait.workspace = true
-async-stream.workspace = true
 commonwl.workspace = true
 reana.workspace = true
+git2.workspace = true
+async-trait.workspace = true
+async-stream.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 futures.workspace = true
@@ -27,12 +28,14 @@ tempfile.workspace = true
 walkdir.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
-tracing-subscriber.workspace = true
+configparser.workspace = true
 
 [dev-dependencies]
+tracing-subscriber.workspace = true
 dotenvy.workspace = true
 shlex.workspace = true
 rstest.workspace = true
+fstest.workspace = true
 
 [lints]
 workspace = true
