@@ -1,5 +1,5 @@
 use crate::authoring::{AuthoringError, AuthoringResult};
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use commonwl::{
     OneOrMany,
     documents::{CWLDocument, Workflow},
@@ -20,7 +20,7 @@ pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> AuthoringResu
     let filename = filename.as_ref();
 
     let mut yaml = serde_saphyr::to_string(&wf)?;
-    yaml = format_cwl(&yaml).map_err(|e| anyhow!("Could not format yaml: {}", e))?;
+    yaml = format_cwl(&yaml).context("Could not format yaml")?;
 
     //removes file first if exists and force is given
     if force && filename.exists() {
@@ -354,4 +354,170 @@ fn schema_matches(output: &CommandOutputSchema, input: &InputSchema) -> bool {
 
 fn local_name(name: &str) -> &str {
     name.rsplit(['#', '/']).next().unwrap_or(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use commonwl::{
+        documents::{CWLDocument, CommandLineTool, Workflow},
+        inputs::CommandInputParameter,
+        outputs::CommandOutputParameter,
+        types::CWLType,
+    };
+    use std::{fs, path::Path};
+    use tempfile::tempdir;
+
+    fn write_tool(path: &Path, input: &str, output: &str) {
+        let tool = CommandLineTool::builder()
+            .cwl_version("v1.2")
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id(input)
+                    .r#type(CWLType::String)
+                    .build(),
+            ])
+            .outputs(vec![
+                CommandOutputParameter::builder()
+                    .id(output)
+                    .r#type(CWLType::String)
+                    .build(),
+            ])
+            .build();
+
+        let yaml = serde_saphyr::to_string(&CWLDocument::CommandLineTool(tool)).unwrap();
+        fs::write(path, yaml).unwrap();
+    }
+
+    #[test]
+    fn create_workflow_creates_file() {
+        let dir = tempdir().unwrap();
+        let wf = dir.path().join("workflow.cwl");
+
+        create_workflow(&wf, false).unwrap();
+
+        assert!(wf.exists());
+
+        let doc = load_cwl_file(&wf, true).unwrap();
+        assert!(matches!(doc, CWLDocument::Workflow(_)));
+        assert_eq!(doc.cwl_version(), Some(&"v1.2".to_string()));
+    }
+
+    #[test]
+    fn add_step_registers_step_and_outputs() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+
+        write_tool(&tool_path, "in", "out");
+
+        let mut wf = Workflow::default();
+        let doc = load_cwl_file(&tool_path, true).unwrap();
+
+        add_workflow_step(&mut wf, "tool", &tool_path, &doc).unwrap();
+
+        assert!(wf.has_step("tool"));
+
+        let step = wf.get_step("tool").unwrap();
+        assert_eq!(step.out.len(), 1);
+        assert_eq!(step.out[0].id(), "out");
+    }
+
+    #[test]
+    fn connect_workflow_input() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+
+        write_tool(&tool_path, "message", "out");
+
+        let mut wf = Workflow::default();
+
+        add_workflow_input_connection(&mut wf, "workflow_input", &tool_path, "tool", "message")
+            .unwrap();
+
+        assert!(wf.has_input("workflow_input"));
+        assert!(wf.has_step("tool"));
+
+        let step = wf.get_step("tool").unwrap();
+        assert_eq!(step.r#in.len(), 1);
+        assert_eq!(
+            step.r#in[0].source.as_ref().unwrap().as_many(),
+            vec!["workflow_input".to_string()]
+        );
+    }
+
+    #[test]
+    fn connect_workflow_output() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+
+        write_tool(&tool_path, "in", "result");
+
+        let mut wf = Workflow::default();
+
+        add_workflow_output_connection(&mut wf, "tool", "result", &tool_path, "final_result")
+            .unwrap();
+
+        assert!(wf.has_output("final_result"));
+
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final_result"))
+            .unwrap();
+
+        assert_eq!(
+            output.output_source.as_ref().unwrap().as_many(),
+            vec!["tool/result".to_string()]
+        );
+    }
+
+    #[test]
+    fn connect_two_steps() {
+        let dir = tempdir().unwrap();
+
+        let producer = dir.path().join("producer.cwl");
+        let consumer = dir.path().join("consumer.cwl");
+
+        write_tool(&producer, "dummy", "value");
+        write_tool(&consumer, "value", "result");
+
+        let mut wf = Workflow::default();
+
+        add_workflow_step_connection(
+            &mut wf, &producer, "producer", "value", &consumer, "consumer", "value",
+        )
+        .unwrap();
+
+        assert!(wf.has_step("producer"));
+        assert!(wf.has_step("consumer"));
+
+        let step = wf.get_step("consumer").unwrap();
+
+        assert_eq!(
+            step.r#in[0].source.as_ref().unwrap().as_many(),
+            vec!["producer/value".to_string()]
+        );
+    }
+
+    #[test]
+    fn remove_connections() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+
+        write_tool(&tool_path, "in", "out");
+
+        let mut wf = Workflow::default();
+
+        add_workflow_input_connection(&mut wf, "wf_in", &tool_path, "tool", "in").unwrap();
+        add_workflow_output_connection(&mut wf, "tool", "out", &tool_path, "wf_out").unwrap();
+
+        remove_workflow_input_connection(&mut wf, "wf_in", "tool", "in", true).unwrap();
+        remove_workflow_output_connection(&mut wf, "wf_out", true).unwrap();
+
+        assert!(!wf.has_input("wf_in"));
+        assert!(!wf.has_output("wf_out"));
+
+        let step = wf.get_step("tool").unwrap();
+        assert!(step.r#in.is_empty());
+    }
 }
