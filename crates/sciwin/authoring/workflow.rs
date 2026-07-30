@@ -1,15 +1,11 @@
 use anyhow::{Context, Result};
 use commonwl::{
     OneOrMany,
-    documents::{CWLDocument, StringOrDocument, Workflow, WorkflowStep},
+    documents::{CWLDocument, Workflow},
     format::format_cwl,
-    inputs::{InputSchema, InputType, WorkflowInputParameter, WorkflowStepInput},
+    inputs::{InputSchema, InputType},
     load_cwl_file,
-    outputs::{
-        CommandOutputParameterType, CommandOutputSchema, CommandOutputType,
-        StringOrWorkflowStepOutput, WorkflowOutputParameter,
-    },
-    requirements::{SubworkflowFeatureRequirement, WorkflowRequirements},
+    outputs::{CommandOutputParameterType, CommandOutputSchema, CommandOutputType},
     types::CWLType,
 };
 use std::{fs, path::Path};
@@ -57,38 +53,21 @@ pub fn add_workflow_step(
     path: impl AsRef<Path>,
     doc: &CWLDocument,
 ) {
-    let path = path.as_ref().to_string_lossy().into_owned();
-    if !workflow.has_step(name) {
-        let path = if path.starts_with("workflows") {
-            path.replace("workflows", "..")
-        } else {
-            format!("../../{path}")
-        };
-        let workflow_step = WorkflowStep::builder()
-            .id(name.to_string())
-            .run(StringOrDocument::String(path))
-            .out(
-                doc.get_output_ids()
-                    .iter()
-                    .map(|id| StringOrWorkflowStepOutput::String(id.clone()))
-                    .collect::<Vec<_>>(),
-            )
-            .r#in(vec![])
-            .build();
-        workflow.steps.push(workflow_step);
-        if !workflow.has_requirement::<SubworkflowFeatureRequirement>() {
-            if let Some(requirements) = &mut workflow.requirements {
-                requirements.push(WorkflowRequirements::SubworkflowFeatureRequirement(
-                    SubworkflowFeatureRequirement {},
-                ));
-            } else {
-                workflow.requirements =
-                    Some(vec![WorkflowRequirements::SubworkflowFeatureRequirement(
-                        SubworkflowFeatureRequirement {},
-                    )]);
-            }
-        }
+    if workflow.has_step(name) {
+        return;
     }
+    let path = path.as_ref().to_string_lossy().into_owned();
+    let path = if path.starts_with("workflows") {
+        path.replace("workflows", "..")
+    } else {
+        format!("../../{path}")
+    };
+    workflow
+        .add_workflow_step_empty_mut(name, Path::new(&path))
+        .expect("step existence just checked above");
+    workflow
+        .add_workflow_step_outputs_by_doc_mut(name, doc)
+        .expect("step was just added above");
 }
 
 /// Adds a connection between an input and a `CommandLineTool`. The tool will be registered as step if it is not already and an Workflow input will be added.
@@ -111,28 +90,14 @@ pub fn add_workflow_input_connection(
 
     //register input
     if !workflow.has_input(from_input) {
-        let mut input = WorkflowInputParameter::builder()
-            .id(from_input)
-            .r#type(to_slot.r#type.clone())
-            .build();
-        input.default = to_slot.default.clone();
-        workflow.inputs.push(input);
+        workflow.add_workflow_input_mut(from_input, to_slot.r#type.clone(), to_slot.default.clone());
     }
 
     add_workflow_step(workflow, to_name, to_filename, &to_cwl);
     //add input in step
     workflow
-        .steps
-        .iter_mut()
-        .find(|step| step.id == Some(to_name.to_owned()))
-        .unwrap()
-        .r#in
-        .push(
-            WorkflowStepInput::builder()
-                .id(to_slot_id.to_string())
-                .source(OneOrMany::One(from_input.to_owned()))
-                .build(),
-        );
+        .add_workflow_step_input_mut(to_name, to_slot_id, OneOrMany::One(from_input.to_owned()))
+        .expect("step was just added above");
     Ok(())
 }
 
@@ -173,22 +138,20 @@ pub fn add_workflow_output_connection(
     .expect("No slot");
     add_workflow_step(workflow, from_name, from_filename, &from_cwl);
 
-    if !workflow.has_output(to_output) {
-        workflow.outputs.push(
-            WorkflowOutputParameter::builder()
-                .id(to_output)
-                .r#type(from_type)
-                .output_source(OneOrMany::One(format!("{from_name}/{from_slot_id}")))
-                .build(),
-        );
-    } else {
+    if workflow.has_output(to_output) {
         let output = workflow
             .outputs
             .iter_mut()
             .find(|o| o.id == Some(to_output.to_owned()))
-            .unwrap();
+            .expect("has_output confirmed above");
         output.r#type = from_type;
         output.output_source = Some(OneOrMany::One(format!("{from_name}/{from_slot_id}")));
+    } else {
+        workflow.add_workflow_output_mut(
+            to_output,
+            from_type,
+            OneOrMany::One(format!("{from_name}/{from_slot_id}")),
+        );
     }
 
     Ok(())
@@ -232,17 +195,11 @@ pub fn add_workflow_step_connection(
         add_workflow_step(workflow, to_name, to_filename, &to_cwl);
     }
 
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id == Some(to_name.to_owned()))
-        .unwrap(); //safe here!
-    step.r#in.push(
-        WorkflowStepInput::builder()
-            .id(to_slot_id.to_string())
-            .source(OneOrMany::One(format!("{from_name}/{from_slot_id}")))
-            .build(),
-    );
+    workflow.add_workflow_step_input_mut(
+        to_name,
+        to_slot_id,
+        OneOrMany::One(format!("{from_name}/{from_slot_id}")),
+    )?;
 
     Ok(())
 }
@@ -253,24 +210,8 @@ pub fn remove_workflow_step_connection(
     to_name: &str,
     to_slot_id: &str,
 ) -> Result<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id == Some(to_name.to_owned()));
-    // If the step is found, try to remove the connection by removing input from `tool_y` that uses output of `tool_x`
-    // Input is empty, change that?
-    if let Some(step) = step {
-        if step
-            .r#in
-            .iter()
-            .any(|v| v.id == Some(to_slot_id.to_owned()))
-        {
-            step.r#in.retain(|v| v.id != Some(to_slot_id.to_owned()));
-        }
-        Ok(())
-    } else {
-        anyhow::bail!("Failed to find step {} in workflow!", to_name);
-    }
+    workflow.remove_workflow_step_input_mut(to_name, to_slot_id)?;
+    Ok(())
 }
 
 /// Removes an input from inputs and removes it from `CommandLineTool` input.
