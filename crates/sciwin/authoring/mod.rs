@@ -1,5 +1,6 @@
 use commonwl::{files::FileOrDirectory, inputs::DefaultValue};
 use miette::Diagnostic;
+use std::path::PathBuf;
 use thiserror::Error;
 
 pub mod io;
@@ -10,6 +11,24 @@ pub type AuthoringResult<T> = Result<T, AuthoringError>;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum AuthoringError {
+    #[error("uncommitted changes detected: {}", files.join(", "))]
+    #[diagnostic(
+        code = "authoring::DirtyWorkingTree",
+        help = "commit or stash the listed files, or skip the trial run"
+    )]
+    DirtyWorkingTree { files: Vec<String> },
+
+    #[error("could not find a git repository at {}", path.display())]
+    #[diagnostic(
+        code = "authoring::NoRepository",
+        help = "run this inside a git repository, or initialize one first"
+    )]
+    NoRepository {
+        path: PathBuf,
+        #[source]
+        source: git2::Error,
+    },
+
     #[error(transparent)]
     #[diagnostic(code = "io::Error")]
     IO(#[from] std::io::Error),
@@ -37,27 +56,6 @@ pub enum AuthoringError {
     #[error(transparent)]
     #[diagnostic(code = "authoring::Unknown")]
     Unknown(#[from] anyhow::Error),
-}
-
-/// `anyhow::Context`-style helper for `AuthoringResult`.
-pub(crate) trait AuthoringContext<T> {
-    fn with_context<F, M>(self, f: F) -> AuthoringResult<T>
-    where
-        F: FnOnce() -> M,
-        M: std::fmt::Display;
-}
-
-impl<T, E> AuthoringContext<T> for Result<T, E>
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    fn with_context<F, M>(self, f: F) -> AuthoringResult<T>
-    where
-        F: FnOnce() -> M,
-        M: std::fmt::Display,
-    {
-        self.map_err(|e| AuthoringError::Unknown(anyhow::anyhow!("{}: {e}", f())))
-    }
 }
 
 pub fn default_to_string(default: &DefaultValue) -> String {

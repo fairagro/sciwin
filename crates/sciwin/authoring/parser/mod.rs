@@ -109,7 +109,8 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
     tool
 }
 
-fn matches_script_executor(token: &str) -> bool {
+/// Whether a token names a script interpreter, allowing a version suffix (`python3.11`).
+pub(crate) fn matches_script_executor(token: &str) -> bool {
     SCRIPT_EXECUTORS.iter().any(|&exec| {
         token == exec
             || (token.starts_with(exec)
@@ -120,6 +121,12 @@ fn matches_script_executor(token: &str) -> bool {
     })
 }
 
+/// Whether a token is an interpreter modifier that shifts the payload one position right,
+/// as in `python -m module` or `R -e script.R`.
+pub(crate) fn matches_script_modifier(token: &str) -> bool {
+    SCRIPT_MODIFIERS.iter().any(|&modif| token.starts_with(modif))
+}
+
 pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
     if command.is_empty() {
         return OneOrMany::One(String::new());
@@ -128,11 +135,7 @@ pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
     let mut base_command = vec![command[0].to_string()];
 
     if command.len() > 1 && matches_script_executor(command[0]) {
-        if command.len() > 2
-            && SCRIPT_MODIFIERS
-                .iter()
-                .any(|&modif| command[1].starts_with(modif))
-        {
+        if command.len() > 2 && matches_script_modifier(command[1]) {
             base_command.push(command[1].to_string()); //the modifier
             base_command.push(command[2].to_string()); //the package
         } else {

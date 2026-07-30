@@ -1,49 +1,61 @@
-use crate::authoring::parser::{SCRIPT_EXECUTORS, SCRIPT_MODIFIERS};
+use crate::authoring::parser::{matches_script_executor, matches_script_modifier};
 use commonwl::OneOrMany;
 use std::path::Path;
 
 pub fn get_workflows_folder() -> String {
     "workflows/".to_string()
 }
-/// Derives the tool's base name (no extension) from its command line, or from `the_name`
-pub fn derive_tool_name(command: &OneOrMany<String>, the_name: Option<&str>) -> String {
-    let mut filename = match &command {
-        OneOrMany::Many(cmd) => {
-            if cmd.len() > 2 && SCRIPT_EXECUTORS.contains(&cmd[0].as_str()) && SCRIPT_MODIFIERS.contains(&cmd[1].as_str()) {
-                get_filename_without_extension(cmd[2].as_str())
-            } else if SCRIPT_EXECUTORS.contains(&cmd[0].as_str()) {
-                get_filename_without_extension(cmd[1].as_str())
-            } else {
-                get_filename_without_extension(cmd[0].as_str())
-            }
-        }
-        OneOrMany::One(cmd) => get_filename_without_extension(cmd.as_str()),
-    };
 
-    filename = Path::new(&filename).file_name().unwrap_or_default().to_string_lossy().into_owned();
-
-    if let Some(name) = the_name {
-        filename = name.to_string();
-        if is_cwl_file(&filename) {
-            filename = filename.replace(".cwl", "");
-        }
+/// Derives the tool's base name (no extension) from its command line, or from `name`
+pub fn derive_tool_name(command: &OneOrMany<String>, name: Option<&str>) -> String {
+    if let Some(name) = name {
+        return strip_cwl_extension(name);
     }
 
-    filename
+    match command {
+        OneOrMany::One(cmd) => get_filename_without_extension(cmd.as_str()),
+        OneOrMany::Many(cmd) => get_filename_without_extension(script_token(cmd)),
+    }
 }
 
-/// Builds `{base_dir}/{tool_name}.cwl` for the given command/name. 
+/// Picks the token a multi-part base command is named after. Mirrors how
+/// `parser::get_base_command` assembled that command in the first place
+fn script_token(cmd: &[String]) -> &str {
+    if !matches_script_executor(&cmd[0]) {
+        return &cmd[0];
+    }
+    //`python -m module` / `R -e script.R`: the payload is the third token
+    if cmd.len() > 2 && matches_script_modifier(&cmd[1]) {
+        return &cmd[2];
+    }
+    //usual command `python script.py`
+    cmd.get(1).map_or(cmd[0].as_str(), String::as_str)
+}
+
+/// Drops a trailing `.cwl`/`.CWL` while leaving any directory part and inner dots alone.
+fn strip_cwl_extension(name: &str) -> String {
+    match Path::new(name).extension() {
+        //`extension` is always preceded by a `.` and matched ASCII here, so this stays on a
+        //char boundary
+        Some(ext) if ext.eq_ignore_ascii_case("cwl") => {
+            name[..name.len() - ext.len() - 1].to_string()
+        }
+        _ => name.to_string(),
+    }
+}
+
+/// Builds `{base_dir}/{tool_name}.cwl` for the given command/name.
 pub fn get_qualified_filename(
     command: &OneOrMany<String>,
     the_name: Option<&str>,
     base_dir: impl AsRef<Path>,
 ) -> String {
     let filename = format!("{}.cwl", derive_tool_name(command, the_name));
-    base_dir.as_ref().join(filename).to_string_lossy().into_owned()
-}
-
-fn is_cwl_file(path: &str) -> bool {
-    Path::new(path).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("cwl"))
+    base_dir
+        .as_ref()
+        .join(filename)
+        .to_string_lossy()
+        .into_owned()
 }
 
 pub(crate) fn get_filename_without_extension(relative_path: impl AsRef<Path>) -> String {
@@ -73,6 +85,7 @@ pub(crate) fn resolve_path<P: AsRef<Path>, Q: AsRef<Path>>(filename: P, relative
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authoring::parser;
     use rstest::rstest;
     use test_utils::os_path;
 
@@ -85,11 +98,23 @@ mod tests {
     }
 
     #[rstest]
-    #[case("tests/testdata/input.txt", "workflows/echo/echo.cwl", "../../tests/testdata/input.txt")]
-    #[case("tests/testdata/input.txt", "workflows/echo/", "../../tests/testdata/input.txt")]
+    #[case(
+        "tests/testdata/input.txt",
+        "workflows/echo/echo.cwl",
+        "../../tests/testdata/input.txt"
+    )]
+    #[case(
+        "tests/testdata/input.txt",
+        "workflows/echo/",
+        "../../tests/testdata/input.txt"
+    )]
     #[case("workflows/echo/echo.py", "workflows/echo/echo.cwl", "echo.py")]
     #[case("workflows/lol/echo.py", "workflows/echo/echo.cwl", "../lol/echo.py")]
-    #[case("/home/user/workflows/echo/echo.py", "/home/user/workflows/echo/echo.cwl", "echo.py")]
+    #[case(
+        "/home/user/workflows/echo/echo.py",
+        "/home/user/workflows/echo/echo.cwl",
+        "echo.py"
+    )]
     fn test_resolve_path(#[case] path: &str, #[case] relative_to: &str, #[case] expected: &str) {
         assert_eq!(resolve_path(path, relative_to), os_path(expected));
     }
@@ -112,6 +137,37 @@ mod tests {
         assert_eq!(
             derive_tool_name(&OneOrMany::One("echo".to_string()), Some("hello")),
             "hello"
+        );
+    }
+
+    #[rstest]
+    #[case(vec!["python3.11", "script.py"], "script")]
+    #[case(vec!["python3", "script.py"], "script")]
+    //`python -m module` / `R -e script.R`: name comes from the third token
+    #[case(vec!["python3", "-m", "my_module"], "my_module")]
+    #[case(vec!["Rscript", "-e", "analysis.R"], "analysis")]
+    //not an executor -- named after the command itself
+    #[case(vec!["Rake", "build"], "Rake")]
+    fn test_derive_tool_name_mirrors_base_command(
+        #[case] command: Vec<&str>,
+        #[case] expected: &str,
+    ) {
+        let base = parser::get_base_command(&command);
+        assert_eq!(derive_tool_name(&base, None), expected);
+    }
+
+    #[rstest]
+    #[case("MyTool.CWL", "MyTool")]
+    #[case("hello.cwl", "hello")]
+    #[case("a.cwl.bak.cwl", "a.cwl.bak")]
+    #[case("no_extension", "no_extension")]
+    #[case("tool.txt", "tool.txt")]
+    //a directory part in the name is preserved -- only the extension is dropped
+    #[case("group/tool.cwl", "group/tool")]
+    fn test_derive_tool_name_strips_cwl_extension(#[case] name: &str, #[case] expected: &str) {
+        assert_eq!(
+            derive_tool_name(&OneOrMany::One("echo".to_string()), Some(name)),
+            expected
         );
     }
 

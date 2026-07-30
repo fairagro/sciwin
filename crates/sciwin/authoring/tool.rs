@@ -1,11 +1,12 @@
 use crate::{
     authoring::{
-        AuthoringContext, AuthoringError, AuthoringResult,
+        AuthoringError, AuthoringResult,
         io::{self, resolve_path},
         parser,
     },
     repository::{self, Repository},
 };
+use anyhow::Context as _;
 use commonwl::{
     OneOrMany,
     documents::{CWLDocument, CommandLineTool},
@@ -104,11 +105,8 @@ pub async fn create_tool(
 
     if save {
         let cwd = env::current_dir()?;
-        let repo = Repository::open(&cwd).map_err(|e| {
-            AuthoringError::Unknown(anyhow::anyhow!(
-                "Could not find git repository at {cwd:?}: {e}"
-            ))
-        })?;
+        let repo = Repository::open(&cwd)
+            .map_err(|source| AuthoringError::NoRepository { path: cwd, source })?;
         save_tool_to_disk(&yaml, &path, &repo, options.commit)?;
     }
     Ok(yaml)
@@ -121,7 +119,8 @@ fn save_tool_to_disk(
     commit: bool,
 ) -> AuthoringResult<()> {
     let parent = Path::new(path).parent().unwrap();
-    fs::create_dir_all(parent).with_context(|| format!("Failed to create directories for {parent:?}"))?;
+    fs::create_dir_all(parent)
+        .with_context(|| format!("Failed to create directories for {parent:?}"))?;
     fs::write(path, yaml).with_context(|| format!("Creation of file {path} failed"))?;
 
     if commit {
@@ -132,18 +131,23 @@ fn save_tool_to_disk(
 }
 
 async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<CommandLineTool> {
-    let command = options.command.iter().map(String::as_str).collect::<Vec<_>>();
+    let command = options
+        .command
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
     let current_working_dir = env::current_dir()?;
 
     //check for modified files and fail if there are any
-    let repo = Repository::open(&current_working_dir)?;
+    let repo =
+        Repository::open(&current_working_dir).map_err(|source| AuthoringError::NoRepository {
+            path: current_working_dir.clone(),
+            source,
+        })?;
     let modified = repository::get_modified_files(&repo)?;
 
     if !options.no_run && !modified.is_empty() {
-        return Err(AuthoringError::Unknown(anyhow::anyhow!(
-            "Uncommitted changes detected: {:?}",
-            modified
-        )));
+        return Err(AuthoringError::DirtyWorkingTree { files: modified });
     }
 
     //parse command
@@ -158,7 +162,11 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<
     if !options.inputs.is_empty() {
         parser::add_fixed_inputs(
             &mut cwl,
-            &options.inputs.iter().map(String::as_str).collect::<Vec<_>>(),
+            &options
+                .inputs
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
         )?;
     }
     if !options.no_run {
@@ -423,8 +431,42 @@ mod tests {
         },
         types::CWLType,
     };
+    use fstest::fstest;
     use serde_json::Value;
     use test_utils::os_path;
+
+    #[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt"])]
+    pub async fn test_dirty_working_tree_is_a_typed_variant() {
+        fs::write("uncommitted.txt", "scratch").unwrap();
+
+        let command = ["echo".to_string(), "hello".to_string()];
+        let options = ToolCreationOptions {
+            command: &command,
+            ..Default::default()
+        };
+
+        let err = create_tool(&options, None, false).await.unwrap_err();
+        let AuthoringError::DirtyWorkingTree { files } = &err else {
+            panic!("expected DirtyWorkingTree, got {err:?}");
+        };
+        assert!(files.iter().any(|f| f == "uncommitted.txt"));
+    }
+
+    /// Same reasoning: a missing repository is a state a frontend offers to fix.
+    #[fstest(tokio = true)]
+    pub async fn test_missing_repository_is_a_typed_variant() {
+        let command = ["echo".to_string(), "hello".to_string()];
+        let options = ToolCreationOptions {
+            command: &command,
+            ..Default::default()
+        };
+
+        let err = create_tool(&options, None, false).await.unwrap_err();
+        assert!(
+            matches!(err, AuthoringError::NoRepository { .. }),
+            "expected NoRepository, got {err:?}"
+        );
+    }
 
     #[test]
     pub fn test_cwl_save() {

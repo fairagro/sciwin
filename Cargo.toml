@@ -133,3 +133,4 @@ inherits = "dev"
 
 [patch.crates-io]
 reana = { path = "../reana-client-rs/crates/reana" }
+commonwl = { path = "../commonwl/crates/commonwl" }
