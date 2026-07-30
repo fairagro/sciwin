@@ -20,7 +20,7 @@ pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> AuthoringResu
     let filename = filename.as_ref();
 
     let mut yaml = serde_saphyr::to_string(&wf)?;
-    yaml = format_cwl(&yaml).map_err(|e| anyhow::anyhow!("Could not formal yaml: {e}"))?;
+    yaml = format_cwl(&yaml).context("Could not formal yaml")?;
 
     //removes file first if exists and force is given
     if force && filename.exists() {
@@ -41,12 +41,10 @@ pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> AuthoringResu
             parent.to_string_lossy()
         )
     })?;
-    fs::write(filename, &yaml).map_err(|e| {
-        anyhow::anyhow!(
-            "❌ Could not create workflow {} at {}: {}",
-            name,
+    fs::write(filename, &yaml).with_context(|| {
+        format!(
+            "❌ Could not create workflow {name} at {}",
             filename.to_string_lossy(),
-            e
         )
     })?;
     Ok(yaml)
@@ -57,9 +55,9 @@ pub fn add_workflow_step(
     name: &str,
     path: impl AsRef<Path>,
     doc: &CWLDocument,
-) {
+) -> AuthoringResult<()> {
     if workflow.has_step(name) {
-        return;
+        return Ok(()); // or do we want error?
     }
     let path = path.as_ref().to_string_lossy().into_owned();
     let path = if path.starts_with("workflows") {
@@ -67,12 +65,10 @@ pub fn add_workflow_step(
     } else {
         format!("../../{path}")
     };
-    workflow
-        .add_workflow_step_empty_mut(name, Path::new(&path))
-        .expect("step existence just checked above");
-    workflow
-        .add_workflow_step_outputs_by_doc_mut(name, doc)
-        .expect("step was just added above");
+    workflow.add_workflow_step_empty_mut(name, Path::new(&path))?;
+    workflow.add_workflow_step_outputs_by_doc_mut(name, doc)?;
+
+    Ok(())
 }
 
 /// Adds a connection between an input and a `CommandLineTool`. The tool will be registered as step if it is not already and an Workflow input will be added.
@@ -85,8 +81,7 @@ pub fn add_workflow_input_connection(
 ) -> AuthoringResult<()> {
     let to_filename = to_filename.as_ref();
 
-    let to_cwl = load_cwl_file(to_filename, true)
-        .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+    let to_cwl = load_cwl_file(to_filename, true)?;
     let to_inputs = to_cwl.get_inputs();
     let to_slot = to_inputs
         .iter()
@@ -102,7 +97,7 @@ pub fn add_workflow_input_connection(
         );
     }
 
-    add_workflow_step(workflow, to_name, to_filename, &to_cwl);
+    add_workflow_step(workflow, to_name, to_filename, &to_cwl)?;
     //add input in step
     workflow
         .add_workflow_step_input_mut(to_name, to_slot_id, OneOrMany::One(from_input.to_owned()))
@@ -120,8 +115,7 @@ pub fn add_workflow_output_connection(
 ) -> AuthoringResult<()> {
     let from_filename = from_filename.as_ref();
 
-    let from_cwl = load_cwl_file(from_filename, true)
-        .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+    let from_cwl = load_cwl_file(from_filename, true)?;
     let from_type = match &from_cwl {
         CWLDocument::CommandLineTool(clt) => clt
             .outputs
@@ -145,7 +139,7 @@ pub fn add_workflow_output_connection(
             .map(|i| i.r#type.clone()),
     }
     .expect("No slot");
-    add_workflow_step(workflow, from_name, from_filename, &from_cwl);
+    add_workflow_step(workflow, from_name, from_filename, &from_cwl)?;
 
     if workflow.has_output(to_output) {
         let output = workflow
@@ -181,8 +175,7 @@ pub fn add_workflow_step_connection(
     let to_filename = to_filename.as_ref();
 
     if !workflow.has_step(from_name) {
-        let from_cwl = load_cwl_file(from_filename, true)
-            .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
+        let from_cwl = load_cwl_file(from_filename, true)?;
         let from_outputs = from_cwl.get_output_ids();
         if !from_outputs.contains(&from_slot_id.to_string()) {
             return Err(AuthoringError::InvalidWorkflowOutput {
@@ -192,14 +185,13 @@ pub fn add_workflow_step_connection(
         }
 
         //create step
-        add_workflow_step(workflow, from_name, from_filename, &from_cwl);
+        add_workflow_step(workflow, from_name, from_filename, &from_cwl)?;
     }
 
     //check if step exists
     if !workflow.has_step(to_name) {
-        let to_cwl = load_cwl_file(to_filename, true)
-            .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
-        add_workflow_step(workflow, to_name, to_filename, &to_cwl);
+        let to_cwl = load_cwl_file(to_filename, true)?;
+        add_workflow_step(workflow, to_name, to_filename, &to_cwl)?;
     }
 
     workflow.add_workflow_step_input_mut(
