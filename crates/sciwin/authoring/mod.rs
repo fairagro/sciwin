@@ -77,6 +77,22 @@ pub enum AuthoringError {
         source: git2::Error,
     },
 
+    #[error("Input {id} not found in {path}")]
+    #[diagnostic(code = "authoring::InvalidWorkflowInput")]
+    InvalidWorkflowInput { id: String, path: String },
+
+    #[error("Input {id} not found in {path}")]
+    #[diagnostic(code = "authoring::InvalidWorkflowOutput")]
+    InvalidWorkflowOutput { id: String, path: String },
+
+    #[error("Step {id} not found in workflow")]
+    #[diagnostic(code = "authoring::InvalidWorkflowStep")]
+    InvalidWorkflowStep { id: String },
+
+    #[error(transparent)]
+    #[diagnostic(code = "commonwl::Error")]
+    CWL(#[from] commonwl::Error),
+
     #[error(transparent)]
     #[diagnostic(code = "io::Error")]
     IO(#[from] std::io::Error),

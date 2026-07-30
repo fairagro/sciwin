@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use crate::authoring::{AuthoringError, AuthoringResult};
+use anyhow::Context;
 use commonwl::{
     OneOrMany,
     documents::{CWLDocument, Workflow},
@@ -10,7 +11,7 @@ use commonwl::{
 };
 use std::{fs, path::Path};
 
-pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> Result<String> {
+pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> AuthoringResult<String> {
     let wf = Workflow {
         cwl_version: Some("v1.2".to_string()),
         ..Default::default()
@@ -81,7 +82,7 @@ pub fn add_workflow_input_connection(
     to_filename: impl AsRef<Path>,
     to_name: &str,
     to_slot_id: &str,
-) -> Result<()> {
+) -> AuthoringResult<()> {
     let to_filename = to_filename.as_ref();
 
     let to_cwl = load_cwl_file(to_filename, true)
@@ -116,7 +117,7 @@ pub fn add_workflow_output_connection(
     from_slot_id: &str,
     from_filename: impl AsRef<Path>,
     to_output: &str,
-) -> Result<()> {
+) -> AuthoringResult<()> {
     let from_filename = from_filename.as_ref();
 
     let from_cwl = load_cwl_file(from_filename, true)
@@ -174,7 +175,7 @@ pub fn add_workflow_step_connection(
     to_filename: impl AsRef<Path>,
     to_name: &str,
     to_slot_id: &str,
-) -> Result<()> {
+) -> AuthoringResult<()> {
     //check if step already exists and create if not
     let from_filename = from_filename.as_ref();
     let to_filename = to_filename.as_ref();
@@ -184,12 +185,10 @@ pub fn add_workflow_step_connection(
             .map_err(|e| anyhow::anyhow!("Failed to load CWL document: {e}"))?;
         let from_outputs = from_cwl.get_output_ids();
         if !from_outputs.contains(&from_slot_id.to_string()) {
-            anyhow::bail!(
-                "Tool {} does not have output `{}`. Cannot not create node from {:?} in Workflow!",
-                from_name,
-                from_slot_id,
-                from_filename
-            );
+            return Err(AuthoringError::InvalidWorkflowOutput {
+                id: from_slot_id.to_string(),
+                path: from_name.to_string(),
+            });
         }
 
         //create step
@@ -217,7 +216,7 @@ pub fn remove_workflow_step_connection(
     workflow: &mut Workflow,
     to_name: &str,
     to_slot_id: &str,
-) -> Result<()> {
+) -> AuthoringResult<()> {
     workflow.remove_workflow_step_input_mut(to_name, to_slot_id)?;
     Ok(())
 }
@@ -229,7 +228,7 @@ pub fn remove_workflow_input_connection(
     to_name: &str,
     to_slot_id: &str,
     remove_input: bool,
-) -> Result<()> {
+) -> AuthoringResult<()> {
     if remove_input
         && let Some(index) = workflow
             .inputs
@@ -251,10 +250,15 @@ pub fn remove_workflow_input_connection(
             step.r#in.retain(|v| v.id != Some(to_slot_id.to_owned()));
             Ok(())
         } else {
-            anyhow::bail!("Input {} not found in step {}!", to_slot_id, to_name);
+            Err(AuthoringError::InvalidWorkflowInput {
+                id: to_slot_id.to_string(),
+                path: format!("step {to_name}"),
+            })
         }
     } else {
-        anyhow::bail!("Step {} not found in workflow!", to_name);
+        Err(AuthoringError::InvalidWorkflowStep {
+            id: to_name.to_string(),
+        })
     }
 }
 
@@ -263,7 +267,7 @@ pub fn remove_workflow_output_connection(
     workflow: &mut Workflow,
     to_output: &str,
     remove_output: bool,
-) -> Result<()> {
+) -> AuthoringResult<()> {
     if remove_output
         && let Some(index) = workflow
             .outputs
