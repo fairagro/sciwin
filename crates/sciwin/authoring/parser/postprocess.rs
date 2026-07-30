@@ -1,4 +1,4 @@
-use crate::authoring::{AuthoringResult, default_to_string};
+use crate::authoring::AuthoringResult;
 use commonwl::{
     OneOrMany,
     documents::{Argument, CommandLineTool},
@@ -74,20 +74,20 @@ fn post_process_variables(tool: &mut CommandLineTool) {
         if let Some(default) = &input.default {
             for output in &mut tool.outputs {
                 if let Some(binding) = &mut output.output_binding
-                    && binding.glob == Some(OneOrMany::One(default_to_string(default)))
+                    && binding.glob == Some(OneOrMany::One(default.to_string()))
                 {
                     binding.glob = Some(OneOrMany::One(process_input(input)));
                     processed_once = true;
                 }
             }
             if let Some(stdout) = &tool.stdout
-                && *stdout == default_to_string(default)
+                && *stdout == default.to_string()
             {
                 tool.stdout = Some(process_input(input));
                 processed_once = true;
             }
             if let Some(stderr) = &tool.stderr
-                && *stderr == default_to_string(default)
+                && *stderr == default.to_string()
             {
                 tool.stderr = Some(process_input(input));
                 processed_once = true;
@@ -97,14 +97,14 @@ fn post_process_variables(tool: &mut CommandLineTool) {
                 for argument in arguments.iter_mut() {
                     match argument {
                         Argument::String(s) => {
-                            if *s == default_to_string(default) {
+                            if *s == default.to_string() {
                                 *s = process_input(input);
                                 processed_once = true;
                             }
                         }
                         Argument::Binding(binding) => {
                             if let Some(from) = &mut binding.value_from
-                                && *from == default_to_string(default)
+                                && *from == default.to_string()
                             {
                                 *from = process_input(input);
                                 processed_once = true;

@@ -40,7 +40,6 @@
 //! same command can parse differently from a different directory. That's deliberate -- the
 //! workflow is "convert a command I just ran" -- but it means results are context-dependent.
 
-use commonwl::{files::FileOrDirectory, inputs::DefaultValue};
 use miette::Diagnostic;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -120,20 +119,4 @@ pub enum AuthoringError {
     #[error(transparent)]
     #[diagnostic(code = "authoring::Unknown")]
     Unknown(#[from] anyhow::Error),
-}
-
-/// Renders a default value as the string a CWL document would carry: a location for files
-/// and directories, the scalar itself otherwise.
-pub fn default_to_string(default: &DefaultValue) -> String {
-    match default {
-        DefaultValue::FileOrDirectory(FileOrDirectory::File(f)) => f
-            .location
-            .clone()
-            .unwrap_or_else(|| f.path.clone().unwrap()),
-        DefaultValue::FileOrDirectory(FileOrDirectory::Directory(d)) => d
-            .location
-            .clone()
-            .unwrap_or_else(|| d.path.clone().unwrap()),
-        DefaultValue::Any(value) => value.as_str().unwrap_or_default().to_string(),
-    }
 }
