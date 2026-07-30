@@ -1,5 +1,5 @@
 use crate::authoring::{AuthoringError, AuthoringResult};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use commonwl::{
     OneOrMany,
     documents::{CWLDocument, Workflow},
@@ -20,7 +20,7 @@ pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> AuthoringResu
     let filename = filename.as_ref();
 
     let mut yaml = serde_saphyr::to_string(&wf)?;
-    yaml = format_cwl(&yaml).context("Could not formal yaml")?;
+    yaml = format_cwl(&yaml).map_err(|e| anyhow!("Could not format yaml: {}", e))?;
 
     //removes file first if exists and force is given
     if force && filename.exists() {
