@@ -73,7 +73,7 @@ pub fn remove_submodule(repo: &Repository, name: &str) -> RepositoryResult<()> {
     ini::remove_section(repo.path().join("config"), &prefix)
         .map_err(|_| git2::Error::from_str("Could not delete config entry"))?;
     ini::remove_section(repo_base_path.join(".gitmodules"), &prefix)
-        .map_err(|_| git2::Error::from_str("Could not delete .gitmodulesg entry"))?;
+        .map_err(|_| git2::Error::from_str("Could not delete .gitmodules entry"))?;
 
     //stage and commit
     stage_all(repo)?;
