@@ -5,6 +5,6 @@ pub mod reana {
     pub use reana::*; //add a prelude to reana lib
 }
 
+pub mod authoring;
 pub mod execution;
 pub mod repository;
-pub mod authoring;

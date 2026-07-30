@@ -60,7 +60,10 @@ pub(super) fn collect_arguments(
 
 /// Splits `slice` at the first occurrence of `split_at`, dropping the separator. The whole
 /// slice ends up on the left when the separator isn't present.
-pub(super) fn split_at_first<'a>(slice: &'a [&'a str], split_at: &str) -> (&'a [&'a str], &'a [&'a str]) {
+pub(super) fn split_at_first<'a>(
+    slice: &'a [&'a str],
+    split_at: &str,
+) -> (&'a [&'a str], &'a [&'a str]) {
     match slice.iter().position(|x| *x == split_at) {
         Some(index) => (&slice[..index], &slice[index + 1..]),
         None => (slice, &[]),
@@ -90,6 +93,9 @@ mod tests {
     #[test]
     fn test_handle_redirection_dangling() {
         assert_eq!(handle_redirection(&[">"]), None);
-        assert_eq!(handle_redirection(&[">", "out.txt"]), Some("out.txt".to_string()));
+        assert_eq!(
+            handle_redirection(&[">", "out.txt"]),
+            Some("out.txt".to_string())
+        );
     }
 }

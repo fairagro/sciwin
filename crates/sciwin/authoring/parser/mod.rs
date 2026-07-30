@@ -24,9 +24,9 @@ mod postprocess;
 mod shell;
 mod staging;
 
-pub use inputs::guess_type;
 pub(crate) use command::{get_base_command, matches_script_executor, matches_script_modifier};
 pub(crate) use inputs::add_fixed_inputs;
+pub use inputs::guess_type;
 pub(crate) use outputs::get_outputs;
 pub(crate) use postprocess::post_process_cwl;
 
@@ -83,7 +83,11 @@ fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<Strin
     };
 
     //usual command `python script-file.py`, or a bare `./script.sh`
-    let script = if tokens.len() > 1 { &tokens[1] } else { &tokens[0] };
+    let script = if tokens.len() > 1 {
+        &tokens[1]
+    } else {
+        &tokens[0]
+    };
     if let Some(req) = staging::iwdr_for_existing_file(script) {
         tool.append_requirement_mut(req);
     }

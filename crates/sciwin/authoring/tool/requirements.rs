@@ -3,6 +3,7 @@
 use super::ToolCreationOptions;
 use crate::authoring::AuthoringResult;
 use anyhow::Context as _;
+use bon::Builder;
 use commonwl::{
     documents::CommandLineTool,
     files::{Directory, FileOrDirectory},
@@ -17,15 +18,17 @@ use std::{
 
 /// Container to run the tool in: either an image reference to pull, or a path to a
 /// `Dockerfile` to build, in which case `tag` names the resulting image.
-#[derive(Clone)]
-pub struct ContainerInfo<'a> {
-    pub image: &'a str,
-    pub tag: Option<&'a str>,
+#[derive(Clone, Debug, PartialEq, Eq, Builder)]
+pub struct ContainerInfo {
+    #[builder(into)]
+    pub image: String,
+    #[builder(into)]
+    pub tag: Option<String>,
 }
 
 pub(super) fn add_tool_requirements(
     cwl: &mut CommandLineTool,
-    options: &ToolCreationOptions<'_>,
+    options: &ToolCreationOptions,
 ) -> AuthoringResult<()> {
     // Handle container requirements
     append_container_requirement_mut(cwl, options.container.as_ref());
@@ -34,7 +37,7 @@ pub(super) fn add_tool_requirements(
         cwl.use_network_mut();
     }
 
-    if let Some(env) = options.env {
+    if let Some(env) = &options.env {
         let data = read_env(env)?;
         cwl.use_env_requirement_mut(&data);
     }
@@ -76,7 +79,7 @@ pub(super) fn rewrite_sif_container_mut(cwl: &mut CommandLineTool, container: &C
     }
 
     let mut without_extension = container.clone();
-    without_extension.image = container.image.trim_end_matches(".sif");
+    without_extension.image = container.image.trim_end_matches(".sif").to_string();
     append_container_requirement_mut(cwl, Some(&without_extension));
 }
 
@@ -84,10 +87,10 @@ fn append_container_requirement_mut(cwl: &mut CommandLineTool, container: Option
     let Some(container) = container else { return };
 
     if container.image.contains("Dockerfile") {
-        let image_id = container.tag.unwrap_or("sciwin-container");
-        cwl.use_docker_file_mut(container.image, image_id);
+        let image_id = container.tag.as_deref().unwrap_or("sciwin-container");
+        cwl.use_docker_file_mut(&container.image, image_id);
     } else {
-        cwl.use_docker_pull_mut(container.image);
+        cwl.use_docker_pull_mut(&container.image);
     }
 }
 

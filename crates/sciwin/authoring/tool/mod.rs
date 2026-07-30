@@ -17,42 +17,80 @@ use crate::{
     authoring::{AuthoringError, AuthoringResult, parser, paths},
     repository::{self, Repository},
 };
+use bon::Builder;
 use commonwl::{documents::CommandLineTool, engine::ContainerEngine};
-use std::{
-    env,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
-#[derive(Default)]
-pub struct ToolCreationOptions<'a> {
-    pub command: &'a [String],
-    pub outputs: &'a [String],
-    pub inputs: &'a [String],
+#[derive(Debug, Default, Builder)]
+pub struct ToolCreationOptions {
+    /// The command line to convert, already split into tokens.
+    #[builder(into)]
+    pub command: Vec<String>,
+    /// Output files to declare instead of discovering them by running the tool.
+    #[builder(default, into)]
+    pub outputs: Vec<String>,
+    /// Extra inputs to declare on top of those parsed from `command`.
+    #[builder(default, into)]
+    pub inputs: Vec<String>,
+    /// Name for the tool. Defaults to the script or command the tool runs.
+    #[builder(into)]
+    pub name: Option<String>,
+    /// Where to write the tool, relative to the project root. Defaults to a per-tool folder
+    /// under [`paths::WORKFLOWS_FOLDER`].
+    #[builder(into)]
+    pub output_dir: Option<PathBuf>,
+    /// Write the tool to disk. When false, [`create_tool`] only returns it.
+    #[builder(default)]
+    pub save: bool,
+    /// Skip the trial run that discovers outputs.
+    #[builder(default)]
     pub no_run: bool,
+    /// Delete whatever the trial run produced once its outputs are recorded.
+    #[builder(default)]
     pub cleanup: bool,
+    /// Stage and commit the tool and anything the trial run produced.
+    #[builder(default)]
     pub commit: bool,
+    /// Strip the default values parsed off the command line.
+    #[builder(default)]
     pub clear_defaults: bool,
-    pub container: Option<ContainerInfo<'a>>,
+    pub container: Option<ContainerInfo>,
+    #[builder(default)]
     pub enable_network: bool,
-    pub mounts: &'a [PathBuf],
-    pub env: Option<&'a Path>,
+    #[builder(default, into)]
+    pub mounts: Vec<PathBuf>,
+    /// A `KEY=value` file whose entries the tool needs in its environment.
+    #[builder(into)]
+    pub env: Option<PathBuf>,
+    /// Container engine to run the trial run under. `None` runs it directly.
     pub run_container: Option<ContainerEngine>,
-    pub output_dir: Option<&'a Path>,
 }
 
-/// Builds a `CommandLineTool` from `options.command` and returns it as formatted CWL YAML,
-/// optionally writing it to disk.
+/// A tool built by [`create_tool`].
+#[derive(Debug, Clone)]
+pub struct CreatedTool {
+    /// Where the tool belongs, relative to the project root it was created in.
+    pub path: PathBuf,
+    /// The tool itself, post-processed exactly as it was serialized.
+    pub document: CommandLineTool,
+    /// `document` as formatted CWL YAML.
+    pub yaml: String,
+}
+
+/// Builds a `CommandLineTool` from `options.command`, run against `project_root`.
+///
+/// `project_root` is the git repository the tool belongs to: paths are resolved against it,
+/// the trial run executes there, and it is what gets checked for uncommitted changes.
 pub async fn create_tool(
-    options: &ToolCreationOptions<'_>,
-    name: Option<String>,
-    save_to_disk: bool,
-) -> AuthoringResult<String> {
-    let mut cwl = create_tool_base(options).await?;
+    project_root: &Path,
+    options: &ToolCreationOptions,
+) -> AuthoringResult<CreatedTool> {
+    let mut cwl = create_tool_base(project_root, options).await?;
 
     if options.run_container.is_none() {
         requirements::add_tool_requirements(&mut cwl, options)?;
     } else if let Some(container) = &options.container
-        && requirements::is_sif_image(container.image)
+        && requirements::is_sif_image(&container.image)
     {
         //if run_container is some requirements are already set in create_tool_base()
         //just the docker requirements needs to be altered in case of sif file
@@ -61,42 +99,47 @@ pub async fn create_tool(
 
     // Finalize CWL
     let base_command = cwl.base_command.as_ref().unwrap();
-    let output_dir = options
-        .output_dir
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| {
-            // default as in 1.x
-            Path::new(paths::WORKFLOWS_FOLDER)
-                .join(paths::derive_tool_name(base_command, name.as_deref()))
-        });
-    let path = paths::get_qualified_filename(base_command, name.as_deref(), output_dir);
+    let name = options.name.as_deref();
+    let output_dir = options.output_dir.clone().unwrap_or_else(|| {
+        // default as in 1.x
+        Path::new(paths::WORKFLOWS_FOLDER).join(paths::derive_tool_name(base_command, name))
+    });
+    let path = paths::get_qualified_filename(base_command, name, output_dir);
     let yaml = save::finalize_tool(&mut cwl, &path)?;
 
-    if save_to_disk {
-        let cwd = env::current_dir()?;
-        let repo = Repository::open(&cwd)
-            .map_err(|source| AuthoringError::NoRepository { path: cwd, source })?;
-        save::save_tool_to_disk(&yaml, &path, &repo, options.commit)?;
+    if options.save {
+        let repo =
+            Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
+                path: project_root.to_path_buf(),
+                source,
+            })?;
+        save::save_tool_to_disk(&yaml, project_root, &path, &repo, options.commit)?;
     }
-    Ok(yaml)
+
+    Ok(CreatedTool {
+        path,
+        document: cwl,
+        yaml,
+    })
 }
 
 /// Parses the command line into a tool and, unless `options.no_run` is set, runs it once to
 /// discover its outputs.
-async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<CommandLineTool> {
+async fn create_tool_base(
+    project_root: &Path,
+    options: &ToolCreationOptions,
+) -> AuthoringResult<CommandLineTool> {
     let command = options
         .command
         .iter()
         .map(String::as_str)
         .collect::<Vec<_>>();
-    let current_working_dir = env::current_dir()?;
 
     //check for modified files and fail if there are any
-    let repo =
-        Repository::open(&current_working_dir).map_err(|source| AuthoringError::NoRepository {
-            path: current_working_dir,
-            source,
-        })?;
+    let repo = Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
+        path: project_root.to_path_buf(),
+        source,
+    })?;
     let modified = repository::get_modified_files(&repo)?;
 
     if !options.no_run && !modified.is_empty() {
@@ -109,7 +152,7 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<
 
     // handle outputs
     if !options.outputs.is_empty() {
-        cwl.outputs = parser::get_outputs(options.outputs);
+        cwl.outputs = parser::get_outputs(&options.outputs);
     }
 
     if !options.inputs.is_empty() {
@@ -124,7 +167,8 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<
     }
 
     if !options.no_run {
-        let files = probe::run_and_collect_files(&mut cwl, options, &repo, &modified).await?;
+        let files =
+            probe::run_and_collect_files(&mut cwl, project_root, options, &repo, &modified).await?;
         if options.outputs.is_empty() {
             cwl.outputs = parser::get_outputs(&files);
         }
@@ -143,7 +187,13 @@ async fn create_tool_base(options: &ToolCreationOptions<'_>) -> AuthoringResult<
 mod tests {
     use super::*;
     use fstest::fstest;
-    use std::fs;
+    use std::{env, fs};
+
+    fn echo_options() -> ToolCreationOptions {
+        ToolCreationOptions::builder()
+            .command(vec!["echo".to_string(), "hello".to_string()])
+            .build()
+    }
 
     /// A dirty working tree is a state a frontend acts on (offer to commit, or to re-run
     /// with `no_run`), so it must arrive as a matchable variant, not a formatted string.
@@ -151,13 +201,9 @@ mod tests {
     pub async fn test_dirty_working_tree_is_a_typed_variant() {
         fs::write("uncommitted.txt", "scratch").unwrap();
 
-        let command = ["echo".to_string(), "hello".to_string()];
-        let options = ToolCreationOptions {
-            command: &command,
-            ..Default::default()
-        };
+        let root = env::current_dir().unwrap();
+        let err = create_tool(&root, &echo_options()).await.unwrap_err();
 
-        let err = create_tool(&options, None, false).await.unwrap_err();
         let AuthoringError::DirtyWorkingTree { files } = &err else {
             panic!("expected DirtyWorkingTree, got {err:?}");
         };
@@ -167,16 +213,45 @@ mod tests {
     /// Same reasoning: a missing repository is a state a frontend offers to fix.
     #[fstest(tokio = true)]
     pub async fn test_missing_repository_is_a_typed_variant() {
-        let command = ["echo".to_string(), "hello".to_string()];
-        let options = ToolCreationOptions {
-            command: &command,
-            ..Default::default()
-        };
+        let root = env::current_dir().unwrap();
+        let err = create_tool(&root, &echo_options()).await.unwrap_err();
 
-        let err = create_tool(&options, None, false).await.unwrap_err();
         assert!(
             matches!(err, AuthoringError::NoRepository { .. }),
             "expected NoRepository, got {err:?}"
         );
+    }
+
+    /// The tool is written where `path` says, relative to the project root -- not relative
+    /// to whatever the process happens to have as its working directory.
+    #[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt"])]
+    pub async fn test_saves_relative_to_project_root() {
+        let root = env::current_dir().unwrap();
+        let nested = root.join("nested");
+        fs::create_dir(&nested).unwrap();
+        // move the process somewhere else entirely; the project root is the argument
+        env::set_current_dir(&nested).unwrap();
+
+        let options = ToolCreationOptions::builder()
+            .command(vec!["echo".to_string(), "hello".to_string()])
+            .no_run(true)
+            .save(true)
+            .build();
+        let created = create_tool(&root, &options).await.unwrap();
+
+        assert_eq!(created.path, Path::new("workflows/echo/echo.cwl"));
+        assert!(root.join(&created.path).is_file());
+        assert!(!nested.join(&created.path).exists());
+        //the document is handed back alongside the YAML, not just the string
+        assert_eq!(
+            created.document.base_command,
+            Some(commonwl::OneOrMany::One("echo".to_string()))
+        );
+        assert_eq!(
+            created.yaml,
+            fs::read_to_string(root.join(&created.path)).unwrap()
+        );
+
+        env::set_current_dir(&root).unwrap();
     }
 }

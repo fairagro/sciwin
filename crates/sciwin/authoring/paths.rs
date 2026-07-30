@@ -121,7 +121,6 @@ mod tests {
         assert_eq!(resolve_path(path, relative_to), os_path(expected));
     }
 
-
     #[rstest]
     #[case(OneOrMany::Many(vec!["python3".to_string(), "test/data/script.py".to_string()]), "script")]
     #[case(OneOrMany::One("echo".to_string()), "echo")]

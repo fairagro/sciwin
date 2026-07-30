@@ -27,16 +27,19 @@ use commonwl::{
     types::CWLType,
 };
 use std::{env, fs::remove_file, path::Path, sync::Arc};
+
 use tokio_util::sync::CancellationToken;
 
-/// Executes `cwl` once and reports the files it created.
+/// Executes `cwl` once in `project_root` and reports the files it created, as paths relative
+/// to that root.
 ///
 /// `pre_existing` is what the working tree already reported as modified beforehand; anything
 /// modified afterwards that isn't in that list is attributed to the run. Honours
 /// `options.cleanup` (delete what the run produced) and `options.commit` (stage it).
 pub(super) async fn run_and_collect_files(
     cwl: &mut CommandLineTool,
-    options: &ToolCreationOptions<'_>,
+    project_root: &Path,
+    options: &ToolCreationOptions,
     repo: &Repository,
     pre_existing: &[String],
 ) -> AuthoringResult<Vec<String>> {
@@ -62,7 +65,7 @@ pub(super) async fn run_and_collect_files(
     let job = create_execution_request_from_document(
         CWLDocument::CommandLineTool(probe_cwl),
         InputObject::default(),
-        env::current_dir()?,
+        project_root,
         None,
         None,
     )?;
@@ -74,18 +77,19 @@ pub(super) async fn run_and_collect_files(
 
     if options.cleanup {
         for file in &files {
-            remove_file(file).with_context(|| format!("Failed to remove {file}"))?;
+            remove_file(project_root.join(file))
+                .with_context(|| format!("Failed to remove {file}"))?;
         }
     }
 
     if options.commit {
         for file in &files {
-            let path = Path::new(file);
+            let path = project_root.join(file);
             if path.exists() {
                 if path.is_dir() {
-                    repository::stage_dir(repo, path)?;
+                    repository::stage_dir(repo, &path)?;
                 } else {
-                    repository::stage_file(repo, file)?;
+                    repository::stage_file(repo, &path)?;
                 }
             }
         }

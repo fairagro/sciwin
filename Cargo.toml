@@ -75,6 +75,7 @@ thiserror = "2.0.19"
 miette = "7.6.0"
 
 # util
+bon = "3.9.3"
 chrono = "0.4.45"
 dotenvy = "0.15.7"
 fancy-regex = "0.18.0"

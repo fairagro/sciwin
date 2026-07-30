@@ -22,20 +22,26 @@ pub(super) fn finalize_tool(cwl: &mut CommandLineTool, path: &Path) -> Authoring
         .map_err(|e| AuthoringError::Unknown(anyhow::anyhow!("Failed to format CWL: {e}")))
 }
 
+/// Writes `yaml` to `path`, which is interpreted relative to `project_root`.
 pub(super) fn save_tool_to_disk(
     yaml: &str,
+    project_root: &Path,
     path: &Path,
     repo: &Repository,
     commit: bool,
 ) -> AuthoringResult<()> {
-    if let Some(parent) = path.parent() {
+    let target = project_root.join(path);
+
+    if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create directories for {}", parent.display()))?;
     }
-    fs::write(path, yaml).with_context(|| format!("Creation of file {} failed", path.display()))?;
+    fs::write(&target, yaml)
+        .with_context(|| format!("Creation of file {} failed", target.display()))?;
 
     if commit {
-        repository::stage_file(repo, path)?;
+        repository::stage_file(repo, &target)?;
+        //the message names the tool's place in the project, not on this machine
         repository::commit(repo, &format!("🪄 Creation of `{}`", path.display()))?;
     }
     Ok(())

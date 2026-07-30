@@ -1,6 +1,6 @@
+use crate::repository::RepositoryResult;
 use git2::{Commit, IndexAddOption, Repository, Status, StatusOptions};
 use std::{iter, path::Path};
-use crate::repository::RepositoryResult;
 
 pub fn get_modified_files(repo: &Repository) -> RepositoryResult<Vec<String>> {
     let mut opts = StatusOptions::new();
@@ -21,9 +21,18 @@ pub fn get_modified_files(repo: &Repository) -> RepositoryResult<Vec<String>> {
     Ok(files)
 }
 
+/// Stages a single file. `path` may be absolute or already relative to the work tree --
+/// `git2` only accepts the latter, so an absolute path under the work tree is stripped down
+/// to it first.
 pub fn stage_file(repo: &Repository, path: impl AsRef<Path>) -> RepositoryResult<()> {
+    let path = path.as_ref();
+    let relative = repo
+        .workdir()
+        .and_then(|workdir| path.strip_prefix(workdir).ok())
+        .unwrap_or(path);
+
     let mut index = repo.index()?;
-    index.add_path(path.as_ref())?;
+    index.add_path(relative)?;
     Ok(index.write()?)
 }
 

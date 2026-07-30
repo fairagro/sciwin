@@ -12,6 +12,7 @@ path = "lib.rs"
 [dependencies]
 commonwl.workspace = true
 reana.workspace = true
+bon.workspace = true
 git2.workspace = true
 async-trait.workspace = true
 async-stream.workspace = true

@@ -4884,6 +4884,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "async-trait",
+ "bon",
  "chrono",
  "commonwl",
  "configparser",
