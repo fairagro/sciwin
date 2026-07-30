@@ -46,6 +46,7 @@ dunce = "1.0.5"
 pathdiff = "0.2.3"
 tempfile = "3.26.0"
 walkdir = "2.5.0"
+slugify = "0.1.0"
 
 # Networking
 url = "2.5.8"

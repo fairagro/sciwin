@@ -60,7 +60,7 @@ pub fn remove_submodule(repo: &Repository, name: &str, commit_msg: &str) -> Repo
         .map_err(|e| git2::Error::from_str(&e.to_string()))?;
     let path = repo_base_path.join(module.path());
 
-    fs::remove_dir_all(path).ok();
+    fs::remove_dir_all(path)?;
 
     //remove ksubmodule config
     let prefix = format!("submodule \"{name}\"");

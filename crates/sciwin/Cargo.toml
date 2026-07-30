@@ -29,6 +29,9 @@ walkdir.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 configparser.workspace = true
+rand.workspace = true
+slugify.workspace = true
+serde-saphyr.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
@@ -36,6 +39,7 @@ dotenvy.workspace = true
 shlex.workspace = true
 rstest.workspace = true
 fstest.workspace = true
+serial_test.workspace = true
 
 [lints]
 workspace = true
