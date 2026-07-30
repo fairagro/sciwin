@@ -20,8 +20,8 @@ pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
     while i < args.len() {
         let arg = args[i];
         let input: CommandInputParameter;
-        if arg.starts_with('-') {
-            if i + 1 < args.len() && !args[i + 1].starts_with('-') {
+        if is_flag_like(arg) {
+            if i + 1 < args.len() && !is_flag_like(args[i + 1]) {
                 //is not a flag, as next one is a value
                 input = get_option(arg, args[i + 1]);
                 i += 1;
@@ -35,6 +35,12 @@ pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
         i += 1;
     }
     inputs
+}
+
+/// A leading `-` alone doesn't make something a flag — negative numbers
+/// (`-5`, `-3.2`) also start with `-` but are values, not option names.
+fn is_flag_like(s: &str) -> bool {
+    s.starts_with('-') && s.parse::<f64>().is_err()
 }
 
 fn get_positional(current: &str, index: isize) -> CommandInputParameter {
@@ -100,7 +106,11 @@ fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
             Directory::builder().location(value).build(),
         )),
         CWLType::String => DefaultValue::Any(Value::String(value.to_string())),
-        _ => DefaultValue::Any(serde_saphyr::from_str(value).unwrap()),
+        // type hint (e.g. `i:`) promised a scalar, but the value didn't parse as one
+        // (bad user input) — fall back to a plain string instead of panicking.
+        _ => DefaultValue::Any(
+            serde_saphyr::from_str(value).unwrap_or_else(|_| Value::String(value.to_string())),
+        ),
     }
 }
 
@@ -183,11 +193,12 @@ pub(crate) fn add_fixed_inputs(
 }
 
 fn get_entry_name(input: &str) -> String {
-    let i = input
-        .trim_start_matches(|c: char| !c.is_alphabetic())
-        .to_string()
-        .replace(['.', '/'], "_");
-    format!("$(inputs.{})", i.to_lowercase()).to_string()
+    let trimmed = input.trim_start_matches(|c: char| !c.is_alphabetic());
+    // an all-non-alphabetic name (e.g. a bare "123") trims to "" — fall back to
+    // the untrimmed input rather than emitting the invalid "$(inputs.)"
+    let base = if trimmed.is_empty() { input } else { trimmed };
+    let name = base.replace(['.', '/'], "_").to_lowercase();
+    format!("$(inputs.{name})")
 }
 
 /// Tries to guess the CWLType of a given value
@@ -212,7 +223,9 @@ pub fn guess_type(value: &str) -> CWLType {
     }
 
     //we do not have to check for files that do not exist yet, as CWLTool would run into a failure
-    let yaml_value: Value = serde_saphyr::from_str(value).unwrap();
+    let Ok(yaml_value) = serde_saphyr::from_str::<Value>(value) else {
+        return CWLType::String; // not valid YAML scalar syntax -> treat as opaque string
+    };
     match yaml_value {
         Value::Null => CWLType::Null,
         Value::Bool(_) => CWLType::Boolean,
@@ -304,6 +317,51 @@ mod tests {
             .build();
         let result = get_inputs(&[arg]);
         assert_eq!(result[0], expected);
+    }
+
+    #[test]
+    pub fn test_get_inputs_negative_number_value() {
+        // "-5" must be read as the value of --threshold, not misparsed as its own flag
+        let inputs = "--threshold -5";
+        let args = shlex::split(inputs).unwrap();
+        let result = get_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id.as_deref(), Some("threshold"));
+        assert_eq!(result[0].r#type, CWLType::Int.into());
+        assert_eq!(
+            result[0].default,
+            Some(DefaultValue::Any(Value::Number(Number::from(-5))))
+        );
+    }
+
+    #[test]
+    pub fn test_get_inputs_standalone_negative_number() {
+        let result = get_inputs(&["-5"]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].r#type, CWLType::Int.into());
+    }
+
+    #[test]
+    pub fn test_parse_default_value_malformed_falls_back_to_string() {
+        // an unparsable value under a non-String type hint must degrade to a
+        // plain string instead of panicking (was `.unwrap()` before)
+        let value = parse_default_value("{unclosed", &CWLType::Int);
+        assert_eq!(
+            value,
+            DefaultValue::Any(Value::String("{unclosed".to_string()))
+        );
+    }
+
+    #[test]
+    pub fn test_guess_type_malformed_yaml_does_not_panic() {
+        assert_eq!(guess_type("{unclosed"), CWLType::String);
+    }
+
+    #[test]
+    pub fn test_get_entry_name_numeric_only() {
+        // an all-numeric filename must not produce the invalid "$(inputs.)"
+        assert_eq!(get_entry_name("123"), "$(inputs.123)");
     }
 
     #[test]

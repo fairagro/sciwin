@@ -32,6 +32,7 @@ configparser.workspace = true
 rand.workspace = true
 slugify.workspace = true
 serde-saphyr.workspace = true
+pathdiff.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
@@ -40,6 +41,7 @@ shlex.workspace = true
 rstest.workspace = true
 fstest.workspace = true
 serial_test.workspace = true
+test_utils.workspace = true
 
 [lints]
 workspace = true

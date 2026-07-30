@@ -1239,9 +1239,9 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "724e1a5e10835924bc551ce5a2d290780de017444130f922e15134cfcb254665"
+checksum = "32b32845eda5cc1e706bcf937746039ab7a9369fc73885b18c3cd96d8e616c75"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -1619,9 +1619,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be9cd17889553dfe64a3cc632936d8993a51ccd03fd35ee512a403336d2bda1e"
+checksum = "e9d08e6b7d59f249b95327e063110c4f5b40389af5cef499596414798bf068b6"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -1641,9 +1641,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d8cfd37859fc3a332ab6f06f4b73866b900c49584a83e4aad7e9eac5a79085"
+checksum = "aeb6bfc32dc2c38156f83660e7614663258eb9c9ace4d1008853a6aac87907c5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1681,9 +1681,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd6dc476783c6888c5e4539433b467a1d5dece086d5583be5126dd3f0799bb20"
+checksum = "e6248ccef12a337c1000ee3289fc3199d7f82a7015121fca09cb33711823c5ce"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1703,9 +1703,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3528bfd2189f303ca723058c422d7b99ab8ea046b8cd8699e11030583e45c06"
+checksum = "dd67f24ee5cddee4fdb429eda794dc3e6279c16d932bf876e62e0de857bb7d5d"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -1715,9 +1715,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa510e60722e848da808cdf1f1b6ee64a71ff01a732c29237252bc26ed95849a"
+checksum = "0dd85385c082cbecc652daa93f5816691138d6c586527f1e35951e99042c9742"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4326,8 +4326,6 @@ checksum = "bb1725bf0133fe4a3279e18efd6d69f952cb8356bf8b835023042e1b98d4c646"
 [[package]]
 name = "reana"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbf51f3d3e7b43d3826ff78fa4cf065423735334e742a813179b732bc49c73e5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4374,8 +4372,6 @@ dependencies = [
 [[package]]
 name = "reana-auth"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677b55b2f06d2be0df5254f2180adf5e9f3db26fee2384cf05aecd58553fed48"
 dependencies = [
  "async-trait",
  "miette",
@@ -4908,6 +4904,7 @@ dependencies = [
  "futures",
  "git2 0.21.0",
  "miette",
+ "pathdiff",
  "rand 0.10.2",
  "reana 0.3.1",
  "rstest",
@@ -4917,6 +4914,7 @@ dependencies = [
  "shlex 2.0.1",
  "slugify",
  "tempfile",
+ "test_utils",
  "thiserror 2.0.19",
  "tokio",
  "tokio-util",

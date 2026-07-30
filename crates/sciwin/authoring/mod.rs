@@ -1,11 +1,10 @@
-use commonwl::{
-    documents::CommandLineTool, files::FileOrDirectory, inputs::DefaultValue,
-    requirements::ToolRequirements,
-};
+use commonwl::{files::FileOrDirectory, inputs::DefaultValue};
 use miette::Diagnostic;
 use thiserror::Error;
 
+pub mod io;
 pub mod parser;
+pub mod tool;
 
 pub type AuthoringResult<T> = Result<T, AuthoringError>;
 
@@ -22,14 +21,22 @@ pub enum AuthoringError {
     #[error(transparent)]
     #[diagnostic(code = "serde_saphyr::Error")]
     Yaml(#[from] serde_saphyr::Error),
-}
 
-pub fn append_requirement(tool: &mut CommandLineTool, requirement: ToolRequirements) {
-    if let Some(reqs) = &mut tool.requirements {
-        reqs.push(requirement);
-    } else {
-        tool.requirements = Some(vec![requirement]);
-    }
+    #[error(transparent)]
+    #[diagnostic(code = "serde_saphyr::ser::Error")]
+    SaphyrSer(#[from] serde_saphyr::ser::Error),
+
+    #[error(transparent)]
+    #[diagnostic(code = "git2::Error")]
+    Git(#[from] git2::Error),
+
+    #[error(transparent)]
+    #[diagnostic(code = "repository::RepositoryError")]
+    Repository(#[from] crate::repository::RepositoryError),
+
+    #[error(transparent)]
+    #[diagnostic(code = "authoring::Unknown")]
+    Unknown(#[from] anyhow::Error),
 }
 
 pub fn default_to_string(default: &DefaultValue) -> String {

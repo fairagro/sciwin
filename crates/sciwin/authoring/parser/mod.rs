@@ -12,8 +12,6 @@ pub use inputs::*;
 pub(crate) use outputs::*;
 pub(crate) use postprocess::post_process_cwl;
 
-use crate::authoring::append_requirement;
-
 //TODO complete list
 pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "node"];
 pub static SCRIPT_MODIFIERS: &[&str] = &["-e", "-m"];
@@ -53,36 +51,51 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
         OneOrMany::One(cmd) => {
             //if command is an existing file, add to requirements
             if fs::exists(&cmd).unwrap_or_default() {
-                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(&cmd)));
+                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(&cmd)));
             }
             tool
         }
         OneOrMany::Many(ref vec) => {
             //usual command `pyton script-file.py`
             if fs::exists(&vec[1]).unwrap_or_default() && Path::new(&vec[1]).is_file() {
-                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
+                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
                     &vec[1],
                 )));
             }
             //command with `R -e script.R`
             if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_file() {
-               append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
+               tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(iwdr_by_file(
                     &vec[2],
                 )));
             }
             //command with `python -m folder`
-            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {                
+            if vec.len() > 2 && SCRIPT_MODIFIERS.contains(&vec[1].as_str()) && fs::exists(&vec[2]).unwrap_or_default() && Path::new(&vec[2]).is_dir() {
                 tool.inputs.push(CommandInputParameter::builder().id("module").r#type(CWLType::Directory).default(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(Directory::builder().location(&vec[2]).build()))).build());
-                append_requirement(&mut tool, ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: WorkDirItems::Expression("$(inputs.module)".to_string()) }));
+                tool.append_requirement_mut(ToolRequirements::InitialWorkDirRequirement(InitialWorkDirRequirement { listing: WorkDirItems::Expression("$(inputs.module)".to_string()) }));
             }
             tool
         }
     };
 
     if tool.arguments.is_some() {
-        append_requirement(&mut tool, ToolRequirements::ShellCommandRequirement(ShellCommandRequirement));
+        tool.append_requirement_mut(ToolRequirements::ShellCommandRequirement(ShellCommandRequirement));
     }
     tool
+}
+
+/// `command[0].starts_with(exec)` alone false-positives on unrelated commands that
+/// happen to share a prefix (e.g. "R" matching "Rake", "Restore-Item"). Require the
+/// character right after the matched prefix to be non-alphabetic (digit/dot/end of
+/// string), so "python3.11" still matches "python3" but "pythonic" does not.
+fn matches_script_executor(token: &str) -> bool {
+    SCRIPT_EXECUTORS.iter().any(|&exec| {
+        token == exec
+            || (token.starts_with(exec)
+                && token[exec.len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(|c| !c.is_alphabetic()))
+    })
 }
 
 pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
@@ -92,7 +105,7 @@ pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
 
     let mut base_command = vec![command[0].to_string()];
 
-    if command.len() > 1 && SCRIPT_EXECUTORS.iter().any(|&exec| command[0].starts_with(exec)) {
+    if command.len() > 1 && matches_script_executor(command[0]) {
         if command.len() > 2 && SCRIPT_MODIFIERS.iter().any(|&modif| command[1].starts_with(modif)) {
             base_command.push(command[1].to_string()); //the modifier
             base_command.push(command[2].to_string()); //the package
@@ -108,13 +121,10 @@ pub(crate) fn get_base_command(command: &[&str]) -> OneOrMany<String> {
 }
 
 fn handle_redirection(remaining_args: &[&str]) -> Option<String> {
-    if remaining_args.is_empty() {
-        return None;
-    }
     //hopefully? most cases are only `some_command > some_file.out`
-    //remdirect comes at pos 0, discard that
-    let out_file = remaining_args[1];
-    Some(out_file.to_string())
+    //redirect token comes at pos 0, discard that; pos 1 is the filename, if present
+    //(absent e.g. for a trailing dangling `>` with nothing after it)
+    remaining_args.get(1).map(|out_file| out_file.to_string())
 }
 
 fn collect_arguments(piped: &[&str], inputs: &[CommandInputParameter]) -> Option<Vec<Argument>> {
@@ -195,6 +205,8 @@ mod tests {
     #[case("Rscript lol.R", OneOrMany::Many(vec!["Rscript".to_string(), "lol.R".to_string()]))]
     #[case("", OneOrMany::One(String::new()))]
     #[case("python", OneOrMany::One("python".to_string()))]
+    #[case("Rake build", OneOrMany::One("Rake".to_string()))]
+    #[case("python3.11 script.py", OneOrMany::Many(vec!["python3.11".to_string(), "script.py".to_string()]))]
     pub fn test_get_base_command(#[case] command: &str, #[case] expected: OneOrMany<String>) {
         let args = shlex::split(command).unwrap();
         let args_slice: Vec<&str> = args.iter().map(AsRef::as_ref).collect();
@@ -254,6 +266,13 @@ mod tests {
     }
 
     #[test]
+    pub fn test_parse_dangling_redirect_no_panic() {
+        // a trailing `>` with nothing after it must not index-panic
+        let tool = parse_command("echo hello \\>");
+        assert!(tool.stdout.is_none());
+    }
+
+    #[test]
     pub fn test_parse_redirect_stderr() {
         let tool = parse_command("cat tests/test_data/inputtxt 2\\> err.txt");
         assert!(tool.stderr == Some("err.txt".to_string()));
@@ -280,7 +299,16 @@ mod tests {
     #[test]
     pub fn test_badwords() {
         let tool = parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql");
-        assert!(BAD_WORDS.iter().any(|&word| tool.inputs.iter().any(|i| !i.id.as_ref().unwrap().contains(word))));
+        // no generated input id should leak a bad word — it must have been redacted to "secret_*"
+        assert!(tool.inputs.iter().all(|i| {
+            let id = i.id.as_ref().unwrap().to_lowercase();
+            !BAD_WORDS.iter().any(|&word| id.contains(word))
+        }));
+        assert!(
+            tool.inputs
+                .iter()
+                .any(|i| i.id.as_ref().unwrap().starts_with("secret_"))
+        );
     }
 
     #[test]
