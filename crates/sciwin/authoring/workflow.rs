@@ -54,6 +54,25 @@ pub fn create_workflow(
     Ok((path, yaml))
 }
 
+/// One end of a workflow connection: the CWL document at `filename`, registered as a step
+/// named `name`, wired through its `slot_id` input/output.
+#[derive(Clone, Copy)]
+pub struct WorkflowSlot<'a> {
+    pub filename: &'a Path,
+    pub name: &'a str,
+    pub slot_id: &'a str,
+}
+
+impl<'a> WorkflowSlot<'a> {
+    pub fn new(filename: &'a Path, name: &'a str, slot_id: &'a str) -> Self {
+        Self {
+            filename,
+            name,
+            slot_id,
+        }
+    }
+}
+
 /// Registers `path` (the tool's own location) as a step, relative to `workflow_path` -- the
 /// location the workflow itself will be saved at. Neither has to live under
 /// [`paths::WORKFLOWS_FOLDER`] or at any fixed depth: the tool and the workflow can each be
@@ -81,17 +100,13 @@ pub fn add_workflow_input_connection(
     workflow: &mut Workflow,
     workflow_path: impl AsRef<Path>,
     from_input: &str,
-    to_filename: impl AsRef<Path>,
-    to_name: &str,
-    to_slot_id: &str,
+    to: WorkflowSlot,
 ) -> AuthoringResult<()> {
-    let to_filename = to_filename.as_ref();
-
-    let to_cwl = load_cwl_file(to_filename, true)?;
+    let to_cwl = load_cwl_file(to.filename, true)?;
     let to_inputs = to_cwl.get_inputs();
     let to_slot = to_inputs
         .iter()
-        .find(|i| i.id.as_deref() == Some(to_slot_id))
+        .find(|i| i.id.as_deref() == Some(to.slot_id))
         .expect("No slot");
 
     //register input
@@ -103,10 +118,10 @@ pub fn add_workflow_input_connection(
         );
     }
 
-    add_workflow_step(workflow, workflow_path, to_name, to_filename, &to_cwl)?;
+    add_workflow_step(workflow, workflow_path, to.name, to.filename, &to_cwl)?;
     //add input in step
     workflow
-        .add_workflow_step_input_mut(to_name, to_slot_id, OneOrMany::One(from_input.to_owned()))
+        .add_workflow_step_input_mut(to.name, to.slot_id, OneOrMany::One(from_input.to_owned()))
         .expect("step was just added above");
     Ok(())
 }
@@ -115,52 +130,48 @@ pub fn add_workflow_input_connection(
 pub fn add_workflow_output_connection(
     workflow: &mut Workflow,
     workflow_path: impl AsRef<Path>,
-    from_name: &str,
-    from_slot_id: &str,
-    from_filename: impl AsRef<Path>,
+    from: WorkflowSlot,
     to_output: &str,
 ) -> AuthoringResult<()> {
-    let from_filename = from_filename.as_ref();
-
-    let from_cwl = load_cwl_file(from_filename, true)?;
+    let from_cwl = load_cwl_file(from.filename, true)?;
     let from_type = match &from_cwl {
         CWLDocument::CommandLineTool(clt) => clt
             .outputs
             .iter()
-            .find(|i| i.id.as_deref() == Some(from_slot_id))
+            .find(|i| i.id.as_deref() == Some(from.slot_id))
             .map(|i| i.r#type.clone()),
         CWLDocument::ExpressionTool(et) => et
             .outputs
             .iter()
-            .find(|i| i.id.as_deref() == Some(from_slot_id))
+            .find(|i| i.id.as_deref() == Some(from.slot_id))
             .map(|i| i.r#type.clone().into()),
         CWLDocument::Operation(op) => op
             .outputs
             .iter()
-            .find(|i| i.id.as_deref() == Some(from_slot_id))
+            .find(|i| i.id.as_deref() == Some(from.slot_id))
             .map(|i| i.r#type.clone().into()),
         CWLDocument::Workflow(wf) => wf
             .outputs
             .iter()
-            .find(|i| i.id.as_deref() == Some(from_slot_id))
+            .find(|i| i.id.as_deref() == Some(from.slot_id))
             .map(|i| i.r#type.clone()),
     }
     .expect("No slot");
-    add_workflow_step(workflow, workflow_path, from_name, from_filename, &from_cwl)?;
+    add_workflow_step(workflow, workflow_path, from.name, from.filename, &from_cwl)?;
 
     if workflow.has_output(to_output) {
         let output = workflow
             .outputs
             .iter_mut()
-            .find(|o| o.id == Some(to_output.to_owned()))
+            .find(|o| o.id.as_deref() == Some(to_output))
             .expect("has_output confirmed above");
         output.r#type = from_type;
-        output.output_source = Some(OneOrMany::One(format!("{from_name}/{from_slot_id}")));
+        output.output_source = Some(OneOrMany::One(format!("{}/{}", from.name, from.slot_id)));
     } else {
         workflow.add_workflow_output_mut(
             to_output,
             from_type,
-            OneOrMany::One(format!("{from_name}/{from_slot_id}")),
+            OneOrMany::One(format!("{}/{}", from.name, from.slot_id)),
         );
     }
 
@@ -168,46 +179,39 @@ pub fn add_workflow_output_connection(
 }
 
 /// Adds a connection between two `CommandLineTools`. The tools will be registered as step if registered not already.
-#[allow(clippy::too_many_arguments)] // from/to each need a name, a filename and a slot id, plus the workflow itself
 pub fn add_workflow_step_connection(
     workflow: &mut Workflow,
     workflow_path: impl AsRef<Path>,
-    from_filename: impl AsRef<Path>,
-    from_name: &str,
-    from_slot_id: &str,
-    to_filename: impl AsRef<Path>,
-    to_name: &str,
-    to_slot_id: &str,
+    from: WorkflowSlot,
+    to: WorkflowSlot,
 ) -> AuthoringResult<()> {
-    //check if step already exists and create if not
     let workflow_path = workflow_path.as_ref();
-    let from_filename = from_filename.as_ref();
-    let to_filename = to_filename.as_ref();
 
-    if !workflow.has_step(from_name) {
-        let from_cwl = load_cwl_file(from_filename, true)?;
+    //check if step already exists and create if not
+    if !workflow.has_step(from.name) {
+        let from_cwl = load_cwl_file(from.filename, true)?;
         let from_outputs = from_cwl.get_output_ids();
-        if !from_outputs.contains(&from_slot_id.to_string()) {
+        if !from_outputs.iter().any(|s| s.as_str() == from.slot_id) {
             return Err(AuthoringError::InvalidWorkflowOutput {
-                id: from_slot_id.to_string(),
-                path: from_name.to_string(),
+                id: from.slot_id.to_string(),
+                path: from.name.to_string(),
             });
         }
 
         //create step
-        add_workflow_step(workflow, workflow_path, from_name, from_filename, &from_cwl)?;
+        add_workflow_step(workflow, workflow_path, from.name, from.filename, &from_cwl)?;
     }
 
     //check if step exists
-    if !workflow.has_step(to_name) {
-        let to_cwl = load_cwl_file(to_filename, true)?;
-        add_workflow_step(workflow, workflow_path, to_name, to_filename, &to_cwl)?;
+    if !workflow.has_step(to.name) {
+        let to_cwl = load_cwl_file(to.filename, true)?;
+        add_workflow_step(workflow, workflow_path, to.name, to.filename, &to_cwl)?;
     }
 
     workflow.add_workflow_step_input_mut(
-        to_name,
-        to_slot_id,
-        OneOrMany::One(format!("{from_name}/{from_slot_id}")),
+        to.name,
+        to.slot_id,
+        OneOrMany::One(format!("{}/{}", from.name, from.slot_id)),
     )?;
 
     Ok(())
@@ -239,29 +243,27 @@ pub fn remove_workflow_input_connection(
     {
         workflow.inputs.remove(index);
     }
-    if let Some(step) = workflow
+    let Some(step) = workflow
         .steps
         .iter_mut()
         .find(|s| s.id.as_deref() == Some(to_name))
-    {
-        if step
-            .r#in
-            .iter()
-            .any(|v| v.id.as_deref() == Some(to_slot_id))
-        {
-            step.r#in.retain(|v| v.id.as_deref() != Some(to_slot_id));
-            Ok(())
-        } else {
-            Err(AuthoringError::InvalidWorkflowInput {
-                id: to_slot_id.to_string(),
-                path: format!("step {to_name}"),
-            })
-        }
-    } else {
-        Err(AuthoringError::InvalidWorkflowStep {
+    else {
+        return Err(AuthoringError::InvalidWorkflowStep {
             id: to_name.to_string(),
-        })
+        });
+    };
+    if !step
+        .r#in
+        .iter()
+        .any(|v| v.id.as_deref() == Some(to_slot_id))
+    {
+        return Err(AuthoringError::InvalidWorkflowInput {
+            id: to_slot_id.to_string(),
+            path: format!("step {to_name}"),
+        });
     }
+    step.r#in.retain(|v| v.id.as_deref() != Some(to_slot_id));
+    Ok(())
 }
 
 /// Removes a connection between an output and a `CommandLineTool`.
@@ -270,19 +272,18 @@ pub fn remove_workflow_output_connection(
     to_output: &str,
     remove_output: bool,
 ) -> AuthoringResult<()> {
-    if remove_output
-        && let Some(index) = workflow
+    if remove_output {
+        if let Some(index) = workflow
             .outputs
             .iter()
             .position(|o| o.id.as_deref() == Some(to_output))
-    {
-        // Remove the output connection
-        workflow.outputs.remove(index);
-    } else if !remove_output
-        && let Some(output) = workflow
-            .outputs
-            .iter_mut()
-            .find(|o| o.id.as_deref() == Some(to_output))
+        {
+            workflow.outputs.remove(index);
+        }
+    } else if let Some(output) = workflow
+        .outputs
+        .iter_mut()
+        .find(|o| o.id.as_deref() == Some(to_output))
     {
         output.output_source = None;
     }
@@ -470,9 +471,7 @@ mod tests {
             &mut wf,
             &workflow_path,
             "workflow_input",
-            &tool_path,
-            "tool",
-            "message",
+            WorkflowSlot::new(&tool_path, "tool", "message"),
         )
         .unwrap();
 
@@ -500,9 +499,7 @@ mod tests {
         add_workflow_output_connection(
             &mut wf,
             &workflow_path,
-            "tool",
-            "result",
-            &tool_path,
+            WorkflowSlot::new(&tool_path, "tool", "result"),
             "final_result",
         )
         .unwrap();
@@ -537,12 +534,8 @@ mod tests {
         add_workflow_step_connection(
             &mut wf,
             &workflow_path,
-            &producer,
-            "producer",
-            "value",
-            &consumer,
-            "consumer",
-            "value",
+            WorkflowSlot::new(&producer, "producer", "value"),
+            WorkflowSlot::new(&consumer, "consumer", "value"),
         )
         .unwrap();
 
@@ -567,14 +560,17 @@ mod tests {
 
         let mut wf = Workflow::default();
 
-        add_workflow_input_connection(&mut wf, &workflow_path, "wf_in", &tool_path, "tool", "in")
-            .unwrap();
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "wf_in",
+            WorkflowSlot::new(&tool_path, "tool", "in"),
+        )
+        .unwrap();
         add_workflow_output_connection(
             &mut wf,
             &workflow_path,
-            "tool",
-            "out",
-            &tool_path,
+            WorkflowSlot::new(&tool_path, "tool", "out"),
             "wf_out",
         )
         .unwrap();
