@@ -5,9 +5,16 @@ use crate::{
 };
 use anyhow::anyhow;
 use clap::Args;
+use sciwin::authoring::paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name};
 use sciwin::cwl::{documents::CWLDocument, format::format_cwl, load_cwl_file};
 use std::{fs, io::Write, path::Path};
 use tracing::info;
+
+fn workflow_filename(name: &str) -> String {
+    get_qualified_filename_by_name(name, Path::new(WORKFLOWS_FOLDER).join(name))
+        .to_string_lossy()
+        .into_owned()
+}
 
 #[derive(Args, Debug)]
 pub struct ConnectWorkflowArgs {
@@ -21,7 +28,7 @@ pub struct ConnectWorkflowArgs {
 
 pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> {
     //get workflow
-    let filename = format!("workflows/{}/{}.cwl", args.name, args.name); // TODO: fix
+    let filename = workflow_filename(&args.name);
     if !Path::new(&filename).exists() {
         let args = CreateArgs {
             name: Some(args.name.clone()),
@@ -94,7 +101,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
 }
 
 pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> {
-    let filename = format!("workflows/{}/{}.cwl", args.name, args.name); // todo: fix
+    let filename = workflow_filename(&args.name);
     let CWLDocument::Workflow(mut workflow) = load_cwl_file(&filename, true)
         .map_err(|e| anyhow!("Could not load workflow {filename}: {e}"))?
     else {
