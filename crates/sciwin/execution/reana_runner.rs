@@ -375,6 +375,34 @@ mod tests {
         assert!(matches!(status, RunStatus::Stopped));
     }
 
+    /// This test needs a valid REANA Instance running and token defined by .env file
+    /// The test is ignored in CI runs and can only start manually
+    #[tokio::test]
+    #[ignore]
+    async fn test_find_failures_reana() {
+        dotenvy::dotenv().ok();
+
+        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_TOKEN").unwrap()));
+        let server_url = Url::parse(&env::var("REANA_URL").unwrap()).unwrap();
+        let client = ReanaClient::new(server_url.join("api").unwrap(), token);
+        let runner = ReanaRunner::new(client);
+
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let specification_path = root.join("../../testdata/failing_tool.cwl");
+
+        let run_id = runner
+            .submit(&specification_path, InputObject::default(), None)
+            .await
+            .unwrap();
+
+        let status = runner.wait_for_completion(&run_id).await.unwrap();
+        assert!(matches!(status, RunStatus::Failed), "expected Failed, got {status:?}");
+
+        let failures = runner.find_failures(&run_id).await.unwrap();
+        assert!(!failures.is_empty(), "expected at least one reported failure");
+        assert!(failures[0].logs.contains("intentional failure for find_failures test"));
+    }
+
     fn job_log(name: &str, status: WorkflowStatus, logs: &str) -> JobLog {
         JobLog {
             workflow_uuid: "wf".to_string(),
