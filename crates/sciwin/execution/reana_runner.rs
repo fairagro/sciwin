@@ -4,9 +4,9 @@ use crate::execution::{
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::future::try_join_all;
 use reana::{
-    api::client::ReanaClient,
+    api::{client::ReanaClient, response::WorkflowStatus},
     client::CreatedWorkspace,
-    logs::{ReanaLogMessage, get_log_outputs},
+    logs::{JobLog, ReanaLogMessage, get_log_outputs},
 };
 use serde_json::Value;
 use std::{
@@ -16,7 +16,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tracing::info;
+use tracing::{error, info, warn};
 
 pub struct ReanaRunner {
     client: Arc<ReanaClient>,
@@ -46,6 +46,68 @@ impl ReanaRunner {
             tokio::time::sleep(interval).await;
         }
     }
+
+    /// Fetches `id`'s logs and reports which step(s) look like they failed -- see
+    /// [`find_failures`] for what "look like" means. Meant to be called once a run has
+    /// reached [`RunStatus::Failed`]; on a run that's still going or finished cleanly this
+    /// just returns an empty list.
+    pub async fn find_failures(&self, id: &RunId) -> RunnerResult<Vec<JobFailure>> {
+        let logs_resp = reana::client::logs(self.client.clone(), id).await?;
+        let parsed: ReanaLogMessage = serde_json::from_str(&logs_resp.logs)?;
+        Ok(find_failures(&parsed))
+    }
+}
+
+/// A workflow step whose logs suggest it failed.
+#[derive(Debug, Clone)]
+pub struct JobFailure {
+    pub step: String,
+    pub logs: String,
+}
+
+const FAILURE_KEYWORDS: [&str; 3] = ["Error", "Exception", "Traceback"];
+
+/// Picks out the step(s) responsible for a failed run, from its full job logs.
+pub fn find_failures(logs: &ReanaLogMessage) -> Vec<JobFailure> {
+    let explicit: Vec<JobFailure> = logs
+        .job_logs
+        .values()
+        .filter(|job| job.status == WorkflowStatus::Failed)
+        .map(to_failure)
+        .collect();
+
+    if !explicit.is_empty() {
+        for failure in &explicit {
+            error!("step {} failed:\n{}", failure.step, failure.logs);
+        }
+        return explicit;
+    }
+
+    let suspects: Vec<JobFailure> = logs
+        .job_logs
+        .values()
+        .filter(|job| looks_like_failure(job))
+        .map(to_failure)
+        .collect();
+
+    for failure in &suspects {
+        warn!(
+            "step {} was reported as finished, but its logs look like a failure:\n{}",
+            failure.step, failure.logs
+        );
+    }
+    suspects
+}
+
+fn to_failure(job: &JobLog) -> JobFailure {
+    JobFailure {
+        step: job.job_name.clone(),
+        logs: job.logs.clone(),
+    }
+}
+
+fn looks_like_failure(job: &JobLog) -> bool {
+    FAILURE_KEYWORDS.iter().any(|k| job.logs.contains(k)) || job.logs.to_lowercase().contains("failed")
 }
 
 #[async_trait::async_trait]
@@ -311,5 +373,61 @@ mod tests {
 
         //reana has no cancel state
         assert!(matches!(status, RunStatus::Stopped));
+    }
+
+    fn job_log(name: &str, status: WorkflowStatus, logs: &str) -> JobLog {
+        JobLog {
+            workflow_uuid: "wf".to_string(),
+            job_name: name.to_string(),
+            compute_backend: "kubernetes".to_string(),
+            backend_job_id: "job-1".to_string(),
+            docker_img: "python".to_string(),
+            cmd: "python script.py".to_string(),
+            status,
+            logs: logs.to_string(),
+            finished_at: None,
+        }
+    }
+
+    fn log_message(jobs: Vec<JobLog>) -> ReanaLogMessage {
+        ReanaLogMessage {
+            workflow_logs: String::new(),
+            job_logs: jobs.into_iter().map(|j| (j.job_name.clone(), j)).collect(),
+            engine_specific: None,
+        }
+    }
+
+    #[test]
+    fn find_failures_prefers_jobs_explicitly_marked_failed() {
+        let logs = log_message(vec![
+            job_log("ok_step", WorkflowStatus::Finished, "all good"),
+            job_log("bad_step", WorkflowStatus::Failed, "boom"),
+        ]);
+
+        let failures = find_failures(&logs);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].step, "bad_step");
+    }
+
+    #[test]
+    fn find_failures_falls_back_to_sniffing_when_nothing_is_marked_failed() {
+        let logs = log_message(vec![
+            job_log("ok_step", WorkflowStatus::Finished, "all good"),
+            job_log(
+                "sneaky_step",
+                WorkflowStatus::Finished,
+                "Traceback (most recent call last):\n  raise ValueError",
+            ),
+        ]);
+
+        let failures = find_failures(&logs);
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].step, "sneaky_step");
+    }
+
+    #[test]
+    fn find_failures_returns_empty_for_a_clean_run() {
+        let logs = log_message(vec![job_log("ok_step", WorkflowStatus::Finished, "all good")]);
+        assert!(find_failures(&logs).is_empty());
     }
 }

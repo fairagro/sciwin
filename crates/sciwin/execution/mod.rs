@@ -31,7 +31,7 @@ use tracing::{Level, info};
 mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;
-pub use reana_runner::ReanaRunner;
+pub use reana_runner::{JobFailure, ReanaRunner, find_failures};
 pub mod reana_compat;
 
 pub type RunnerResult<T> = Result<T, RunnerError>;
