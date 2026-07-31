@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "packages/cli",
+    #"packages/cli",
     "packages/core",
     "packages/reana",
     "packages/repository",
@@ -9,6 +9,7 @@ members = [
     "packages/remote_execution",
     #"packages/gui", 
     "crates/sciwin",
+    "crates/cli",
 ]
 resolver = "3"
 
@@ -47,6 +48,8 @@ pathdiff = "0.2.3"
 tempfile = "3.26.0"
 walkdir = "2.5.0"
 slugify = "0.1.0"
+ignore = "0.4.23"
+similar = "3.1.1"
 
 # Networking
 url = "2.5.8"
@@ -65,9 +68,14 @@ tokio-util = "0.7.19"
 futures = "0.3.33"
 async-stream = "0.3.6"
 
+# CLI
+clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
+clap_complete = "4.5.61"
+
 # terminal utils
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
 colored = "3.1.1"
+prettytable-rs = "0.10.0"
 
 # error handling
 anyhow = "1.0.104"
@@ -91,6 +99,13 @@ rand = "0.10.2"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 uuid = { version = "1.21.0", features = ["v4"] }
+syntect = { version = "5.2.0", default-features = false, features = [
+    "regex-fancy",
+    "parsing",
+    "default-themes",
+    "default-syntaxes",
+] }
+
 
 # dev dependencies
 test_utils = { path = "packages/test_utils" }

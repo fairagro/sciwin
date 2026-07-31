@@ -1,0 +1,48 @@
+[package]
+name = "s4n"
+description = "SciWIn Client: Reproducible computational Workflows made easy!"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+keywords = ["cwl", "common workflow language", "SciWIn", "workflow", "fairagro"]
+categories = ["science"]
+
+[lints]
+workspace = true
+
+[lib]
+path = "lib.rs"
+
+[[bin]]
+name = "s4n"
+path = "main.rs"
+
+[dependencies]
+sciwin = { path = "../sciwin" }
+clap.workspace = true
+clap_complete.workspace = true
+anyhow = { workspace = true }
+colored = { workspace = true }
+dialoguer = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+serde-saphyr = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+dunce.workspace = true
+syntect.workspace = true
+tracing-subscriber.workspace = true
+similar.workspace = true
+ignore.workspace = true
+prettytable-rs.workspace = true
+
+[dev-dependencies]
+shlex = { workspace = true }
+test_utils = { workspace = true }
+serial_test = { workspace = true }
+fstest = { workspace = true }
+dircpy = { workspace = true }
