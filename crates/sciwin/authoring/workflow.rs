@@ -54,8 +54,14 @@ pub fn create_workflow(
     Ok((path, yaml))
 }
 
+/// Registers `path` (the tool's own location) as a step, relative to `workflow_path` -- the
+/// location the workflow itself will be saved at. Neither has to live under
+/// [`paths::WORKFLOWS_FOLDER`] or at any fixed depth: the tool and the workflow can each be
+/// anywhere in the project, so the step's `run` path is computed by diffing the two real
+/// locations rather than assumed from a folder convention.
 pub fn add_workflow_step(
     workflow: &mut Workflow,
+    workflow_path: impl AsRef<Path>,
     name: &str,
     path: impl AsRef<Path>,
     doc: &CWLDocument,
@@ -63,12 +69,7 @@ pub fn add_workflow_step(
     if workflow.has_step(name) {
         return Ok(()); // or do we want error?
     }
-    let path = path.as_ref().to_string_lossy().into_owned();
-    let path = if path.starts_with("workflows") {
-        path.replace("workflows", "..")
-    } else {
-        format!("../../{path}")
-    };
+    let path = paths::resolve_path(path, workflow_path);
     workflow.add_workflow_step_empty_mut(name, Path::new(&path))?;
     workflow.add_workflow_step_outputs_by_doc_mut(name, doc)?;
 
@@ -78,6 +79,7 @@ pub fn add_workflow_step(
 /// Adds a connection between an input and a `CommandLineTool`. The tool will be registered as step if it is not already and an Workflow input will be added.
 pub fn add_workflow_input_connection(
     workflow: &mut Workflow,
+    workflow_path: impl AsRef<Path>,
     from_input: &str,
     to_filename: impl AsRef<Path>,
     to_name: &str,
@@ -89,7 +91,7 @@ pub fn add_workflow_input_connection(
     let to_inputs = to_cwl.get_inputs();
     let to_slot = to_inputs
         .iter()
-        .find(|i| i.id == Some(to_slot_id.to_owned()))
+        .find(|i| i.id.as_deref() == Some(to_slot_id))
         .expect("No slot");
 
     //register input
@@ -101,7 +103,7 @@ pub fn add_workflow_input_connection(
         );
     }
 
-    add_workflow_step(workflow, to_name, to_filename, &to_cwl)?;
+    add_workflow_step(workflow, workflow_path, to_name, to_filename, &to_cwl)?;
     //add input in step
     workflow
         .add_workflow_step_input_mut(to_name, to_slot_id, OneOrMany::One(from_input.to_owned()))
@@ -112,6 +114,7 @@ pub fn add_workflow_input_connection(
 /// Adds a connection between an output and a `CommandLineTool`. The tool will be registered as step if it is not already and an Workflow output will be added.
 pub fn add_workflow_output_connection(
     workflow: &mut Workflow,
+    workflow_path: impl AsRef<Path>,
     from_name: &str,
     from_slot_id: &str,
     from_filename: impl AsRef<Path>,
@@ -124,26 +127,26 @@ pub fn add_workflow_output_connection(
         CWLDocument::CommandLineTool(clt) => clt
             .outputs
             .iter()
-            .find(|i| i.id == Some(from_slot_id.to_owned()))
+            .find(|i| i.id.as_deref() == Some(from_slot_id))
             .map(|i| i.r#type.clone()),
         CWLDocument::ExpressionTool(et) => et
             .outputs
             .iter()
-            .find(|i| i.id == Some(from_slot_id.to_owned()))
+            .find(|i| i.id.as_deref() == Some(from_slot_id))
             .map(|i| i.r#type.clone().into()),
         CWLDocument::Operation(op) => op
             .outputs
             .iter()
-            .find(|i| i.id == Some(from_slot_id.to_owned()))
+            .find(|i| i.id.as_deref() == Some(from_slot_id))
             .map(|i| i.r#type.clone().into()),
         CWLDocument::Workflow(wf) => wf
             .outputs
             .iter()
-            .find(|i| i.id == Some(from_slot_id.to_owned()))
+            .find(|i| i.id.as_deref() == Some(from_slot_id))
             .map(|i| i.r#type.clone()),
     }
     .expect("No slot");
-    add_workflow_step(workflow, from_name, from_filename, &from_cwl)?;
+    add_workflow_step(workflow, workflow_path, from_name, from_filename, &from_cwl)?;
 
     if workflow.has_output(to_output) {
         let output = workflow
@@ -165,8 +168,10 @@ pub fn add_workflow_output_connection(
 }
 
 /// Adds a connection between two `CommandLineTools`. The tools will be registered as step if registered not already.
+#[allow(clippy::too_many_arguments)] // from/to each need a name, a filename and a slot id, plus the workflow itself
 pub fn add_workflow_step_connection(
     workflow: &mut Workflow,
+    workflow_path: impl AsRef<Path>,
     from_filename: impl AsRef<Path>,
     from_name: &str,
     from_slot_id: &str,
@@ -175,6 +180,7 @@ pub fn add_workflow_step_connection(
     to_slot_id: &str,
 ) -> AuthoringResult<()> {
     //check if step already exists and create if not
+    let workflow_path = workflow_path.as_ref();
     let from_filename = from_filename.as_ref();
     let to_filename = to_filename.as_ref();
 
@@ -189,13 +195,13 @@ pub fn add_workflow_step_connection(
         }
 
         //create step
-        add_workflow_step(workflow, from_name, from_filename, &from_cwl)?;
+        add_workflow_step(workflow, workflow_path, from_name, from_filename, &from_cwl)?;
     }
 
     //check if step exists
     if !workflow.has_step(to_name) {
         let to_cwl = load_cwl_file(to_filename, true)?;
-        add_workflow_step(workflow, to_name, to_filename, &to_cwl)?;
+        add_workflow_step(workflow, workflow_path, to_name, to_filename, &to_cwl)?;
     }
 
     workflow.add_workflow_step_input_mut(
@@ -229,21 +235,21 @@ pub fn remove_workflow_input_connection(
         && let Some(index) = workflow
             .inputs
             .iter()
-            .position(|s| s.id == Some(from_input.to_string()))
+            .position(|s| s.id.as_deref() == Some(from_input))
     {
         workflow.inputs.remove(index);
     }
     if let Some(step) = workflow
         .steps
         .iter_mut()
-        .find(|s| s.id == Some(to_name.to_owned()))
+        .find(|s| s.id.as_deref() == Some(to_name))
     {
         if step
             .r#in
             .iter()
-            .any(|v| v.id == Some(to_slot_id.to_owned()))
+            .any(|v| v.id.as_deref() == Some(to_slot_id))
         {
-            step.r#in.retain(|v| v.id != Some(to_slot_id.to_owned()));
+            step.r#in.retain(|v| v.id.as_deref() != Some(to_slot_id));
             Ok(())
         } else {
             Err(AuthoringError::InvalidWorkflowInput {
@@ -268,7 +274,7 @@ pub fn remove_workflow_output_connection(
         && let Some(index) = workflow
             .outputs
             .iter()
-            .position(|o| o.id == Some(to_output.to_owned()))
+            .position(|o| o.id.as_deref() == Some(to_output))
     {
         // Remove the output connection
         workflow.outputs.remove(index);
@@ -276,7 +282,7 @@ pub fn remove_workflow_output_connection(
         && let Some(output) = workflow
             .outputs
             .iter_mut()
-            .find(|o| o.id == Some(to_output.to_owned()))
+            .find(|o| o.id.as_deref() == Some(to_output))
     {
         output.output_source = None;
     }
@@ -364,13 +370,14 @@ fn local_name(name: &str) -> &str {
 mod tests {
     use super::*;
     use commonwl::{
-        documents::{CWLDocument, CommandLineTool, Workflow},
+        documents::{CWLDocument, CommandLineTool, StringOrDocument, Workflow},
         inputs::CommandInputParameter,
         outputs::CommandOutputParameter,
         types::CWLType,
     };
     use std::{fs, path::Path};
     use tempfile::tempdir;
+    use test_utils::os_path;
 
     fn write_tool(path: &Path, input: &str, output: &str) {
         let tool = CommandLineTool::builder()
@@ -425,33 +432,49 @@ mod tests {
     #[test]
     fn add_step_registers_step_and_outputs() {
         let dir = tempdir().unwrap();
-        let tool_path = dir.path().join("tool.cwl");
+        // workflow and tool live in sibling subfolders, not under a shared "workflows/" root --
+        // the step path must be computed relative to the workflow, not assumed from a convention
+        let tool_path = dir.path().join("tools").join("tool.cwl");
+        let workflow_path = dir.path().join("pipelines").join("wf.cwl");
 
+        fs::create_dir_all(tool_path.parent().unwrap()).unwrap();
         write_tool(&tool_path, "in", "out");
 
         let mut wf = Workflow::default();
         let doc = load_cwl_file(&tool_path, true).unwrap();
 
-        add_workflow_step(&mut wf, "tool", &tool_path, &doc).unwrap();
+        add_workflow_step(&mut wf, &workflow_path, "tool", &tool_path, &doc).unwrap();
 
         assert!(wf.has_step("tool"));
 
         let step = wf.get_step("tool").unwrap();
         assert_eq!(step.out.len(), 1);
         assert_eq!(step.out[0].id(), "out");
+        assert_eq!(
+            step.run,
+            StringOrDocument::String(os_path("../tools/tool.cwl"))
+        );
     }
 
     #[test]
     fn connect_workflow_input() {
         let dir = tempdir().unwrap();
         let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
 
         write_tool(&tool_path, "message", "out");
 
         let mut wf = Workflow::default();
 
-        add_workflow_input_connection(&mut wf, "workflow_input", &tool_path, "tool", "message")
-            .unwrap();
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "workflow_input",
+            &tool_path,
+            "tool",
+            "message",
+        )
+        .unwrap();
 
         assert!(wf.has_input("workflow_input"));
         assert!(wf.has_step("tool"));
@@ -468,13 +491,21 @@ mod tests {
     fn connect_workflow_output() {
         let dir = tempdir().unwrap();
         let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
 
         write_tool(&tool_path, "in", "result");
 
         let mut wf = Workflow::default();
 
-        add_workflow_output_connection(&mut wf, "tool", "result", &tool_path, "final_result")
-            .unwrap();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            "tool",
+            "result",
+            &tool_path,
+            "final_result",
+        )
+        .unwrap();
 
         assert!(wf.has_output("final_result"));
 
@@ -494,6 +525,7 @@ mod tests {
     fn connect_two_steps() {
         let dir = tempdir().unwrap();
 
+        let workflow_path = dir.path().join("workflow.cwl");
         let producer = dir.path().join("producer.cwl");
         let consumer = dir.path().join("consumer.cwl");
 
@@ -503,7 +535,14 @@ mod tests {
         let mut wf = Workflow::default();
 
         add_workflow_step_connection(
-            &mut wf, &producer, "producer", "value", &consumer, "consumer", "value",
+            &mut wf,
+            &workflow_path,
+            &producer,
+            "producer",
+            "value",
+            &consumer,
+            "consumer",
+            "value",
         )
         .unwrap();
 
@@ -522,13 +561,23 @@ mod tests {
     fn remove_connections() {
         let dir = tempdir().unwrap();
         let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
 
         write_tool(&tool_path, "in", "out");
 
         let mut wf = Workflow::default();
 
-        add_workflow_input_connection(&mut wf, "wf_in", &tool_path, "tool", "in").unwrap();
-        add_workflow_output_connection(&mut wf, "tool", "out", &tool_path, "wf_out").unwrap();
+        add_workflow_input_connection(&mut wf, &workflow_path, "wf_in", &tool_path, "tool", "in")
+            .unwrap();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            "tool",
+            "out",
+            &tool_path,
+            "wf_out",
+        )
+        .unwrap();
 
         remove_workflow_input_connection(&mut wf, "wf_in", "tool", "in", true).unwrap();
         remove_workflow_output_connection(&mut wf, "wf_out", true).unwrap();
