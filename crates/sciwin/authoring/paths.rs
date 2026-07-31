@@ -53,7 +53,13 @@ pub fn get_qualified_filename(
     the_name: Option<&str>,
     base_dir: impl AsRef<Path>,
 ) -> PathBuf {
-    let filename = format!("{}.cwl", derive_tool_name(command, the_name));
+    get_qualified_filename_by_name(&derive_tool_name(command, the_name), base_dir)
+}
+
+/// Builds `{base_dir}/{name}.cwl` for a document that always has an explicit name -- a
+/// workflow, unlike a tool, is never named after a command line.
+pub fn get_qualified_filename_by_name(name: &str, base_dir: impl AsRef<Path>) -> PathBuf {
+    let filename = format!("{}.cwl", strip_cwl_extension(name));
     base_dir.as_ref().join(filename)
 }
 

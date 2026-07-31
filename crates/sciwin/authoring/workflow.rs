@@ -1,4 +1,4 @@
-use crate::authoring::{AuthoringError, AuthoringResult};
+use crate::authoring::{AuthoringError, AuthoringResult, paths};
 use anyhow::Context;
 use commonwl::{
     OneOrMany,
@@ -9,45 +9,49 @@ use commonwl::{
     outputs::{CommandOutputParameterType, CommandOutputSchema, CommandOutputType},
     types::CWLType,
 };
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-pub fn create_workflow(filename: impl AsRef<Path>, force: bool) -> AuthoringResult<String> {
+/// Creates a blank workflow document named `name`.
+///
+/// Follows the same path scheme as [`crate::authoring::tool::create_tool`]: `output_dir` is
+/// the project folder to place it in; when absent, it falls back to a per-workflow folder
+/// under [`paths::WORKFLOWS_FOLDER`].
+pub fn create_workflow(
+    name: &str,
+    output_dir: Option<PathBuf>,
+    force: bool,
+) -> AuthoringResult<(PathBuf, String)> {
     let wf = Workflow {
         cwl_version: Some("v1.2".to_string()),
         ..Default::default()
     };
     let wf = CWLDocument::Workflow(wf);
-    let filename = filename.as_ref();
 
     let mut yaml = serde_saphyr::to_string(&wf)?;
     yaml = format_cwl(&yaml).context("Could not format yaml")?;
 
+    let base_dir = output_dir.unwrap_or_else(|| Path::new(paths::WORKFLOWS_FOLDER).join(name));
+    let path = paths::get_qualified_filename_by_name(name, base_dir);
+
     //removes file first if exists and force is given
-    if force && filename.exists() {
-        fs::remove_file(filename)?;
+    if force && path.exists() {
+        fs::remove_file(&path)?;
     }
 
-    let name = Path::new(&filename)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .context("Could not determine workflow name from filename")?;
-
-    let parent = filename
-        .parent()
-        .context("Could not determine parent directory of workflow file")?;
-    fs::create_dir_all(parent).with_context(|| {
-        format!(
-            "Could not create parent directory for workflow file at {}",
-            parent.to_string_lossy()
-        )
-    })?;
-    fs::write(filename, &yaml).with_context(|| {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directories for {}", parent.display()))?;
+    }
+    fs::write(&path, &yaml).with_context(|| {
         format!(
             "❌ Could not create workflow {name} at {}",
-            filename.to_string_lossy(),
+            path.to_string_lossy(),
         )
     })?;
-    Ok(yaml)
+    Ok((path, yaml))
 }
 
 pub fn add_workflow_step(
@@ -390,17 +394,32 @@ mod tests {
     }
 
     #[test]
-    fn create_workflow_creates_file() {
+    fn create_workflow_creates_file_in_given_project_folder() {
         let dir = tempdir().unwrap();
-        let wf = dir.path().join("workflow.cwl");
 
-        create_workflow(&wf, false).unwrap();
+        let (path, _) = create_workflow("workflow", Some(dir.path().to_path_buf()), false).unwrap();
 
-        assert!(wf.exists());
+        // a given output_dir is used as-is, no extra per-workflow subfolder
+        assert_eq!(path, dir.path().join("workflow.cwl"));
+        assert!(path.exists());
 
-        let doc = load_cwl_file(&wf, true).unwrap();
+        let doc = load_cwl_file(&path, true).unwrap();
         assert!(matches!(doc, CWLDocument::Workflow(_)));
         assert_eq!(doc.cwl_version(), Some(&"v1.2".to_string()));
+    }
+
+    #[fstest::fstest]
+    fn create_workflow_falls_back_to_workflows_folder() {
+        // no output_dir given -> workflows/<name>/<name>.cwl, same convention as create_tool
+        let (path, _) = create_workflow("myworkflow", None, false).unwrap();
+
+        assert_eq!(
+            path,
+            Path::new("workflows")
+                .join("myworkflow")
+                .join("myworkflow.cwl")
+        );
+        assert!(path.exists());
     }
 
     #[test]
