@@ -1,16 +1,19 @@
 use crate::ExitCode;
 use clap::{Args, Subcommand};
-use sciwin::cwl::{
-    OneOrMany,
-    documents::CWLDocument,
-    engine::{
-        ContainerEngine, EngineStatus, InputObject, LocalBackend, create_execution_request,
-        create_execution_request_with_inputs, evaluate_exitcodes,
+use sciwin::{
+    cwl::{
+        OneOrMany,
+        documents::CWLDocument,
+        engine::{
+            ContainerEngine, EngineStatus, InputObject, LocalBackend, create_execution_request,
+            create_execution_request_with_inputs, evaluate_exitcodes, load_input_file_from_file,
+        },
+        files::{Directory, File, FileOrDirectory},
+        inputs::{DefaultValue, InputSchema, InputType},
+        storage::{StorageBackend, StoragePath},
+        types::CWLType,
     },
-    files::{Directory, File, FileOrDirectory},
-    inputs::{DefaultValue, InputSchema, InputType},
-    storage::{StorageBackend, StoragePath},
-    types::CWLType,
+    execution::{TaskRunner, WorkflowRunner},
 };
 
 use remote_execution::{check_status, download_results, export_rocrate, logout};
@@ -166,28 +169,20 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
     } else {
         ContainerEngine::Docker
     };
+
     let storage = Arc::new(StorageBackend::new());
-
-    let local_data_store = StoragePath::from_local(&env::temp_dir());
     let backend = Arc::new(LocalBackend::new(
-        container_engine,
+        ContainerEngine::default(),
         storage,
-        local_data_store,
+        StoragePath::from_local(&env::temp_dir()),
     ));
+    let runner = TaskRunner::new(backend);
 
-    let request = if args.args.is_empty() {
-        create_execution_request_with_inputs(
-            args.file.clone(),
-            InputObject::default(),
-            args.out_dir.as_deref(),
-            None,
-        )?
+    let base_path = dunce::canonicalize(args.file.parent().unwrap_or(Path::new(".")))?;
+    let inputs = if args.args.is_empty() {
+        InputObject::default()
     } else if args.args.len() == 1 && fs::exists(args.args[0].clone())? {
-        create_execution_request(
-            args.file.clone().clone(),
-            args.args[0].clone(),
-            args.out_dir.as_deref(),
-        )?
+        load_input_file_from_file(args.args[0], base_path)?
     } else {
         let raw = args
             .args
@@ -214,19 +209,15 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
                 }
             })
             .collect::<HashMap<_, _>>();
-        let inputs = InputObject {
+        InputObject {
             inputs: raw,
             ..Default::default()
-        };
-        create_execution_request_with_inputs(
-            args.file.clone(),
-            inputs,
-            args.out_dir.as_deref(),
-            None,
-        )?
+        }
     };
-    let cancellation_token = CancellationToken::new();
-    let result = commonwl::engine::execute(backend, &request, cancellation_token).await?;
+    runner
+        .run_workflow(&args.file, inputs, args.out_dir.as_deref())
+        .await
+        .unwrap(); //fix!
     let exit_status = result.exit_status;
 
     let evaluated_code = evaluate_exitcodes(&exit_status, &request.specification);
