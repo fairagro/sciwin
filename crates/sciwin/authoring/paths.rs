@@ -1,7 +1,7 @@
 //! Deriving tool names and file locations. Pure path arithmetic -- nothing here touches the
 //! filesystem.
 
-use crate::authoring::parser::{matches_script_executor, matches_script_modifier};
+use crate::authoring::tool::parser::command::{matches_script_executor, matches_script_modifier};
 use commonwl::OneOrMany;
 use std::path::{Path, PathBuf};
 
@@ -87,7 +87,6 @@ pub(crate) fn resolve_path<P: AsRef<Path>, Q: AsRef<Path>>(filename: P, relative
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::authoring::parser;
     use rstest::rstest;
     use test_utils::os_path;
 
@@ -148,7 +147,9 @@ mod tests {
         #[case] command: Vec<&str>,
         #[case] expected: &str,
     ) {
-        let base = parser::get_base_command(&command);
+        use crate::authoring::tool::parser::command::get_base_command;
+
+        let base = get_base_command(&command);
         assert_eq!(derive_tool_name(&base, None), expected);
     }
 

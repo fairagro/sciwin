@@ -8,6 +8,7 @@
 //! Only [`guess_type`] is public; the rest is reached through
 //! [`crate::authoring::tool::create_tool`].
 
+use crate::authoring::tool::parser::command::{get_base_command, matches_script_modifier};
 use commonwl::{
     OneOrMany,
     documents::CommandLineTool,
@@ -20,18 +21,11 @@ use commonwl::{
 };
 use std::path::Path;
 
-mod command;
-mod inputs;
-mod outputs;
-mod postprocess;
+pub(crate) mod command;
+pub(super) mod inputs;
+pub(super) mod outputs;
 mod shell;
 mod staging;
-
-pub(crate) use command::{get_base_command, matches_script_executor, matches_script_modifier};
-pub(crate) use inputs::add_fixed_inputs;
-pub use inputs::guess_type;
-pub(crate) use outputs::get_outputs;
-pub(crate) use postprocess::post_process_cwl;
 
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 

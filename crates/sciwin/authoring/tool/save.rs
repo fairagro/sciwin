@@ -1,8 +1,7 @@
 //! Post-processing, serializing and writing a finished tool.
 
 use crate::{
-    authoring::{AuthoringError, AuthoringResult, parser, paths::resolve_path},
-    repository::{self, Repository},
+    authoring::{AuthoringError, AuthoringResult, paths::resolve_path, tool::postprocess::post_process_cwl}, repository::{self, Repository},
 };
 use anyhow::Context as _;
 use commonwl::{
@@ -16,7 +15,7 @@ use std::{fs, path::Path};
 
 /// Post-processes, rewires and serializes `cwl` as it would be saved at `path`.
 pub(super) fn finalize_tool(cwl: &mut CommandLineTool, path: &Path) -> AuthoringResult<String> {
-    parser::post_process_cwl(cwl)?;
+    post_process_cwl(cwl)?;
     let yaml = prepare_save(cwl, path)?;
     format_cwl(&yaml)
         .map_err(|e| AuthoringError::Unknown(anyhow::anyhow!("Failed to format CWL: {e}")))

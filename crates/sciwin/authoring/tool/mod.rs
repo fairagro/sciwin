@@ -9,6 +9,8 @@
 //!
 //! See [`crate::authoring`] for the same pipeline drawn out.
 
+pub(crate) mod parser;
+mod postprocess;
 mod probe;
 mod requirements;
 mod save;
@@ -16,7 +18,7 @@ mod save;
 pub use requirements::ContainerInfo;
 
 use crate::{
-    authoring::{AuthoringError, AuthoringResult, parser, paths},
+    authoring::{AuthoringError, AuthoringResult, paths},
     repository::{self, Repository},
 };
 use bon::Builder;
@@ -154,11 +156,11 @@ async fn create_tool_base(
 
     // handle outputs
     if !options.outputs.is_empty() {
-        cwl.outputs = parser::get_outputs(&options.outputs);
+        cwl.outputs = parser::outputs::get_outputs(&options.outputs);
     }
 
     if !options.inputs.is_empty() {
-        parser::add_fixed_inputs(
+        parser::inputs::add_fixed_inputs(
             &mut cwl,
             &options
                 .inputs
@@ -172,7 +174,7 @@ async fn create_tool_base(
         let files =
             probe::run_and_collect_files(&mut cwl, project_root, options, &repo, &modified).await?;
         if options.outputs.is_empty() {
-            cwl.outputs = parser::get_outputs(&files);
+            cwl.outputs = parser::outputs::get_outputs(&files);
         }
     }
 

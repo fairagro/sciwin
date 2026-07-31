@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use super::{BAD_WORDS, staging};
 use crate::authoring::AuthoringResult;
 use commonwl::{
@@ -12,6 +10,7 @@ use commonwl::{
 use rand::{RngExt, distr::Alphanumeric};
 use serde_json::Value;
 use slugify::slugify;
+use std::path::Path;
 
 pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
     let mut inputs = vec![];
