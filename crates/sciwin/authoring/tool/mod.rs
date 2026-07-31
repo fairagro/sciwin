@@ -18,7 +18,8 @@ mod save;
 pub use requirements::ContainerInfo;
 
 use crate::{
-    authoring::{AuthoringError, AuthoringResult, paths}, repository::{self, Repository},
+    authoring::{AuthoringError, AuthoringResult, paths},
+    repository::{self, Repository},
 };
 use bon::Builder;
 use commonwl::{documents::CommandLineTool, engine::ContainerEngine};

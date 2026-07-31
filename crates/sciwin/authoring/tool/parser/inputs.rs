@@ -12,7 +12,7 @@ use serde_json::Value;
 use slugify::slugify;
 use std::path::Path;
 
-pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
+pub(crate) fn build_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
     let mut inputs = vec![];
     let mut i = 0;
     while i < args.len() {
@@ -20,13 +20,14 @@ pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
         let input: CommandInputParameter = if is_flag_like(arg) {
             if i + 1 < args.len() && !is_flag_like(args[i + 1]) {
                 //is not a flag, as next one is a value
+                let option = build_option(arg, args[i + 1]);
                 i += 1;
-                get_option(arg, args[i + 1])
+                option
             } else {
-                get_flag(arg)
+                build_flag(arg)
             }
         } else {
-            get_positional(arg, i.try_into().unwrap())
+            build_positional(arg, i.try_into().unwrap())
         };
         inputs.push(input);
         i += 1;
@@ -40,7 +41,7 @@ fn is_flag_like(s: &str) -> bool {
     s.starts_with('-') && s.parse::<f64>().is_err()
 }
 
-fn get_positional(current: &str, index: isize) -> CommandInputParameter {
+fn build_positional(current: &str, index: isize) -> CommandInputParameter {
     let (current, cwl_type) = parse_input(current);
 
     // detected before building id/default -- a secret must never reach the default
@@ -75,7 +76,7 @@ fn get_positional(current: &str, index: isize) -> CommandInputParameter {
         .build()
 }
 
-fn get_flag(current: &str) -> CommandInputParameter {
+fn build_flag(current: &str) -> CommandInputParameter {
     // slugify already strips leading `-`/`--`
     CommandInputParameter::builder()
         .input_binding(CommandLineBinding::builder().prefix(current).build())
@@ -85,7 +86,7 @@ fn get_flag(current: &str) -> CommandInputParameter {
         .build()
 }
 
-fn get_option(current: &str, next: &str) -> CommandInputParameter {
+fn build_option(current: &str, next: &str) -> CommandInputParameter {
     let (next, cwl_type) = parse_input(next);
     let default_value = parse_default_value(next, &cwl_type);
 
@@ -245,7 +246,7 @@ mod tests {
         let inputs_vec = shlex::split(inputs).unwrap();
         let inputs_slice: Vec<&str> = inputs_vec.iter().map(AsRef::as_ref).collect();
 
-        let result = get_inputs(&inputs_slice);
+        let result = build_inputs(&inputs_slice);
 
         assert_eq!(result, expected);
     }
@@ -261,7 +262,7 @@ mod tests {
             .build();
 
         let args = shlex::split(commandline_args).unwrap();
-        let result = get_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
+        let result = build_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
 
         assert_eq!(result[0], expected);
     }
@@ -275,7 +276,7 @@ mod tests {
             .input_binding(CommandLineBinding::builder().position(0).build())
             .default(DefaultValue::Any(Value::String(arg.to_string())))
             .build();
-        let result = get_inputs(&[arg]);
+        let result = build_inputs(&[arg]);
         assert_eq!(result[0], expected);
     }
 
@@ -284,7 +285,7 @@ mod tests {
         // "-5" must be read as the value of --threshold, not misparsed as its own flag
         let inputs = "--threshold -5";
         let args = shlex::split(inputs).unwrap();
-        let result = get_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
+        let result = build_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id.as_deref(), Some("threshold"));
@@ -297,7 +298,7 @@ mod tests {
 
     #[test]
     pub fn test_get_inputs_standalone_negative_number() {
-        let result = get_inputs(&["-5"]);
+        let result = build_inputs(&["-5"]);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].r#type, CWLType::Int.into());
     }
@@ -348,13 +349,13 @@ mod tests {
         // slugify, which for a multi-word flag stripped the internal dash *before*
         // slugify could turn it into the separator -- "--dry-run" became id "dryrun"
         // instead of "dry_run". slugify already handles leading/internal dashes itself.
-        let result = get_inputs(&["--dry-run"]);
+        let result = build_inputs(&["--dry-run"]);
         assert_eq!(result[0].id.as_deref(), Some("dry_run"));
     }
 
     #[test]
     pub fn test_get_option_multiword_id_keeps_word_boundary() {
-        let result = get_inputs(&["--max-retries", "3"]);
+        let result = build_inputs(&["--max-retries", "3"]);
         assert_eq!(result[0].id.as_deref(), Some("max_retries"));
     }
 

@@ -43,22 +43,18 @@ pub(super) fn add_tool_requirements(
     }
 
     if !options.mounts.is_empty() {
-        let entries = options
-            .mounts
-            .iter()
-            .filter_map(|m| {
-                if m.is_dir() {
-                    Some(FileOrDirectory::Directory(
-                        Directory::builder()
-                            .location(m.to_string_lossy().into_owned())
-                            .build(),
-                    ))
-                } else {
-                    tracing::warn!("{} is not a directory and has been skipped!", m.display());
-                    None
-                }
-            })
-            .collect();
+        let mut entries = Vec::with_capacity(options.mounts.len());
+        for m in &options.mounts {
+            if m.is_dir() {
+                entries.push(FileOrDirectory::Directory(
+                    Directory::builder()
+                        .location(m.to_string_lossy().into_owned())
+                        .build(),
+                ));
+            } else {
+                tracing::warn!("{} is not a directory and has been skipped!", m.display());
+            }
+        }
         cwl.add_mount_requirement_mut(entries);
     }
     Ok(())

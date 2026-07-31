@@ -9,7 +9,7 @@ use commonwl::{
     requirements::{InlineJavascriptRequirement, ToolRequirements},
     types::CWLType,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Applies some postprocessing to the cwl `CommandLineTool`
 pub(crate) fn post_process_cwl(tool: &mut CommandLineTool) -> AuthoringResult<()> {
@@ -21,37 +21,40 @@ pub(crate) fn post_process_cwl(tool: &mut CommandLineTool) -> AuthoringResult<()
 
 /// Transforms duplicate key and type entries into an array type input
 fn detect_array_inputs(tool: &mut CommandLineTool) -> AuthoringResult<()> {
-    let mut seen = HashSet::new();
-    let mut inputs = Vec::new();
+    // maps an input id to its index in `inputs`, so a repeat id is merged in O(1)
+    // instead of a linear re-scan -- and merged regardless of whether its type
+    // matches the first occurrence, so two inputs never end up sharing one id.
+    let mut index_by_id: HashMap<Option<String>, usize> = HashMap::new();
+    let mut inputs: Vec<CommandInputParameter> = Vec::new();
 
     for input in std::mem::take(&mut tool.inputs) {
-        let key = (input.id.clone(), input.r#type.clone());
-        if seen.insert(key.clone()) {
+        let Some(&index) = index_by_id.get(&input.id) else {
+            index_by_id.insert(input.id.clone(), inputs.len());
             inputs.push(input);
-        } else if let Some(existing) = inputs.iter_mut().find(|i| i.id == key.0) {
-            // Convert to array type if not already
-            if !matches!(&existing.r#type, CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(schema))) if matches!(&**schema, CommandInputSchema::Array(_)) )
-                && let CommandInputParameterType::CommandInputType(in_ty) = input.r#type
-            {
-                existing.r#type = CommandInputSchema::Array(
-                    CommandInputArraySchema::builder().items(in_ty).build(),
-                )
-                .into();
+            continue;
+        };
+        let existing = &mut inputs[index];
 
-                if let Some(default) = &existing.default {
-                    existing.default = Some(DefaultValue::Any(serde_json::to_value(vec![
-                        default.clone(),
-                    ])?));
-                }
-            }
+        // Convert to array type if not already
+        if !matches!(&existing.r#type, CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(schema))) if matches!(&**schema, CommandInputSchema::Array(_)) )
+            && let CommandInputParameterType::CommandInputType(in_ty) = existing.r#type.clone()
+        {
+            existing.r#type =
+                CommandInputSchema::Array(CommandInputArraySchema::builder().items(in_ty).build())
+                    .into();
 
-            // Append additional default value if present
-            if let Some(DefaultValue::Any(serde_json::Value::Array(defaults))) =
-                &mut existing.default
-                && let Some(default) = input.default
-            {
-                defaults.push(serde_json::to_value(default.clone())?);
+            if let Some(default) = &existing.default {
+                existing.default = Some(DefaultValue::Any(serde_json::to_value(vec![
+                    default.clone(),
+                ])?));
             }
+        }
+
+        // Append additional default value if present
+        if let Some(DefaultValue::Any(serde_json::Value::Array(defaults))) = &mut existing.default
+            && let Some(default) = input.default
+        {
+            defaults.push(serde_json::to_value(default.clone())?);
         }
     }
     tool.inputs = inputs;

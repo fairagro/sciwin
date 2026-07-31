@@ -50,7 +50,7 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
         let stdout = shell::handle_redirection(&cmd[stdout_pos..]);
         let stderr = shell::handle_redirection(&cmd[stderr_pos..]);
 
-        let inputs = inputs::get_inputs(&cmd[..first_redir_pos]);
+        let inputs = inputs::build_inputs(&cmd[..first_redir_pos]);
         let args = shell::collect_arguments(piped, &inputs);
 
         tool.inputs(inputs)
@@ -120,9 +120,11 @@ fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<Strin
 pub(crate) fn sanitize_id(input: &str) -> String {
     let trimmed = input.trim_start_matches(|c: char| !c.is_alphabetic());
     // an all-non-alphabetic name (e.g. a bare "123") trims to "" — fall back to
-    // the untrimmed input rather than emitting the invalid "$(inputs.)"
+    // the untrimmed input rather than emitting an empty/invalid id
     let base = if trimmed.is_empty() { input } else { trimmed };
-    base.replace(['.', '/'], "_").to_lowercase()
+    base.trim_end_matches('/')
+        .replace(['.', '/'], "_")
+        .to_lowercase()
 }
 
 #[cfg(test)]
@@ -239,8 +241,13 @@ mod tests {
         assert!(secret_input.default.is_none());
     }
     #[test]
-    pub fn test_entry_name_numeric_only() {
-        // an all-numeric filename must not produce the invalid "$(inputs.)"
-        assert_eq!(sanitize_id("123"), "$(inputs.123)");
+    pub fn test_sanitize_id_numeric_only() {
+        // an all-numeric name must not produce an empty id
+        assert_eq!(sanitize_id("123"), "123");
+    }
+
+    #[test]
+    pub fn test_sanitize_id_trailing_slash() {
+        assert_eq!(sanitize_id("results/"), "results");
     }
 }
