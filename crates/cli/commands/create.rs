@@ -2,8 +2,10 @@ use crate::{cwl::highlight_cwl, print_diff, print_list};
 use anyhow::{anyhow, bail};
 use clap::Args;
 use colored::Colorize;
-use sciwin::cwl::{documents::CommandLineTool, engine::ContainerEngine};
-use sciwin::{authoring::paths::get_qualified_filename, authoring::tool::ToolCreationOptions};
+use sciwin::authoring::tool::CreatedTool;
+use sciwin::authoring::tool::ToolCreationOptions;
+use sciwin::cwl::engine::ContainerEngine;
+use std::env;
 use std::{path::PathBuf, str::FromStr};
 use tracing::{info, warn};
 
@@ -96,27 +98,29 @@ pub struct CreateArgs {
     pub command: Vec<String>,
 }
 
-impl<'a> From<&'a CreateArgs> for ToolCreationOptions<'a> {
-    fn from(args: &'a CreateArgs) -> Self {
+impl From<&CreateArgs> for ToolCreationOptions {
+    fn from(args: &CreateArgs) -> Self {
         Self {
-            command: &args.command,
-            outputs: args.outputs.as_deref().unwrap_or(&[]),
-            inputs: args.inputs.as_deref().unwrap_or(&[]),
+            command: args.command.clone(),
+            outputs: args.outputs.clone().unwrap_or(vec![]),
+            inputs: args.inputs.clone().unwrap_or(vec![]),
             no_run: args.no_run,
             cleanup: args.is_clean,
             commit: !args.no_commit,
             clear_defaults: args.no_defaults,
-            container: args
-                .container_image
-                .as_ref()
-                .map(|image| s4n_core::tool::ContainerInfo {
-                    image: image.as_str(),
-                    tag: args.container_tag.as_deref(),
-                }),
+            container: args.container_image.as_ref().map(|image| {
+                sciwin::authoring::tool::ContainerInfo {
+                    image: image.to_owned(),
+                    tag: args.container_tag.clone(),
+                }
+            }),
             enable_network: args.enable_network,
-            run_container: args.run_container.as_ref().map(|r| r.0),
-            mounts: args.mount.as_deref().unwrap_or(&[]),
-            env: args.env.as_deref(),
+            run_container: args.run_container.clone().map(|r| r.0),
+            mounts: args.mount.clone().unwrap_or(vec![]),
+            env: args.env.clone(),
+            name: args.name.clone(),
+            output_dir: None,
+            save: args.is_raw,
         }
     }
 }
@@ -145,10 +149,14 @@ pub fn create_workflow(args: &CreateArgs) -> anyhow::Result<()> {
     };
 
     //check if workflow already exists
-    let filename = format!("{}{}/{}.cwl", get_workflows_folder(), name, name);
-    let yaml = s4n_core::workflow::create_workflow(&filename, args.force)?;
+    let filename = format!("workflows/{}/{}.cwl", name, name); //TODO: fix
+    let (path, yaml) = sciwin::authoring::workflow::create_workflow(
+        &filename,
+        Some(env::current_dir()?),
+        args.force,
+    )?;
 
-    info!("📄 Created new Workflow file: {filename}");
+    info!("📄 Created new Workflow file: {path:?}");
     print_diff("", &yaml);
 
     Ok(())
@@ -162,11 +170,14 @@ pub async fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
         warn!("User requested no execution, could not determine outputs!");
     }
 
-    let yaml = s4n_core::tool::create_tool(&args.into(), args.name.clone(), !args.is_raw).await?;
-    let cwl: CommandLineTool = serde_saphyr::from_str(&yaml)?;
+    let CreatedTool {
+        document,
+        path,
+        yaml,
+    } = sciwin::authoring::tool::create_tool(&env::current_dir()?, &args.into()).await?;
 
     info!("Found outputs:");
-    let string_outputs: Vec<String> = cwl
+    let string_outputs: Vec<String> = document
         .outputs
         .iter()
         .filter_map(|o| o.output_binding.as_ref()?.glob.clone().map(|g| g.as_many()))
@@ -179,8 +190,10 @@ pub async fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
     if args.is_raw {
         highlight_cwl(&yaml);
     } else {
-        let path = get_qualified_filename(&cwl.base_command.unwrap(), args.name.clone());
-        info!("\n📄 Created CWL file {}", path.green().bold());
+        info!(
+            "\n📄 Created CWL file {}",
+            path.to_string_lossy().green().bold()
+        );
     }
 
     Ok(())

@@ -9,7 +9,7 @@
 //!
 //! See [`crate::authoring`] for the same pipeline drawn out.
 
-pub(crate) mod parser;
+pub mod parser;
 mod postprocess;
 mod probe;
 mod requirements;

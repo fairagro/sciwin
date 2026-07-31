@@ -186,7 +186,7 @@ fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
                 &input
                     .default
                     .as_ref()
-                    .map_or("None".to_string(), default_to_string),
+                    .map_or("None".to_string(), |d| d.to_string()),
             ),
         ]));
     }
@@ -247,7 +247,7 @@ fn list_et(et: &ExpressionTool, filename: &Path) -> anyhow::Result<()> {
                 &input
                     .default
                     .as_ref()
-                    .map_or("None".to_string(), default_to_string),
+                    .map_or("None".to_string(), |d| d.to_string()),
             ),
         ]));
     }

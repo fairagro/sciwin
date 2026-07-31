@@ -41,7 +41,13 @@ pub fn install_package(url: &str, branch: &Option<String>) -> anyhow::Result<()>
     let current_dir = env::current_dir().unwrap_or(PathBuf::from("."));
     let mut repo = Repository::open(&current_dir)?;
 
-    add_submodule(&mut repo, url, branch, &package_dir.join(repo_name))?;
+    add_submodule(
+        &mut repo,
+        url,
+        branch,
+        &package_dir.join(repo_name),
+        &format!("📦 Installed Package {repo_name}"),
+    )?;
 
     info!("📦 Installed Package {}", repo_name.bold().green());
 
@@ -52,7 +58,11 @@ pub fn remove_package(package_id: &str) -> anyhow::Result<()> {
     let current_dir = env::current_dir().unwrap_or(PathBuf::from("."));
     let repo = Repository::open(&current_dir)?;
 
-    remove_submodule(&repo, &format!("packages/{package_id}"))?;
+    remove_submodule(
+        &repo,
+        &format!("packages/{package_id}"),
+        &format!("📦 Removed Package {package_id}"),
+    )?;
 
     info!("📦 Removed Package {}", package_id.bold().red());
     Ok(())

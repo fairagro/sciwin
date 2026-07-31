@@ -6,8 +6,8 @@ use crate::{
 use anyhow::anyhow;
 use clap::Args;
 use sciwin::cwl::{documents::CWLDocument, format::format_cwl, load_cwl_file};
-use tracing::info;
 use std::{fs, io::Write, path::Path};
+use tracing::info;
 
 #[derive(Args, Debug)]
 pub struct ConnectWorkflowArgs {
@@ -21,7 +21,7 @@ pub struct ConnectWorkflowArgs {
 
 pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> {
     //get workflow
-    let filename = format!("{}{}/{}.cwl", get_workflows_folder(), args.name, args.name);
+    let filename = format!("workflows/{}/{}.cwl", args.name, args.name); // TODO: fix
     if !Path::new(&filename).exists() {
         let args = CreateArgs {
             name: Some(args.name.clone()),
@@ -94,7 +94,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
 }
 
 pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> {
-    let filename = format!("{}{}/{}.cwl", get_workflows_folder(), args.name, args.name);
+    let filename = format!("workflows/{}/{}.cwl", args.name, args.name); // todo: fix
     let CWLDocument::Workflow(mut workflow) = load_cwl_file(&filename, true)
         .map_err(|e| anyhow!("Could not load workflow {filename}: {e}"))?
     else {
