@@ -27,6 +27,8 @@ pub(super) mod outputs;
 mod shell;
 mod staging;
 
+pub use inputs::guess_type;
+
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 
 pub(crate) fn parse_command_line(commands: &[&str], base: &Path) -> CommandLineTool {

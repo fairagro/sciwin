@@ -1,33 +1,27 @@
-use crate::ExitCode;
 use clap::{Args, Subcommand};
 use sciwin::{
     cwl::{
         OneOrMany,
         documents::CWLDocument,
-        engine::{
-            ContainerEngine, EngineStatus, InputObject, LocalBackend, create_execution_request,
-            create_execution_request_with_inputs, evaluate_exitcodes, load_input_file_from_file,
-        },
+        engine::{ContainerEngine, InputObject, LocalBackend, load_input_file_from_file},
         files::{Directory, File, FileOrDirectory},
         inputs::{DefaultValue, InputSchema, InputType},
         storage::{StorageBackend, StoragePath},
         types::CWLType,
     },
-    execution::{TaskRunner, WorkflowRunner},
+    authoring::tool::parser::guess_type,
+    execution::{ReanaRunner, RunStatus, TaskRunner, WorkflowRunner},
+    reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
 };
-
-use remote_execution::{check_status, download_results, export_rocrate, logout};
-use sciwin::authoring::tool::parser::guess_type;
 use serde_json::{Number, Value};
 use std::{
     collections::HashMap,
-    env,
-    error::Error,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tokio_util::sync::CancellationToken;
+use tracing::{info, warn};
+use url::Url;
 
 pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Result<()> {
     match subcommand {
@@ -39,23 +33,29 @@ pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Re
                 rocrate,
                 watch,
                 logout,
-            } => schedule_run(file, input_file, *rocrate, *watch, *logout)
-                .map_err(|e| anyhow::anyhow!("{e}")),
+            } => execute_remote_start(file, input_file, *rocrate, *watch, *logout).await,
             RemoteSubcommands::Status { workflow_name } => {
-                check_status(workflow_name).map_err(|e| anyhow::anyhow!("{e}"))
+                execute_remote_status(workflow_name.as_deref()).await
             }
             RemoteSubcommands::Download {
                 workflow_name,
                 all,
                 output_dir,
-            } => download_results(workflow_name, *all, output_dir.as_ref())
-                .map_err(|e| anyhow::anyhow!("{e}")),
-            RemoteSubcommands::Rocrate {
-                workflow_name,
-                output_dir,
-            } => export_rocrate(workflow_name, output_dir.as_ref(), None)
-                .map_err(|e| anyhow::anyhow!("{e}")),
-            RemoteSubcommands::Logout => logout().map_err(|e| anyhow::anyhow!("{e}")),
+            } => execute_remote_download(workflow_name, *all, output_dir.as_deref()).await,
+            RemoteSubcommands::Rocrate { .. } => {
+                // packages/reana's rocrate.rs (RO-Crate generation, ~1000 lines) has no
+                // equivalent in crates/sciwin yet -- it's the one gap CLAUDE.md explicitly
+                // calls out as still needing a port.
+                anyhow::bail!("RO-Crate export is not implemented yet in the new core library")
+            }
+            RemoteSubcommands::Logout => {
+                // crates/cli has no credential storage yet -- `reana_runner()` below reads
+                // REANA_URL/REANA_TOKEN from the environment as a stopgap until a real
+                // keyring-backed TokenProvider exists, so there's nothing to log out of.
+                anyhow::bail!(
+                    "Logout is not implemented yet: credentials are currently read from REANA_URL/REANA_TOKEN env vars, nothing is stored"
+                )
+            }
         },
         ExecuteCommands::MakeTemplate(args) => make_template(&args.cwl),
     }
@@ -172,7 +172,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
 
     let storage = Arc::new(StorageBackend::new());
     let backend = Arc::new(LocalBackend::new(
-        ContainerEngine::default(),
+        container_engine,
         storage,
         StoragePath::from_local(&env::temp_dir()),
     ));
@@ -182,7 +182,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
     let inputs = if args.args.is_empty() {
         InputObject::default()
     } else if args.args.len() == 1 && fs::exists(args.args[0].clone())? {
-        load_input_file_from_file(args.args[0], base_path)?
+        load_input_file_from_file(args.args[0].clone(), base_path)?
     } else {
         let raw = args
             .args
@@ -190,7 +190,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
             .filter_map(|pair| {
                 if let Some(key) = pair[0].strip_prefix("--") {
                     let raw_value = &pair[1];
-                    let value = match guess_type(raw_value) {
+                    let value = match guess_type(raw_value, Path::new(".")) {
                         CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
                             File::builder().location(raw_value.to_string()).build(),
                         )),
@@ -214,38 +214,138 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
             ..Default::default()
         }
     };
+
+    // `run_workflow` submits, streams logs live, waits for completion, prints outputs on
+    // success (folding in `evaluate_exitcodes`, so a nonzero process exit that the tool's own
+    // `successCodes` accepts still counts as finished) and returns an error on anything else.
     runner
         .run_workflow(&args.file, inputs, args.out_dir.as_deref())
         .await
-        .unwrap(); //fix!
-    let exit_status = result.exit_status;
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
 
-    let evaluated_code = evaluate_exitcodes(&exit_status, &request.specification);
-
-    if let EngineStatus::Success(_) = evaluated_code {
-        let json = serde_json::to_string_pretty(&result.outputs)?;
-        println!("{json}");
-        Ok(())
-    } else {
-        anyhow::bail!(ExitCode(1))
-    }
+    Ok(())
 }
 
-pub fn schedule_run(
+/// Builds a `ReanaRunner` from `REANA_URL`/`REANA_TOKEN` env vars.
+fn reana_runner() -> anyhow::Result<ReanaRunner> {
+    let url = env::var("REANA_URL").map_err(|_| {
+        anyhow::anyhow!(
+            "REANA_URL is not set (no credential storage is wired up yet, see reana_runner() in execute.rs)"
+        )
+    })?;
+    let token = env::var("REANA_TOKEN").map_err(|_| {
+        anyhow::anyhow!(
+            "REANA_TOKEN is not set (no credential storage is wired up yet, see reana_runner() in execute.rs)"
+        )
+    })?;
+
+    let server_url = Url::parse(&url)?;
+    let token: Arc<ReanaAccessToken> = Arc::new(ReanaAccessToken::new(token));
+    let client = ReanaClient::new(server_url.join("api")?, token);
+    Ok(ReanaRunner::new(client))
+}
+
+#[allow(clippy::disallowed_macros)]
+async fn execute_remote_start(
     file: &Path,
     input_file: &Option<PathBuf>,
     rocrate: bool,
     watch: bool,
     logout: bool,
-) -> Result<(), Box<dyn Error>> {
-    let workflow_name = remote_execution::schedule_run(file, input_file)?;
+) -> anyhow::Result<()> {
+    let runner = reana_runner()?;
+
+    let inputs = match input_file {
+        Some(input_file) => {
+            let base_path = dunce::canonicalize(file.parent().unwrap_or(Path::new(".")))?;
+            load_input_file_from_file(input_file.clone(), base_path)?
+        }
+        None => InputObject::default(),
+    };
+
+    // `execution::reana_compat::compatibility_adjustments` isn't wired in here, yet
+    let run_id = runner.submit(file, inputs, None).await?;
+    info!("submitted workflow run '{run_id}'");
 
     if watch {
-        remote_execution::watch(&workflow_name, rocrate)?;
+        let status = runner.wait_for_completion(&run_id).await?;
+        info!("workflow '{run_id}' finished with status {status:?}");
+
+        match status {
+            RunStatus::Finished => {
+                if let Some(outputs) = runner.outputs(&run_id, None).await? {
+                    println!("{}", serde_json::to_string_pretty(&outputs)?);
+                }
+            }
+            RunStatus::Failed => {
+                runner.find_failures(&run_id).await?;
+            }
+            _ => {}
+        }
+
+        if rocrate {
+            // See the `Rocrate` subcommand: no equivalent in crates/sciwin yet.
+            warn!("--rocrate requested, but RO-Crate export is not implemented yet");
+        }
     }
 
-    if logout && let Err(e) = remote_execution::logout() {
-        eprintln!("Error logging out of reana instance: {e}");
+    if logout {
+        // See the `Logout` subcommand: no credential storage wired up yet.
+        warn!("--logout requested, but nothing is stored to log out of yet");
+    }
+
+    Ok(())
+}
+
+async fn execute_remote_status(workflow_name: Option<&str>) -> anyhow::Result<()> {
+    let runner = reana_runner()?;
+
+    if let Some(name) = workflow_name {
+        let status = runner.status(&name.to_string()).await?;
+        info!("{name}: {status:?}");
+        if matches!(status, RunStatus::Failed) {
+            runner.find_failures(&name.to_string()).await?;
+        }
+        return Ok(());
+    }
+
+    let list = reana_client::list(runner.get_client()).await?;
+    if list.items.is_empty() {
+        info!("no workflows found for this REANA instance");
+    }
+    for workflow in list.items {
+        info!(
+            "{} ({}): {:?}",
+            workflow.name,
+            workflow.created,
+            workflow.status.unwrap_or_default()
+        );
+    }
+
+    Ok(())
+}
+
+async fn execute_remote_download(
+    workflow_name: &str,
+    all: bool,
+    output_dir: Option<&str>,
+) -> anyhow::Result<()> {
+    let runner = reana_runner()?;
+    let out_dir = output_dir
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    if all {
+        let client = runner.get_client();
+        let workspace = reana_client::workspace(client.clone(), workflow_name).await?;
+        for item in workspace.items {
+            reana_client::download_file(client.clone(), workflow_name, &item.name, &out_dir)
+                .await?;
+        }
+    } else {
+        runner
+            .outputs(&workflow_name.to_string(), Some(&out_dir))
+            .await?;
     }
 
     Ok(())
