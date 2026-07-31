@@ -1,7 +1,11 @@
 //! Post-processing, serializing and writing a finished tool.
 
 use crate::{
-    authoring::{AuthoringError, AuthoringResult, paths::resolve_path, tool::postprocess::post_process_cwl}, repository::{self, Repository},
+    authoring::{
+        AuthoringError, AuthoringResult, tool::paths::resolve_path,
+        tool::postprocess::post_process_cwl,
+    },
+    repository::{self, Repository},
 };
 use anyhow::Context as _;
 use commonwl::{

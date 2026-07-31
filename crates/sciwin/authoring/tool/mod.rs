@@ -10,6 +10,7 @@
 //! See [`crate::authoring`] for the same pipeline drawn out.
 
 pub(crate) mod parser;
+mod paths;
 mod postprocess;
 mod probe;
 mod requirements;
@@ -18,7 +19,7 @@ mod save;
 pub use requirements::ContainerInfo;
 
 use crate::{
-    authoring::{AuthoringError, AuthoringResult, paths},
+    authoring::{AuthoringError, AuthoringResult},
     repository::{self, Repository},
 };
 use bon::Builder;

@@ -6,7 +6,7 @@
 use commonwl::OneOrMany;
 
 //TODO complete list
-pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "node"];
+pub static SCRIPT_EXECUTORS: &[&str] = &["python", "python3", "R", "Rscript", "node", "java"];
 pub static SCRIPT_MODIFIERS: &[&str] = &["-e", "-m"];
 
 /// Whether a token names a script interpreter, allowing a version suffix (`python3.11`).
