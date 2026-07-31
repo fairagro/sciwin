@@ -62,6 +62,7 @@ pub mod authoring;
 pub mod execution;
 pub mod repository;
 pub mod visualize;
+pub mod project;
 
 mod error;
 pub use error::{Error, Result};

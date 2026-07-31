@@ -75,6 +75,8 @@ thiserror = "2.0.19"
 miette = "7.6.0"
 
 # util
+semver = { version = "1.0.26", features = ["serde"] }
+smart-default = "0.7.1"
 bon = "3.9.3"
 chrono = "0.4.45"
 dotenvy = "0.15.7"

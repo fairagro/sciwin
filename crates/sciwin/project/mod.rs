@@ -1,0 +1,363 @@
+pub mod config;
+
+use crate::project::config::Config;
+use crate::repository::{commit, get_modified_files, initial_commit, stage_all};
+use anyhow::{Context, Result};
+use git2::Repository;
+use std::path::Component;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+use std::{fs::File, io::Write};
+
+/// Initializes a new project in the specified folder. If no folder is provided, it initializes in the current directory.
+/// The provided path must be relative to the current working directory.
+pub fn initialize_project(folder: impl AsRef<Path>) -> anyhow::Result<()> {
+    let folder = verify_base_dir(folder.as_ref())?;
+
+    let repo = if is_git_repo(&folder) {
+        Repository::open(&folder)
+            .with_context(|| format!("Could not open Repository at {folder:?}"))?
+    } else {
+        init_git_repo(&folder)?
+    };
+
+    create_minimal_folder_structure(&folder)?;
+
+    write_config(&folder)?;
+
+    let files = get_modified_files(&repo)?;
+    if !files.is_empty() {
+        stage_all(&repo)?;
+        if repo.head().is_ok() {
+            commit(&repo, "🚀 Initialized Project")?;
+        } else {
+            initial_commit(&repo)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn write_config(dir: &Path) -> anyhow::Result<()> {
+    let dir = verify_relative_to_cwd(dir)?;
+
+    // create workflow toml
+    let mut cfg = Config::default();
+    cfg.workflow.name = dir
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    fs::write(dir.join("workflow.toml"), toml::to_string_pretty(&cfg)?)?;
+
+    Ok(())
+}
+
+fn is_git_repo(path: &Path) -> bool {
+    // Determine the base directory from the provided path or use the current directory
+    Repository::open(path).is_ok()
+}
+
+const GITIGNORE_CONTENT: &str = include_str!("../resources/default.gitignore");
+
+fn init_git_repo(base_dir: &Path) -> anyhow::Result<Repository> {
+    let base_dir = verify_relative_to_cwd(base_dir)?;
+
+    if !base_dir.exists() {
+        fs::create_dir_all(&base_dir)
+            .with_context(|| format!("Could not create Repository at {base_dir:?}"))?;
+    }
+    let repo = Repository::init(&base_dir)
+        .with_context(|| format!("Could not init Repository at {base_dir:?}"))?;
+
+    let gitignore_path = base_dir.join(PathBuf::from(".gitignore"));
+    if !gitignore_path.exists() {
+        fs::write(&gitignore_path, GITIGNORE_CONTENT)
+            .with_context(|| format!("Could not create .gitignore file in {base_dir:?}"))?;
+    }
+
+    //append .s4n folder to .gitignore, whatever it may contains
+    let mut gitignore = fs::OpenOptions::new().append(true).open(gitignore_path)?;
+    writeln!(gitignore, "\n.s4n")?;
+
+    Ok(repo)
+}
+
+fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
+    let base_dir = verify_relative_to_cwd(base_dir)?;
+
+    // Create the base directory
+    if !base_dir.exists() {
+        fs::create_dir_all(&base_dir)?;
+    }
+
+    // Check and create subdirectories
+    let workflows_dir = base_dir.join("workflows");
+    if !workflows_dir.exists() {
+        fs::create_dir_all(&workflows_dir)?;
+    }
+    File::create(workflows_dir.join(".gitkeep"))?;
+
+    Ok(())
+}
+
+fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
+    if folder.is_absolute() {
+        anyhow::bail!("Provided path must be relative, got absolute path: {folder:?}");
+    }
+
+    for component in folder.components() {
+        match component {
+            Component::ParentDir => {
+                anyhow::bail!("Provided path must not contain parent directory components ('..')");
+            }
+            Component::Prefix(_) => {
+                anyhow::bail!("Provided path contains an invalid path prefix");
+            }
+            Component::CurDir => anyhow::bail!("Provided path must not be current directory '.'"),
+            Component::RootDir => {
+                anyhow::bail!("Provided path must not contain root directory components");
+            }
+            _ => {}
+        }
+    }
+
+    let cwd = dunce::canonicalize(".")?;
+    let mut path = cwd.join(folder);
+    path = verify_relative_to_cwd(&path)?;
+
+    Ok(path)
+}
+
+fn verify_relative_to_cwd(path: &Path) -> anyhow::Result<PathBuf> {
+    let cwd = dunce::canonicalize(".")?;
+
+    let mut path = path.to_path_buf();
+    if path.exists() {
+        path = dunce::canonicalize(&path)
+            .with_context(|| format!("Could not canonicalize {path:?}"))?;
+    } else if let Some(parent) = path.parent() {
+        let canonical_parent = dunce::canonicalize(parent)
+            .with_context(|| format!("Could not canonicalize parent directory {parent:?}"))?;
+        let file_name = path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Provided path has no valid file name: {path:?}"))?;
+        path = canonical_parent.join(file_name);
+    } else {
+        anyhow::bail!("Provided path has no valid parent directory: {path:?}");
+    }
+
+    // check whether it still starts with cwd
+    if !path.starts_with(&cwd) {
+        anyhow::bail!("Provided path escapes the current working directory: {path:?}");
+    }
+
+    if path.exists() && path.is_file() {
+        anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
+    }
+
+    Ok(path)
+}
+
+pub fn git_cleanup(folder_name: Option<String>) -> Result<()> {
+    // init project in folder name failed, delete it
+    if let Some(folder) = folder_name {
+        std::fs::remove_dir_all(&folder)?;
+    }
+    // init project in current folder failed, only delete .git folder
+    else {
+        let git_folder = ".git";
+        std::fs::remove_dir_all(git_folder)?;
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::{env, path::Path};
+    use tempfile::{Builder, NamedTempFile, tempdir};
+    use test_utils::check_git_user;
+
+    #[test]
+    #[serial]
+    fn test_init_git_repo() {
+        let cwd = env::current_dir().unwrap();
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        env::set_current_dir(&temp_dir).unwrap();
+
+        let base_folder = temp_dir.path().join("my_repo");
+        let result = init_git_repo(&base_folder);
+
+        env::set_current_dir(cwd).unwrap();
+        assert!(result.is_ok(), "Expected successful initialization");
+
+        // Verify that the .git directory was created
+        let git_dir = base_folder.join(".git");
+        assert!(git_dir.exists(), "Expected .git directory to be created");
+    }
+
+    #[test]
+    #[serial]
+    fn test_is_git_repo() {
+        let repo_dir = tempdir().unwrap();
+        let repo_dir_pa = repo_dir.path();
+
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(repo_dir_pa).unwrap();
+
+        init_git_repo(repo_dir_pa).unwrap();
+        env::set_current_dir(cwd).unwrap();
+
+        let result = is_git_repo(repo_dir_pa);
+        // Assert that directory is a git repo
+        assert!(
+            result,
+            "Expected directory to be a git repo true, got false"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_is_not_git_repo() {
+        //create directory that is not a git repo
+        let no_repo = tempdir().unwrap();
+
+        let no_repo_str = no_repo.path();
+        // call is_git repo_function
+        let result = is_git_repo(no_repo_str);
+
+        // assert that it is not a git repo
+        assert!(!result, "Expected directory to not be a git repo");
+    }
+
+    #[test]
+    #[serial]
+    fn test_create_minimal_folder_structure() {
+        let temp_dir = Builder::new().prefix("minimal_folder").tempdir().unwrap();
+
+        let base_folder = temp_dir.path();
+
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(base_folder).unwrap();
+
+        let result = create_minimal_folder_structure(base_folder);
+
+        env::set_current_dir(&cwd).unwrap();
+
+        //test if result is ok
+        assert!(result.is_ok(), "Expected successful initialization");
+
+        let expected_dirs = vec!["workflows"];
+        //assert that folders exist
+        for dir in &expected_dirs {
+            let full_path = PathBuf::from(temp_dir.path()).join(dir);
+            assert!(full_path.exists(), "Directory {dir} does not exist");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_create_minimal_folder_structure_invalid() {
+        //create an invalid file input
+        let temp_file = NamedTempFile::new().unwrap();
+        let base_folder_invalid = temp_file.path();
+        let base_dir = base_folder_invalid.parent().unwrap();
+
+        eprintln!("Base folder path: {base_folder_invalid:?}");
+
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(base_dir).unwrap();
+
+        //path to file instead of a directory, assert that it fails
+        let result = create_minimal_folder_structure(base_folder_invalid);
+
+        env::set_current_dir(&cwd).unwrap();
+
+        assert!(result.is_err(), "Expected failed initialization");
+    }
+
+    #[test]
+    #[serial]
+    fn test_init_s4n_minimal() {
+        let temp_dir = Builder::new()
+            .prefix("init_without_arc_test")
+            .tempdir()
+            .unwrap();
+        check_git_user().unwrap();
+
+        let cwd = env::current_dir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+
+        //call method with temp dir
+        let result = initialize_project("");
+        eprintln!("{result:#?}");
+        assert!(result.is_ok(), "Expected successful initialization");
+
+        env::set_current_dir(&cwd).unwrap();
+
+        //check if directories were created
+        let expected_dirs = vec!["workflows"];
+
+        //assert minimal folders do exist
+        for dir in &expected_dirs {
+            let full_path = PathBuf::from(temp_dir.path()).join(dir);
+            assert!(full_path.exists(), "Directory {dir} does not exist");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_cleanup_no_folder() {
+        let cwd = env::current_dir().unwrap();
+        let temp_dir = tempdir().expect("Failed to create a temporary directory");
+        eprintln!("Temporary directory: {temp_dir:?}");
+        check_git_user().unwrap();
+        // Create a subdirectory in the temporary directory
+        std::fs::create_dir_all(&temp_dir).expect("Failed to create test directory");
+
+        // Change to the temporary directory
+        env::set_current_dir(&temp_dir).unwrap();
+        eprintln!(
+            "Current directory changed to: {}",
+            env::current_dir().unwrap().display()
+        );
+
+        let git_folder = ".git";
+        std::fs::create_dir(git_folder).unwrap();
+        assert!(Path::new(git_folder).exists());
+
+        git_cleanup(None).unwrap();
+        assert!(!Path::new(git_folder).exists());
+        env::set_current_dir(&cwd).unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn test_cleanup_failed_init() {
+        let cwd = env::current_dir().unwrap();
+
+        let temp_dir = tempdir().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
+        let test_folder = temp_dir.path().join("my_repo");
+        let result = initialize_project("my_repo");
+        if let Err(e) = &result {
+            eprintln!("Error initializing git repo: {}", e);
+        }
+        assert!(result.is_ok(), "Expected successful initialization");
+        assert!(Path::new(&test_folder).exists());
+        let git_dir = test_folder.join(".git");
+        assert!(git_dir.exists(), "Expected .git directory to be created");
+        git_cleanup(Some(test_folder.display().to_string())).unwrap();
+        assert!(!Path::new(&test_folder).exists());
+        assert!(!git_dir.exists(), "Expected .git directory to be deleted");
+
+        env::set_current_dir(cwd).unwrap();
+        temp_dir.close().unwrap();
+    }
+}
