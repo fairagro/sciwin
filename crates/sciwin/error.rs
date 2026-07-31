@@ -27,4 +27,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Repository(#[from] crate::repository::RepositoryError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Project(#[from] crate::project::ProjectError),
 }

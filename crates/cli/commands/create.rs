@@ -120,7 +120,7 @@ impl From<&CreateArgs> for ToolCreationOptions {
             env: args.env.clone(),
             name: args.name.clone(),
             output_dir: None,
-            save: args.is_raw,
+            save: !args.is_raw,
         }
     }
 }
@@ -148,15 +148,9 @@ pub fn create_workflow(args: &CreateArgs) -> anyhow::Result<()> {
         return Err(anyhow!("❌ Workflow name is required"));
     };
 
-    //check if workflow already exists
-    let filename = format!("workflows/{}/{}.cwl", name, name); //TODO: fix
-    let (path, yaml) = sciwin::authoring::workflow::create_workflow(
-        &filename,
-        Some(env::current_dir()?),
-        args.force,
-    )?;
+    let (path, yaml) = sciwin::authoring::workflow::create_workflow(name, None, args.force)?;
 
-    info!("📄 Created new Workflow file: {path:?}");
+    info!("📄 Created new Workflow file: {}", path.display());
     print_diff("", &yaml);
 
     Ok(())

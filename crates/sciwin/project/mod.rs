@@ -2,23 +2,73 @@ pub mod config;
 
 use crate::project::config::Config;
 use crate::repository::{commit, get_modified_files, initial_commit, stage_all};
-use anyhow::{Context, Result};
 use git2::Repository;
+use miette::Diagnostic;
 use std::path::Component;
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 use std::{fs::File, io::Write};
+use thiserror::Error;
+
+/// Result alias for this module. See [`crate::Result`] for code spanning several modules.
+pub type ProjectResult<T> = Result<T, ProjectError>;
+
+/// Anything project initialization can fail with.
+#[derive(Error, Diagnostic, Debug)]
+pub enum ProjectError {
+    #[error("invalid project path {}: {reason}", path.display())]
+    #[diagnostic(code = "project::InvalidPath")]
+    InvalidPath { path: PathBuf, reason: String },
+
+    #[error("could not canonicalize path {}", path.display())]
+    #[diagnostic(code = "project::Canonicalize")]
+    Canonicalize {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("could not open git repository at {}", path.display())]
+    #[diagnostic(code = "project::OpenRepository")]
+    OpenRepository {
+        path: PathBuf,
+        #[source]
+        source: git2::Error,
+    },
+
+    #[error("could not initialize git repository at {}", path.display())]
+    #[diagnostic(code = "project::InitRepository")]
+    InitRepository {
+        path: PathBuf,
+        #[source]
+        source: git2::Error,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Repository(#[from] crate::repository::RepositoryError),
+
+    #[error(transparent)]
+    #[diagnostic(code = "io::Error")]
+    IO(#[from] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(code = "toml::ser::Error")]
+    Toml(#[from] toml::ser::Error),
+}
 
 /// Initializes a new project in the specified folder. If no folder is provided, it initializes in the current directory.
 /// The provided path must be relative to the current working directory.
-pub fn initialize_project(folder: impl AsRef<Path>) -> anyhow::Result<()> {
+pub fn initialize_project(folder: impl AsRef<Path>) -> ProjectResult<()> {
     let folder = verify_base_dir(folder.as_ref())?;
 
     let repo = if is_git_repo(&folder) {
-        Repository::open(&folder)
-            .with_context(|| format!("Could not open Repository at {folder:?}"))?
+        Repository::open(&folder).map_err(|source| ProjectError::OpenRepository {
+            path: folder.clone(),
+            source,
+        })?
     } else {
         init_git_repo(&folder)?
     };
@@ -40,7 +90,7 @@ pub fn initialize_project(folder: impl AsRef<Path>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn write_config(dir: &Path) -> anyhow::Result<()> {
+fn write_config(dir: &Path) -> ProjectResult<()> {
     let dir = verify_relative_to_cwd(dir)?;
 
     // create workflow toml
@@ -62,20 +112,20 @@ fn is_git_repo(path: &Path) -> bool {
 
 const GITIGNORE_CONTENT: &str = include_str!("../resources/default.gitignore");
 
-fn init_git_repo(base_dir: &Path) -> anyhow::Result<Repository> {
+fn init_git_repo(base_dir: &Path) -> ProjectResult<Repository> {
     let base_dir = verify_relative_to_cwd(base_dir)?;
 
     if !base_dir.exists() {
-        fs::create_dir_all(&base_dir)
-            .with_context(|| format!("Could not create Repository at {base_dir:?}"))?;
+        fs::create_dir_all(&base_dir)?;
     }
-    let repo = Repository::init(&base_dir)
-        .with_context(|| format!("Could not init Repository at {base_dir:?}"))?;
+    let repo = Repository::init(&base_dir).map_err(|source| ProjectError::InitRepository {
+        path: base_dir.clone(),
+        source,
+    })?;
 
     let gitignore_path = base_dir.join(PathBuf::from(".gitignore"));
     if !gitignore_path.exists() {
-        fs::write(&gitignore_path, GITIGNORE_CONTENT)
-            .with_context(|| format!("Could not create .gitignore file in {base_dir:?}"))?;
+        fs::write(&gitignore_path, GITIGNORE_CONTENT)?;
     }
 
     //append .s4n folder to .gitignore, whatever it may contains
@@ -85,7 +135,7 @@ fn init_git_repo(base_dir: &Path) -> anyhow::Result<Repository> {
     Ok(repo)
 }
 
-fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
+fn create_minimal_folder_structure(base_dir: &Path) -> ProjectResult<()> {
     let base_dir = verify_relative_to_cwd(base_dir)?;
 
     // Create the base directory
@@ -103,65 +153,83 @@ fn create_minimal_folder_structure(base_dir: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn verify_base_dir(folder: &Path) -> Result<PathBuf> {
+fn verify_base_dir(folder: &Path) -> ProjectResult<PathBuf> {
     if folder.is_absolute() {
-        anyhow::bail!("Provided path must be relative, got absolute path: {folder:?}");
+        return Err(ProjectError::InvalidPath {
+            path: folder.to_path_buf(),
+            reason: "must be relative, got an absolute path".to_string(),
+        });
     }
 
     for component in folder.components() {
-        match component {
-            Component::ParentDir => {
-                anyhow::bail!("Provided path must not contain parent directory components ('..')");
-            }
-            Component::Prefix(_) => {
-                anyhow::bail!("Provided path contains an invalid path prefix");
-            }
-            Component::CurDir => anyhow::bail!("Provided path must not be current directory '.'"),
-            Component::RootDir => {
-                anyhow::bail!("Provided path must not contain root directory components");
-            }
-            _ => {}
+        let reason = match component {
+            Component::ParentDir => Some("must not contain parent directory components ('..')"),
+            Component::Prefix(_) => Some("contains an invalid path prefix"),
+            Component::CurDir => Some("must not be current directory '.'"),
+            Component::RootDir => Some("must not contain root directory components"),
+            _ => None,
+        };
+        if let Some(reason) = reason {
+            return Err(ProjectError::InvalidPath {
+                path: folder.to_path_buf(),
+                reason: reason.to_string(),
+            });
         }
     }
 
-    let cwd = dunce::canonicalize(".")?;
+    let cwd = canonicalize(Path::new("."))?;
     let mut path = cwd.join(folder);
     path = verify_relative_to_cwd(&path)?;
 
     Ok(path)
 }
 
-fn verify_relative_to_cwd(path: &Path) -> anyhow::Result<PathBuf> {
-    let cwd = dunce::canonicalize(".")?;
+fn verify_relative_to_cwd(path: &Path) -> ProjectResult<PathBuf> {
+    let cwd = canonicalize(Path::new("."))?;
 
     let mut path = path.to_path_buf();
     if path.exists() {
-        path = dunce::canonicalize(&path)
-            .with_context(|| format!("Could not canonicalize {path:?}"))?;
+        path = canonicalize(&path)?;
     } else if let Some(parent) = path.parent() {
-        let canonical_parent = dunce::canonicalize(parent)
-            .with_context(|| format!("Could not canonicalize parent directory {parent:?}"))?;
-        let file_name = path
-            .file_name()
-            .ok_or_else(|| anyhow::anyhow!("Provided path has no valid file name: {path:?}"))?;
+        let canonical_parent = canonicalize(parent)?;
+        let file_name = path.file_name().ok_or_else(|| ProjectError::InvalidPath {
+            path: path.clone(),
+            reason: "has no valid file name".to_string(),
+        })?;
         path = canonical_parent.join(file_name);
     } else {
-        anyhow::bail!("Provided path has no valid parent directory: {path:?}");
+        return Err(ProjectError::InvalidPath {
+            path: path.clone(),
+            reason: "has no valid parent directory".to_string(),
+        });
     }
 
     // check whether it still starts with cwd
     if !path.starts_with(&cwd) {
-        anyhow::bail!("Provided path escapes the current working directory: {path:?}");
+        return Err(ProjectError::InvalidPath {
+            path,
+            reason: "escapes the current working directory".to_string(),
+        });
     }
 
     if path.exists() && path.is_file() {
-        anyhow::bail!("Provided path is a file, expected a directory: {path:?}");
+        return Err(ProjectError::InvalidPath {
+            path,
+            reason: "is a file, expected a directory".to_string(),
+        });
     }
 
     Ok(path)
 }
 
-pub fn git_cleanup(folder_name: Option<String>) -> Result<()> {
+fn canonicalize(path: &Path) -> ProjectResult<PathBuf> {
+    dunce::canonicalize(path).map_err(|source| ProjectError::Canonicalize {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+pub fn git_cleanup(folder_name: Option<String>) -> ProjectResult<()> {
     // init project in folder name failed, delete it
     if let Some(folder) = folder_name {
         std::fs::remove_dir_all(&folder)?;
