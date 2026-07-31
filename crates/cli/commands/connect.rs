@@ -1,11 +1,12 @@
 use crate::{
     commands::{CreateArgs, create_workflow},
-    cwl::Connectable,
+    cwl::resolve_filename,
     print_diff,
 };
 use anyhow::anyhow;
 use clap::Args;
 use sciwin::authoring::paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name};
+use sciwin::authoring::workflow::{self, WorkflowSlot};
 use sciwin::cwl::{documents::CWLDocument, format::format_cwl, load_cwl_file};
 use std::{fs, io::Write, path::Path};
 use tracing::info;
@@ -14,6 +15,10 @@ fn workflow_filename(name: &str) -> String {
     get_qualified_filename_by_name(name, Path::new(WORKFLOWS_FOLDER).join(name))
         .to_string_lossy()
         .into_owned()
+}
+
+fn resolve(cwl_filename: &str) -> anyhow::Result<String> {
+    resolve_filename(cwl_filename).map_err(|e| anyhow!("Could not resolve CWL file {cwl_filename}: {e}"))
 }
 
 #[derive(Args, Debug)]
@@ -36,6 +41,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
         };
         create_workflow(&args)?;
     }
+    let workflow_path = Path::new(&filename);
     let CWLDocument::Workflow(mut workflow) = load_cwl_file(&filename, true)
         .map_err(|e| anyhow!("Could not load workflow {filename}: {e}"))?
     else {
@@ -51,15 +57,24 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
             _ => anyhow::bail!("Invalid input path"),
         };
 
-        workflow
-            .add_input_connection(input, &args.to)
-            .map_err(|e| {
-                anyhow!(
-                    "Could not add input connection from {} to {}: {e}",
-                    input,
-                    args.to
-                )
-            })?;
+        let to_filename = resolve(to_parts[0])?;
+        workflow::add_workflow_input_connection(
+            &mut workflow,
+            workflow_path,
+            input,
+            WorkflowSlot::new(Path::new(&to_filename), to_parts[0], to_parts[1]),
+        )
+        .map_err(|e| {
+            anyhow!(
+                "Could not add input connection from {} to {}: {e}",
+                input,
+                args.to
+            )
+        })?;
+        info!(
+            "➕ Added or updated connection from inputs.{input} to {} in workflow",
+            args.to
+        );
     } else if to_parts[0] == "@outputs" || to_parts.len() == 1 {
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
@@ -67,25 +82,41 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<()> 
             _ => anyhow::bail!("Invalid output path"),
         };
 
-        workflow
-            .add_output_connection(&args.from, output)
-            .map_err(|e| {
-                anyhow!(
-                    "Could not add output connection from {} to {}: {e}",
-                    args.from,
-                    output
-                )
-            })?;
+        let from_filename = resolve(from_parts[0])?;
+        workflow::add_workflow_output_connection(
+            &mut workflow,
+            workflow_path,
+            WorkflowSlot::new(Path::new(&from_filename), from_parts[0], from_parts[1]),
+            output,
+        )
+        .map_err(|e| {
+            anyhow!(
+                "Could not add output connection from {} to {}: {e}",
+                args.from,
+                output
+            )
+        })?;
+        info!(
+            "➕ Added or updated connection from {} to outputs.{output} in workflow!",
+            args.from
+        );
     } else {
-        workflow
-            .add_step_connection(&args.from, &args.to)
-            .map_err(|e| {
-                anyhow!(
-                    "Could not add connection from {} to {}:: {e}",
-                    args.from,
-                    args.to
-                )
-            })?;
+        let from_filename = resolve(from_parts[0])?;
+        let to_filename = resolve(to_parts[0])?;
+        workflow::add_workflow_step_connection(
+            &mut workflow,
+            workflow_path,
+            WorkflowSlot::new(Path::new(&from_filename), from_parts[0], from_parts[1]),
+            WorkflowSlot::new(Path::new(&to_filename), to_parts[0], to_parts[1]),
+        )
+        .map_err(|e| {
+            anyhow!(
+                "Could not add connection from {} to {}:: {e}",
+                args.from,
+                args.to
+            )
+        })?;
+        info!("🔗 Added connection from {} to {} in workflow!", args.from, args.to);
     }
 
     //save workflow
@@ -117,16 +148,25 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<(
             [input] => input,
             _ => anyhow::bail!("Invalid input path"),
         };
+        if to_parts.len() != 2 {
+            anyhow::bail!("Invalid 'to' format for input connection: {input} to:{}", args.to);
+        }
 
-        workflow
-            .remove_input_connection(input, &args.to)
-            .map_err(|e| {
-                anyhow!(
-                    "Could not remove input connection from {} to {}: {e}",
-                    input,
-                    args.to
-                )
-            })?;
+        workflow::remove_workflow_input_connection(
+            &mut workflow,
+            input,
+            to_parts[0],
+            to_parts[1],
+            true,
+        )
+        .map_err(|e| {
+            anyhow!(
+                "Could not remove input connection from {} to {}: {e}",
+                input,
+                args.to
+            )
+        })?;
+        info!("➖ Removed connection from inputs.{input} to {} in workflow", args.to);
     } else if to_parts[0] == "@outputs" || to_parts.len() == 1 {
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
@@ -134,18 +174,32 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<(
             _ => anyhow::bail!("Invalid output path"),
         };
 
-        workflow
-            .remove_output_connection(&args.from, output)
-            .map_err(|e| {
-                anyhow!(
-                    "Could not remove output connection from {} to {}: {e}",
-                    args.from,
-                    output
-                )
-            })?;
+        workflow::remove_workflow_output_connection(&mut workflow, output, true).map_err(|e| {
+            anyhow!(
+                "Could not remove output connection from {} to {}: {e}",
+                args.from,
+                output
+            )
+        })?;
+        info!("➖ Removed connection to {output} from workflow!");
     } else {
-        workflow
-            .remove_step_connection(&args.from, &args.to)
+        if from_parts.len() != 2 {
+            anyhow::bail!(
+                "Invalid '--from' format: {}. Please use tool/parameter or @inputs/parameter.",
+                args.from
+            );
+        }
+        if to_parts.len() != 2 {
+            anyhow::bail!(
+                "Invalid '--to' format: {}. Please use tool/parameter or @outputs/parameter.",
+                args.to
+            );
+        }
+        if !workflow.has_step(to_parts[0]) {
+            anyhow::bail!("Step {} not found!", to_parts[0]);
+        }
+
+        workflow::remove_workflow_step_connection(&mut workflow, to_parts[0], to_parts[1])
             .map_err(|e| {
                 anyhow!(
                     "Could not remove connection from {} to {}:: {e}",
@@ -153,6 +207,7 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> anyhow::Result<(
                     args.to
                 )
             })?;
+        info!("➖ Removed connection from {} to {} in workflow!", args.from, args.to);
     }
 
     let mut yaml = serde_saphyr::to_string(&CWLDocument::Workflow(workflow))?;
