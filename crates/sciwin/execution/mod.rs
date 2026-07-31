@@ -32,6 +32,7 @@ mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;
 pub use reana_runner::ReanaRunner;
+pub mod reana_compat;
 
 pub type RunnerResult<T> = Result<T, RunnerError>;
 
@@ -60,6 +61,17 @@ pub enum RunnerError {
     #[diagnostic(code = "sciwin::error::RunnerError::NotSupported")]
     #[error("Unsupported")]
     NotSupported(&'static str),
+
+    #[diagnostic(
+        code = "sciwin::error::RunnerError::DockerUnavailable",
+        help = "start Docker, or skip REANA compatibility adjustments"
+    )]
+    #[error("Docker is not running or accessible")]
+    DockerUnavailable,
+
+    #[diagnostic(code = "sciwin::error::RunnerError::DockerCommandFailed")]
+    #[error("docker {command} failed: {stderr}")]
+    DockerCommandFailed { command: String, stderr: String },
 
     //add Runner Error in commonwl: https://github.com/fairagro/commonwl/issues/15
     #[diagnostic(code = "anyhow::Error")]
