@@ -10,7 +10,6 @@ use crate::{
 use anyhow::Context as _;
 use commonwl::{
     documents::{CWLDocument, CommandLineTool},
-    files::FileOrDirectory,
     format::format_cwl,
     inputs::DefaultValue,
     requirements::{ListingItems, StringOrInclude, ToolRequirements, WorkDirItems},
@@ -55,15 +54,8 @@ pub(super) fn save_tool_to_disk(
 fn prepare_save(tool: &mut CommandLineTool, path: &Path) -> AuthoringResult<String> {
     //rewire paths to new location
     for input in &mut tool.inputs {
-        if let Some(DefaultValue::FileOrDirectory(FileOrDirectory::File(value))) =
-            &mut input.default
-        {
-            value.location = Some(resolve_path(value.location.as_ref().unwrap(), path));
-        }
-        if let Some(DefaultValue::FileOrDirectory(FileOrDirectory::Directory(value))) =
-            &mut input.default
-        {
-            value.location = Some(resolve_path(value.location.as_ref().unwrap(), path));
+        if let Some(DefaultValue::FileOrDirectory(fod)) = &mut input.default {
+            fod.set_location(Some(resolve_path(fod.location().as_ref().unwrap(), path)));
         }
     }
 

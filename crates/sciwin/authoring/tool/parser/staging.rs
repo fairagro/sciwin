@@ -12,6 +12,8 @@ use commonwl::{
 };
 use std::path::Path;
 
+use crate::authoring::tool::parser::sanitize_id;
+
 /// A requirement staging `path` verbatim, or `None` when it isn't an existing file.
 pub(super) fn iwdr_for_existing_file(path: &str) -> Option<ToolRequirements> {
     Path::new(path).is_file().then(|| {
@@ -51,11 +53,7 @@ pub(super) fn stage_fixed_input(tool: &mut CommandLineTool, input: &str) {
 
 /// The CWL expression pulling a staged file's content from the input of the same name.
 fn entry_name(input: &str) -> String {
-    let trimmed = input.trim_start_matches(|c: char| !c.is_alphabetic());
-    // an all-non-alphabetic name (e.g. a bare "123") trims to "" — fall back to
-    // the untrimmed input rather than emitting the invalid "$(inputs.)"
-    let base = if trimmed.is_empty() { input } else { trimmed };
-    let name = base.replace(['.', '/'], "_").to_lowercase();
+    let name = sanitize_id(input);
     format!("$(inputs.{name})")
 }
 

@@ -117,6 +117,14 @@ fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<Strin
     }
 }
 
+pub(crate) fn sanitize_id(input: &str) -> String {
+    let trimmed = input.trim_start_matches(|c: char| !c.is_alphabetic());
+    // an all-non-alphabetic name (e.g. a bare "123") trims to "" — fall back to
+    // the untrimmed input rather than emitting the invalid "$(inputs.)"
+    let base = if trimmed.is_empty() { input } else { trimmed };
+    base.replace(['.', '/'], "_").to_lowercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,5 +237,10 @@ mod tests {
             .expect("a secret_* input must be generated");
         // the credential itself must not be written into the tool file
         assert!(secret_input.default.is_none());
+    }
+    #[test]
+    pub fn test_entry_name_numeric_only() {
+        // an all-numeric filename must not produce the invalid "$(inputs.)"
+        assert_eq!(sanitize_id("123"), "$(inputs.123)");
     }
 }

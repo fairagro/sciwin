@@ -44,6 +44,7 @@ use miette::Diagnostic;
 use std::path::PathBuf;
 use thiserror::Error;
 
+mod paths;
 pub mod tool;
 pub mod workflow;
 

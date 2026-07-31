@@ -17,18 +17,17 @@ pub(crate) fn get_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
     let mut i = 0;
     while i < args.len() {
         let arg = args[i];
-        let input: CommandInputParameter;
-        if is_flag_like(arg) {
+        let input: CommandInputParameter = if is_flag_like(arg) {
             if i + 1 < args.len() && !is_flag_like(args[i + 1]) {
                 //is not a flag, as next one is a value
-                input = get_option(arg, args[i + 1]);
                 i += 1;
+                get_option(arg, args[i + 1])
             } else {
-                input = get_flag(arg);
+                get_flag(arg)
             }
         } else {
-            input = get_positional(arg, i.try_into().unwrap());
-        }
+            get_positional(arg, i.try_into().unwrap())
+        };
         inputs.push(input);
         i += 1;
     }
@@ -146,15 +145,7 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> A
             staging::stage_fixed_input(tool, input);
         }
 
-        let default = match type_ {
-            CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
-                File::builder().location(input).build(),
-            )),
-            CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
-                Directory::builder().location(input).build(),
-            )),
-            _ => DefaultValue::Any(serde_saphyr::from_str(input)?),
-        };
+        let default = parse_default_value(input, &type_);
         let id = slugify!(input, separator = "_");
 
         tool.inputs.push(
