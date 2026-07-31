@@ -61,6 +61,7 @@ pub mod reana {
 pub mod authoring;
 pub mod execution;
 pub mod repository;
+pub mod visualize;
 
 mod error;
 pub use error::{Error, Result};
