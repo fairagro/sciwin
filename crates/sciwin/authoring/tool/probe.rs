@@ -51,7 +51,7 @@ pub(super) async fn run_and_collect_files(
     ));
 
     if options.run_container.is_some() {
-        requirements::add_tool_requirements(cwl, options)?;
+        requirements::add_tool_requirements(cwl, options, project_root)?;
     }
 
     // the probe runs a copy: the catch-all output and the JS requirement it needs exist only
@@ -62,11 +62,12 @@ pub(super) async fn run_and_collect_files(
         InlineJavascriptRequirement::default(),
     ));
 
+    // `outputs_path` must be explicit: left `None`, the engine falls back to `env::current_dir()`
     let job = create_execution_request_from_document(
         CWLDocument::CommandLineTool(probe_cwl),
         InputObject::default(),
         project_root,
-        None,
+        Some(project_root),
         None,
     )?;
     execute(backend, &job, CancellationToken::new()).await?;

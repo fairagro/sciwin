@@ -29,7 +29,7 @@ mod staging;
 
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 
-pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
+pub(crate) fn parse_command_line(commands: &[&str], base: &Path) -> CommandLineTool {
     let base_command = get_base_command(commands);
 
     let remainder = match &base_command {
@@ -50,7 +50,7 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
         let stdout = shell::handle_redirection(&cmd[stdout_pos..]);
         let stderr = shell::handle_redirection(&cmd[stderr_pos..]);
 
-        let inputs = inputs::build_inputs(&cmd[..first_redir_pos]);
+        let inputs = inputs::build_inputs(&cmd[..first_redir_pos], base);
         let args = shell::collect_arguments(piped, &inputs);
 
         tool.inputs(inputs)
@@ -60,7 +60,7 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
             .build()
     };
 
-    stage_base_command(&mut tool, &base_command);
+    stage_base_command(&mut tool, &base_command, base);
 
     if tool.arguments.is_some() {
         tool.append_requirement_mut(ToolRequirements::ShellCommandRequirement(
@@ -72,7 +72,7 @@ pub(crate) fn parse_command_line(commands: &[&str]) -> CommandLineTool {
 
 /// Declares whatever the base command runs -- a script file, or a module directory -- as
 /// staged, so it exists inside the tool's working directory at runtime.
-fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<String>) {
+fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<String>, base: &Path) {
     let tokens = match base_command {
         //if command is an existing file, add to requirements
         OneOrMany::One(cmd) => std::slice::from_ref(cmd),
@@ -85,7 +85,7 @@ fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<Strin
     } else {
         &tokens[0]
     };
-    if let Some(req) = staging::iwdr_for_existing_file(script) {
+    if let Some(req) = staging::iwdr_for_existing_file(script, base) {
         tool.append_requirement_mut(req);
     }
 
@@ -94,12 +94,12 @@ fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<Strin
     if !matches_script_modifier(&tokens[1]) {
         return;
     }
-    if let Some(req) = staging::iwdr_for_existing_file(payload) {
+    if let Some(req) = staging::iwdr_for_existing_file(payload, base) {
         tool.append_requirement_mut(req);
     }
 
     //command with `python -m folder`
-    if Path::new(payload).is_dir() {
+    if base.join(payload).is_dir() {
         tool.inputs.push(
             CommandInputParameter::builder()
                 .id("module")
@@ -139,7 +139,10 @@ mod tests {
 
     fn parse_command(command: &str) -> CommandLineTool {
         let cmd = shlex::split(command).unwrap();
-        parse_command_line(&cmd.iter().map(|s| s.as_str()).collect::<Vec<_>>())
+        parse_command_line(
+            &cmd.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
+            Path::new("."),
+        )
     }
 
     #[rstest]

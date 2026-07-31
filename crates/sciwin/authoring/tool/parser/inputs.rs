@@ -12,7 +12,7 @@ use serde_json::Value;
 use slugify::slugify;
 use std::path::Path;
 
-pub(crate) fn build_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
+pub(crate) fn build_inputs(args: &[&str], base: &Path) -> Vec<CommandInputParameter> {
     let mut inputs = vec![];
     let mut i = 0;
     while i < args.len() {
@@ -20,14 +20,14 @@ pub(crate) fn build_inputs(args: &[&str]) -> Vec<CommandInputParameter> {
         let input: CommandInputParameter = if is_flag_like(arg) {
             if i + 1 < args.len() && !is_flag_like(args[i + 1]) {
                 //is not a flag, as next one is a value
-                let option = build_option(arg, args[i + 1]);
+                let option = build_option(arg, args[i + 1], base);
                 i += 1;
                 option
             } else {
                 build_flag(arg)
             }
         } else {
-            build_positional(arg, i.try_into().unwrap())
+            build_positional(arg, i.try_into().unwrap(), base)
         };
         inputs.push(input);
         i += 1;
@@ -41,8 +41,8 @@ fn is_flag_like(s: &str) -> bool {
     s.starts_with('-') && s.parse::<f64>().is_err()
 }
 
-fn build_positional(current: &str, index: isize) -> CommandInputParameter {
-    let (current, cwl_type) = parse_input(current);
+fn build_positional(current: &str, index: isize, base: &Path) -> CommandInputParameter {
+    let (current, cwl_type) = parse_input(current, base);
 
     // detected before building id/default -- a secret must never reach the default
     // value either, only its presence (behind a random id) may be recorded
@@ -86,8 +86,8 @@ fn build_flag(current: &str) -> CommandInputParameter {
         .build()
 }
 
-fn build_option(current: &str, next: &str) -> CommandInputParameter {
-    let (next, cwl_type) = parse_input(next);
+fn build_option(current: &str, next: &str, base: &Path) -> CommandInputParameter {
+    let (next, cwl_type) = parse_input(next, base);
     let default_value = parse_default_value(next, &cwl_type);
 
     CommandInputParameter::builder()
@@ -115,7 +115,7 @@ fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
     }
 }
 
-fn parse_input(input: &str) -> (&str, CWLType) {
+fn parse_input<'a>(input: &'a str, base: &Path) -> (&'a str, CWLType) {
     if let Some((hint, name)) = input.split_once(':') {
         if hint.len() == 1 {
             let type_ = match hint {
@@ -130,16 +130,20 @@ fn parse_input(input: &str) -> (&str, CWLType) {
             };
             (name, type_)
         } else {
-            (input, guess_type(input))
+            (input, guess_type(input, base))
         }
     } else {
-        (input, guess_type(input))
+        (input, guess_type(input, base))
     }
 }
 
-pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> AuthoringResult<()> {
+pub(crate) fn add_fixed_inputs(
+    tool: &mut CommandLineTool,
+    inputs: &[&str],
+    base: &Path,
+) -> AuthoringResult<()> {
     for input in inputs {
-        let (input, type_) = parse_input(input);
+        let (input, type_) = parse_input(input, base);
 
         //todo: add requiement for directory also or add new --mount param and remove block from here
         if matches!(type_, CWLType::File) {
@@ -161,9 +165,11 @@ pub(crate) fn add_fixed_inputs(tool: &mut CommandLineTool, inputs: &[&str]) -> A
     Ok(())
 }
 
-/// Tries to guess the CWLType of a given value
-pub fn guess_type(value: &str) -> CWLType {
-    let path = Path::new(value);
+/// Tries to guess the CWLType of a given value.
+///
+/// `value` is checked relative to `base` (the project root)
+pub fn guess_type(value: &str, base: &Path) -> CWLType {
+    let path = base.join(value);
     if path.exists() {
         if path.is_file() {
             return CWLType::File;
@@ -246,7 +252,7 @@ mod tests {
         let inputs_vec = shlex::split(inputs).unwrap();
         let inputs_slice: Vec<&str> = inputs_vec.iter().map(AsRef::as_ref).collect();
 
-        let result = build_inputs(&inputs_slice);
+        let result = build_inputs(&inputs_slice, Path::new("."));
 
         assert_eq!(result, expected);
     }
@@ -262,7 +268,10 @@ mod tests {
             .build();
 
         let args = shlex::split(commandline_args).unwrap();
-        let result = build_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
+        let result = build_inputs(
+            &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+            Path::new("."),
+        );
 
         assert_eq!(result[0], expected);
     }
@@ -276,7 +285,7 @@ mod tests {
             .input_binding(CommandLineBinding::builder().position(0).build())
             .default(DefaultValue::Any(Value::String(arg.to_string())))
             .build();
-        let result = build_inputs(&[arg]);
+        let result = build_inputs(&[arg], Path::new("."));
         assert_eq!(result[0], expected);
     }
 
@@ -285,7 +294,10 @@ mod tests {
         // "-5" must be read as the value of --threshold, not misparsed as its own flag
         let inputs = "--threshold -5";
         let args = shlex::split(inputs).unwrap();
-        let result = build_inputs(&args.iter().map(AsRef::as_ref).collect::<Vec<&str>>());
+        let result = build_inputs(
+            &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+            Path::new("."),
+        );
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id.as_deref(), Some("threshold"));
@@ -298,7 +310,7 @@ mod tests {
 
     #[test]
     pub fn test_get_inputs_standalone_negative_number() {
-        let result = build_inputs(&["-5"]);
+        let result = build_inputs(&["-5"], Path::new("."));
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].r#type, CWLType::Int.into());
     }
@@ -316,14 +328,15 @@ mod tests {
 
     #[test]
     pub fn test_guess_type_malformed_yaml_does_not_panic() {
-        assert_eq!(guess_type("{unclosed"), CWLType::String);
+        assert_eq!(guess_type("{unclosed", Path::new(".")), CWLType::String);
     }
 
     #[test]
     pub fn test_guess_type() {
-        // guess_type checks the filesystem, so directory existence is tested
-        // against a real tempdir rather than an incidental path relative to the
-        // crate — the latter broke silently when this module moved crates.
+        // guess_type checks the filesystem relative to a passed-in base, so directory
+        // existence is tested against a real tempdir rather than an incidental path relative
+        // to the crate.
+        let base = Path::new(env!("CARGO_MANIFEST_DIR"));
         let dir = tempfile::tempdir().unwrap();
         let dir_path = format!("{}/", dir.path().to_string_lossy());
 
@@ -338,7 +351,7 @@ mod tests {
         ];
 
         for input in inputs {
-            let t = guess_type(input.0);
+            let t = guess_type(input.0, base);
             assert_eq!(t, input.1);
         }
     }
@@ -349,13 +362,13 @@ mod tests {
         // slugify, which for a multi-word flag stripped the internal dash *before*
         // slugify could turn it into the separator -- "--dry-run" became id "dryrun"
         // instead of "dry_run". slugify already handles leading/internal dashes itself.
-        let result = build_inputs(&["--dry-run"]);
+        let result = build_inputs(&["--dry-run"], Path::new("."));
         assert_eq!(result[0].id.as_deref(), Some("dry_run"));
     }
 
     #[test]
     pub fn test_get_option_multiword_id_keeps_word_boundary() {
-        let result = build_inputs(&["--max-retries", "3"]);
+        let result = build_inputs(&["--max-retries", "3"], Path::new("."));
         assert_eq!(result[0].id.as_deref(), Some("max_retries"));
     }
 
@@ -367,7 +380,7 @@ mod tests {
         let mut tool = CommandLineTool::builder().build();
         assert!(tool.requirements.is_none());
 
-        add_fixed_inputs(&mut tool, &["f:foo.txt"]).unwrap();
+        add_fixed_inputs(&mut tool, &["f:foo.txt"], Path::new(".")).unwrap();
 
         let req = tool
             .get_requirement::<InitialWorkDirRequirement>()
@@ -388,7 +401,7 @@ mod tests {
             )])
             .build();
 
-        add_fixed_inputs(&mut tool, &["f:foo.txt", "f:bar.txt"]).unwrap();
+        add_fixed_inputs(&mut tool, &["f:foo.txt", "f:bar.txt"], Path::new(".")).unwrap();
 
         assert_eq!(tool.requirements.as_ref().unwrap().len(), 1);
         let req = tool.get_requirement::<InitialWorkDirRequirement>().unwrap();

@@ -92,7 +92,7 @@ pub async fn create_tool(
     let mut cwl = create_tool_base(project_root, options).await?;
 
     if options.run_container.is_none() {
-        requirements::add_tool_requirements(&mut cwl, options)?;
+        requirements::add_tool_requirements(&mut cwl, options, project_root)?;
     } else if let Some(container) = &options.container
         && requirements::is_sif_image(&container.image)
     {
@@ -151,7 +151,7 @@ async fn create_tool_base(
     }
 
     //parse command
-    let mut cwl = parser::parse_command_line(&command);
+    let mut cwl = parser::parse_command_line(&command, project_root);
     cwl.cwl_version = Some("v1.2".to_string());
 
     // handle outputs
@@ -167,6 +167,7 @@ async fn create_tool_base(
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>(),
+            project_root,
         )?;
     }
 

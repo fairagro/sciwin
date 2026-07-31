@@ -29,6 +29,7 @@ pub struct ContainerInfo {
 pub(super) fn add_tool_requirements(
     cwl: &mut CommandLineTool,
     options: &ToolCreationOptions,
+    project_root: &Path,
 ) -> AuthoringResult<()> {
     // Handle container requirements
     append_container_requirement_mut(cwl, options.container.as_ref());
@@ -45,7 +46,7 @@ pub(super) fn add_tool_requirements(
     if !options.mounts.is_empty() {
         let mut entries = Vec::with_capacity(options.mounts.len());
         for m in &options.mounts {
-            if m.is_dir() {
+            if project_root.join(m).is_dir() {
                 entries.push(FileOrDirectory::Directory(
                     Directory::builder()
                         .location(m.to_string_lossy().into_owned())

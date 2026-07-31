@@ -1,7 +1,6 @@
 #![allow(clippy::disallowed_macros)]
 mod common;
 
-use common::copy_dir;
 use commonwl::{
     OneOrMany,
     documents::Argument,
@@ -11,15 +10,28 @@ use commonwl::{
     },
     types::CWLType,
 };
-use fstest::fstest;
+use common::copy_dir;
 use sciwin::authoring::AuthoringError;
 use sciwin::authoring::tool::{ContainerInfo, ToolCreationOptions, create_tool};
 use sciwin::repository::{self, Repository};
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
 };
+use tempfile::{TempDir, tempdir};
 use test_utils::os_path;
+
+/// Builds an isolated project in a fresh tempdir: `files` are copied in by basename
+/// (mirroring the old `#[fstest(files = [...])]`) and committed to a real git repo.
+fn workspace(files: &[&str]) -> TempDir {
+    let dir = tempdir().unwrap();
+    for file in files {
+        let src = Path::new(file);
+        fs::copy(src, dir.path().join(src.file_name().unwrap())).unwrap();
+    }
+    fstest::create_repo_and_commit(dir.path()).unwrap();
+    dir
+}
 
 fn echo_options() -> ToolCreationOptions {
     ToolCreationOptions::builder()
@@ -29,12 +41,13 @@ fn echo_options() -> ToolCreationOptions {
 
 /// A dirty working tree is a state a frontend acts on (offer to commit, or to re-run
 /// with `no_run`), so it must arrive as a matchable variant, not a formatted string.
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt"])]
+#[tokio::test]
 pub async fn test_dirty_working_tree_is_a_typed_variant() {
-    fs::write("uncommitted.txt", "scratch").unwrap();
+    let dir = workspace(&["../../testdata/input.txt"]);
+    let root = dir.path();
+    fs::write(root.join("uncommitted.txt"), "scratch").unwrap();
 
-    let root = env::current_dir().unwrap();
-    let err = create_tool(&root, &echo_options()).await.unwrap_err();
+    let err = create_tool(root, &echo_options()).await.unwrap_err();
 
     let AuthoringError::DirtyWorkingTree { files } = &err else {
         panic!("expected DirtyWorkingTree, got {err:?}");
@@ -43,10 +56,10 @@ pub async fn test_dirty_working_tree_is_a_typed_variant() {
 }
 
 /// Same reasoning: a missing repository is a state a frontend offers to fix.
-#[fstest(tokio = true)]
+#[tokio::test]
 pub async fn test_missing_repository_is_a_typed_variant() {
-    let root = env::current_dir().unwrap();
-    let err = create_tool(&root, &echo_options()).await.unwrap_err();
+    let dir = tempdir().unwrap(); // no repo here
+    let err = create_tool(dir.path(), &echo_options()).await.unwrap_err();
 
     assert!(
         matches!(err, AuthoringError::NoRepository { .. }),
@@ -54,26 +67,22 @@ pub async fn test_missing_repository_is_a_typed_variant() {
     );
 }
 
-/// The tool is written where `path` says, relative to the project root -- not relative
-/// to whatever the process happens to have as its working directory.
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt"])]
+/// The tool is written where `path` says, relative to the project root -- which this whole
+/// file never conflates with the process's cwd (it's never touched).
+#[tokio::test]
 pub async fn test_saves_relative_to_project_root() {
-    let root = env::current_dir().unwrap();
-    let nested = root.join("nested");
-    fs::create_dir(&nested).unwrap();
-    // move the process somewhere else entirely; the project root is the argument
-    env::set_current_dir(&nested).unwrap();
+    let dir = workspace(&["../../testdata/input.txt"]);
+    let root = dir.path();
 
     let options = ToolCreationOptions::builder()
         .command(vec!["echo".to_string(), "hello".to_string()])
         .no_run(true)
         .save(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.path, Path::new("workflows/echo/echo.cwl"));
     assert!(root.join(&created.path).is_file());
-    assert!(!nested.join(&created.path).exists());
     //the document is handed back alongside the YAML, not just the string
     assert_eq!(
         created.document.base_command,
@@ -83,13 +92,12 @@ pub async fn test_saves_relative_to_project_root() {
         created.yaml,
         fs::read_to_string(root.join(&created.path)).unwrap()
     );
-
-    env::set_current_dir(&root).unwrap();
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -100,24 +108,26 @@ pub async fn tool_create_test() {
         .save(true)
         .commit(true)
         .build();
-    create_tool(&root, &options).await.unwrap();
+    create_tool(root, &options).await.unwrap();
 
-    assert!(Path::new("results.txt").exists());
-    assert!(Path::new("workflows/echo/echo.cwl").exists());
+    assert!(root.join("results.txt").exists());
+    assert!(root.join("workflows/echo/echo.cwl").exists());
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo_inline.py"])]
+#[tokio::test]
 pub async fn tool_create_test_inputs_outputs() {
-    fs::create_dir_all("data").unwrap();
-    fs::copy("input.txt", "data/input.txt").unwrap(); //copy to data folder
-    fs::remove_file("input.txt").unwrap(); //remove original file
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo_inline.py"]);
+    let root = dir.path();
 
-    let root = env::current_dir().unwrap();
-    let repo = Repository::open(&root).unwrap();
+    fs::create_dir_all(root.join("data")).unwrap();
+    fs::copy(root.join("input.txt"), root.join("data/input.txt")).unwrap(); //copy to data folder
+    fs::remove_file(root.join("input.txt")).unwrap(); //remove original file
+
+    let repo = Repository::open(root).unwrap();
     repository::stage_all(&repo).unwrap();
 
     let options = ToolCreationOptions::builder()
@@ -127,22 +137,19 @@ pub async fn tool_create_test_inputs_outputs() {
         .save(true)
         .commit(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(
         created.path,
         Path::new("workflows/echo_inline/echo_inline.cwl")
     );
-    assert!(Path::new("results.txt").exists());
+    assert!(root.join("results.txt").exists());
     assert!(root.join(&created.path).is_file());
 
     assert_eq!(created.document.inputs.len(), 1);
     assert_eq!(created.document.outputs.len(), 1);
 
-    let Some(iwdr) = created
-        .document
-        .get_requirement::<InitialWorkDirRequirement>()
-    else {
+    let Some(iwdr) = created.document.get_requirement::<InitialWorkDirRequirement>() else {
         panic!("Tool does not contain an InitialWorkDirRequirement");
     };
     let WorkDirItems::ListingItems(listing) = &iwdr.listing else {
@@ -154,9 +161,10 @@ pub async fn tool_create_test_inputs_outputs() {
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_no_save() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -166,19 +174,20 @@ pub async fn tool_create_test_no_save() {
         ])
         .commit(true)
         .build();
-    create_tool(&root, &options).await.unwrap();
+    create_tool(root, &options).await.unwrap();
 
-    assert!(!Path::new("workflows/echo/echo.cwl").exists()); //save was not requested
-    assert!(Path::new("results.txt").exists());
+    assert!(!root.join("workflows/echo/echo.cwl").exists()); //save was not requested
+    assert!(root.join("results.txt").exists());
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_no_commit() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -188,20 +197,21 @@ pub async fn tool_create_test_no_commit() {
         ])
         .save(true) //look! no .commit(true)
         .build();
-    create_tool(&root, &options).await.unwrap();
+    create_tool(root, &options).await.unwrap();
 
     //check for files being present
-    assert!(Path::new("results.txt").exists());
-    assert!(Path::new("workflows/echo/echo.cwl").exists());
+    assert!(root.join("results.txt").exists());
+    assert!(root.join("workflows/echo/echo.cwl").exists());
 
     //as we did not commit there must be files (exactly 2, the cwl file and the results.txt)
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert_eq!(repository::get_modified_files(&repo).unwrap().len(), 2);
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_no_run() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -213,18 +223,23 @@ pub async fn tool_create_test_no_run() {
         .save(true)
         .commit(true)
         .build();
-    create_tool(&root, &options).await.unwrap();
+    create_tool(root, &options).await.unwrap();
 
-    assert!(Path::new("workflows/echo/echo.cwl").exists());
+    assert!(root.join("workflows/echo/echo.cwl").exists());
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py", "../../testdata/data.bin"])]
+#[tokio::test]
 pub async fn tool_create_test_no_run_explicit_inputs() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[
+        "../../testdata/input.txt",
+        "../../testdata/echo.py",
+        "../../testdata/data.bin",
+    ]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -237,9 +252,9 @@ pub async fn tool_create_test_no_run_explicit_inputs() {
         .save(true)
         .commit(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
-    assert!(Path::new("workflows/echo/echo.cwl").exists());
+    assert!(root.join("workflows/echo/echo.cwl").exists());
     assert!(
         created
             .document
@@ -249,13 +264,14 @@ pub async fn tool_create_test_no_run_explicit_inputs() {
     );
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_no_run_explicit_inputs_string() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -268,9 +284,9 @@ pub async fn tool_create_test_no_run_explicit_inputs_string() {
         .save(true)
         .commit(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
-    assert!(Path::new("workflows/echo/echo.cwl").exists());
+    assert!(root.join("workflows/echo/echo.cwl").exists());
     assert!(
         created
             .document
@@ -280,13 +296,14 @@ pub async fn tool_create_test_no_run_explicit_inputs_string() {
     );
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_is_clean() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -298,19 +315,20 @@ pub async fn tool_create_test_is_clean() {
         .save(true)
         .commit(true)
         .build();
-    create_tool(&root, &options).await.unwrap();
+    create_tool(root, &options).await.unwrap();
 
-    assert!(Path::new("workflows/echo/echo.cwl").exists());
-    assert!(!Path::new("results.txt").exists()); //no result is left as it is cleaned
+    assert!(root.join("workflows/echo/echo.cwl").exists());
+    assert!(!root.join("results.txt").exists()); //no result is left as it is cleaned
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_container_image() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -322,7 +340,7 @@ pub async fn tool_create_test_container_image() {
         .save(true)
         .commit(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.document.requirements.as_ref().unwrap().len(), 2);
 
@@ -332,13 +350,18 @@ pub async fn tool_create_test_container_image() {
     assert_eq!(dr.docker_pull.as_deref(), Some("python3"));
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/Dockerfile", "../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_dockerfile() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[
+        "../../testdata/Dockerfile",
+        "../../testdata/input.txt",
+        "../../testdata/echo.py",
+    ]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -355,14 +378,15 @@ pub async fn tool_create_test_dockerfile() {
         .save(true)
         .commit(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.document.requirements.as_ref().unwrap().len(), 2);
 
     let Some(dr) = created.document.get_requirement::<DockerRequirement>() else {
         panic!("Tool does not contain a DockerRequirement");
     };
-    let (Some(docker_file), Some(docker_image_id)) = (&dr.docker_file, &dr.docker_image_id) else {
+    let (Some(docker_file), Some(docker_image_id)) = (&dr.docker_file, &dr.docker_image_id)
+    else {
         panic!("DockerRequirement does not contain dockerFile and dockerImageId");
     };
     assert_eq!(
@@ -374,18 +398,19 @@ pub async fn tool_create_test_dockerfile() {
     assert_eq!(docker_image_id, "sciwin-client");
 
     //no uncommitted left?
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
-#[fstest(repo = true, tokio = true)]
+#[tokio::test]
 pub async fn test_tool_magic_outputs() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(shlex::split("touch output.txt").unwrap())
         .cleanup(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(
         created.document.outputs[0]
@@ -400,26 +425,28 @@ pub async fn test_tool_magic_outputs() {
     );
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt"])]
+#[tokio::test]
 pub async fn test_tool_magic_stdout() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(shlex::split("wc input.txt \\> input.txt").unwrap())
         .cleanup(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.document.stdout.unwrap(), "$(inputs.input_txt.path)");
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt"])]
+#[tokio::test]
 pub async fn test_tool_magic_arguments() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(shlex::split("cat input.txt | grep -f input.txt").unwrap())
         .cleanup(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     let Argument::Binding(binding) = &created.document.arguments.unwrap()[3] else {
         panic!("expected a binding argument");
@@ -430,13 +457,14 @@ pub async fn test_tool_magic_arguments() {
     );
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/create_dir.py"])]
+#[tokio::test]
 pub async fn test_tool_output_is_dir() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/create_dir.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec!["python3".to_string(), "create_dir.py".to_string()])
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.document.inputs.len(), 0);
     assert_eq!(created.document.outputs.len(), 1); //only folder
@@ -444,20 +472,18 @@ pub async fn test_tool_output_is_dir() {
         created.document.outputs[0].id,
         Some("my_directory".to_string())
     );
-    assert_eq!(
-        created.document.outputs[0].r#type,
-        CWLType::Directory.into()
-    );
+    assert_eq!(created.document.outputs[0].r#type, CWLType::Directory.into());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/create_dir.py"])]
+#[tokio::test]
 pub async fn test_tool_output_complete_dir() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/create_dir.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec!["python3".to_string(), "create_dir.py".to_string()])
         .outputs(vec![".".to_string()])
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.document.inputs.len(), 0);
     assert_eq!(created.document.outputs.len(), 1); //only root folder
@@ -470,33 +496,31 @@ pub async fn test_tool_output_complete_dir() {
     );
 }
 
-#[fstest(repo= true, tokio = true, files=["../../testdata/script.sh"])]
+#[tokio::test]
 #[cfg(target_os = "linux")]
 pub async fn test_shell_script() {
     use commonwl::requirements::ListingItems;
 
+    let dir = workspace(&["../../testdata/script.sh"]);
+    let root = dir.path();
     std::fs::set_permissions(
-        "script.sh",
+        root.join("script.sh"),
         <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o755),
     )
     .unwrap();
-    let root = env::current_dir().unwrap();
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     repository::stage_all(&repo).unwrap();
 
     let options = ToolCreationOptions::builder()
         .command(vec!["./script.sh".to_string()])
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.document.inputs.len(), 0);
     assert_eq!(created.document.outputs.len(), 0);
     assert_eq!(created.document.requirements.as_ref().unwrap().len(), 1);
 
-    let Some(iwdr) = created
-        .document
-        .get_requirement::<InitialWorkDirRequirement>()
-    else {
+    let Some(iwdr) = created.document.get_requirement::<InitialWorkDirRequirement>() else {
         panic!("Tool does not contain an InitialWorkDirRequirement");
     };
 
@@ -511,14 +535,15 @@ pub async fn test_shell_script() {
     assert_eq!(dirent.entryname, Some("./script.sh".to_string()));
 }
 
-#[fstest(repo = true, tokio = true)]
+#[tokio::test]
 /// see Issue [#89](https://github.com/fairagro/sciwin/issues/89)
 pub async fn test_tool_uncommitted_no_run() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[]);
+    let root = dir.path();
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     fs::copy(
         format!("{manifest_dir}/../../testdata/input.txt"),
-        "input.txt",
+        root.join("input.txt"),
     )
     .unwrap(); //repo is not in a clean state now!
 
@@ -527,24 +552,26 @@ pub async fn test_tool_uncommitted_no_run() {
         .no_run(true)
         .build();
     //should be ok to not commit changes, as tool does not run
-    assert!(create_tool(&root, &options).await.is_ok());
+    assert!(create_tool(root, &options).await.is_ok());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/subfolders.py"])]
+#[tokio::test]
 /// see Issue [#88](https://github.com/fairagro/sciwin/issues/88)
 pub async fn test_tool_output_subfolders() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/subfolders.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec!["python3".to_string(), "subfolders.py".to_string()])
         .build();
     //should be ok to not commit changes, as tool does not run
-    assert!(create_tool(&root, &options).await.is_ok());
+    assert!(create_tool(root, &options).await.is_ok());
 }
 
-#[fstest(repo = true, tokio = true)]
+#[tokio::test]
 #[cfg(target_os = "linux")]
 pub async fn tool_create_remote_file() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "cat".to_string(),
@@ -554,19 +581,20 @@ pub async fn tool_create_remote_file() {
             "README.md".to_string(),
         ])
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     //check file
-    assert!(Path::new("README.md").exists());
+    assert!(root.join("README.md").exists());
 
     //check input
     assert_eq!(created.document.inputs.len(), 1);
     assert_eq!(created.document.inputs[0].r#type, CWLType::File.into());
 }
 
-#[fstest(repo = true, tokio = true, files = ["../../testdata/input.txt", "../../testdata/echo.py"])]
+#[tokio::test]
 pub async fn tool_create_test_network() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "python3".to_string(),
@@ -577,7 +605,7 @@ pub async fn tool_create_test_network() {
         .container(ContainerInfo::builder().image("python3").build())
         .enable_network(true)
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert!(
         created
@@ -587,9 +615,10 @@ pub async fn tool_create_test_network() {
     );
 }
 
-#[fstest(repo = true, tokio = true)]
+#[tokio::test]
 pub async fn tool_create_same_inout() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec![
             "echo".to_string(),
@@ -598,7 +627,7 @@ pub async fn tool_create_same_inout() {
             "message".to_string(),
         ])
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert!(
         created
@@ -627,16 +656,17 @@ pub async fn tool_create_same_inout() {
     );
 }
 
-#[fstest(repo = true, tokio = true)]
+#[tokio::test]
 pub async fn tool_create_mount() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[]);
+    let root = dir.path();
 
     //copy a dir we can mount to the working directory
     copy_dir(
         format!("{}/../../testdata/test_dir", env!("CARGO_MANIFEST_DIR")),
-        "test_dir",
+        root.join("test_dir"),
     );
-    let repo = Repository::open(&root).unwrap();
+    let repo = Repository::open(root).unwrap();
     repository::stage_all(&repo).unwrap();
     repository::commit(&repo, "message").unwrap();
 
@@ -649,12 +679,9 @@ pub async fn tool_create_mount() {
         ])
         .mounts(vec![PathBuf::from("test_dir")])
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
-    let Some(iwdr) = created
-        .document
-        .get_requirement::<InitialWorkDirRequirement>()
-    else {
+    let Some(iwdr) = created.document.get_requirement::<InitialWorkDirRequirement>() else {
         panic!("Tool does not contain an InitialWorkDirRequirement");
     };
 
@@ -664,13 +691,14 @@ pub async fn tool_create_mount() {
     assert_eq!(listing.len(), 1);
 }
 
-#[fstest(repo = true, tokio = true)]
+#[tokio::test]
 pub async fn tool_create_typehint() {
-    let root = env::current_dir().unwrap();
+    let dir = workspace(&[]);
+    let root = dir.path();
     let options = ToolCreationOptions::builder()
         .command(vec!["ls".to_string(), "s:.".to_string()]) //. would normally be a directory type. we enforce string here
         .build();
-    let created = create_tool(&root, &options).await.unwrap();
+    let created = create_tool(root, &options).await.unwrap();
 
     assert_eq!(created.document.inputs[0].r#type, CWLType::String.into());
 }

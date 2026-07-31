@@ -15,8 +15,10 @@ use std::path::Path;
 use crate::authoring::tool::parser::sanitize_id;
 
 /// A requirement staging `path` verbatim, or `None` when it isn't an existing file.
-pub(super) fn iwdr_for_existing_file(path: &str) -> Option<ToolRequirements> {
-    Path::new(path).is_file().then(|| {
+///
+/// `path` is checked relative to `base` (the project root)
+pub(super) fn iwdr_for_existing_file(path: &str, base: &Path) -> Option<ToolRequirements> {
+    base.join(path).is_file().then(|| {
         ToolRequirements::InitialWorkDirRequirement(
             InitialWorkDirRequirement::new_from_filename_include(path),
         )
