@@ -72,14 +72,12 @@ pub fn build_crate(inputs: &CrateInputs) -> ProvenanceResult<RoCrate> {
         rocrate_builder = rocrate_builder.entity(entity);
     }
 
-    let workflow_id = prefixed(wf, &graph.workflow_id);
-    rocrate_builder = rocrate_builder.main_workflow(main_workflow_entity(
-        wf,
-        &workflow_id,
-        &graph,
-        &tool_ids,
-        &connections,
-    ));
+    // The main workflow entity's own id is the bare crate-relative filename, not the packed
+    // graph's internal "#main" fragment -- from the crate's perspective, the workflow *is* the
+    // file. Its own ports/steps still carry the full "workflow.json#main/..." form, unaffected.
+    let workflow_id = wf.to_string();
+    rocrate_builder =
+        rocrate_builder.main_workflow(main_workflow_entity(wf, &workflow_id, &graph, &connections));
 
     // Per-step HowToStep, CreateAction and ControlAction. `organize_objects` collects the
     // ControlAction ids, which is what OrganizeAction below points at.
@@ -286,17 +284,17 @@ fn tool_entities(wf: &str, graph: &WorkflowGraph, tool_ids: &[&str]) -> Vec<Enti
         .collect()
 }
 
+/// The main workflow entity itself. No `hasPart` of its own: the tools it runs are fragments
+/// *inside* `workflow_id` (`"workflow.json#calculation.cwl"`), not separate crate files if generated via PackedCWL
 fn main_workflow_entity(
     wf: &str,
     workflow_id: &str,
     graph: &WorkflowGraph,
-    tool_ids: &[&str],
     connections: &[(String, String, String)],
 ) -> Entity {
     let workflow_inputs: Vec<String> = graph.inputs.iter().map(|p| prefixed(wf, &p.id)).collect();
     let workflow_outputs: Vec<String> = graph.outputs.iter().map(|p| prefixed(wf, &p.id)).collect();
     let step_refs: Vec<String> = graph.steps.iter().map(|s| prefixed(wf, &s.id)).collect();
-    let has_part: Vec<String> = tool_ids.iter().map(|id| prefixed(wf, id)).collect();
 
     let own_connections: Vec<String> = connections
         .iter()
@@ -315,7 +313,6 @@ fn main_workflow_entity(
     )
     .set("name", wf)
     .reference("programmingLanguage", CWL_ID)
-    .references("hasPart", has_part)
     .references("input", workflow_inputs)
     .references("output", workflow_outputs)
     .references("step", step_refs)
@@ -573,7 +570,7 @@ mod tests {
         let crate_ = build_crate(&fixture_inputs()).unwrap();
 
         let main_entity = crate_.main_entity().unwrap();
-        assert_eq!(main_entity.id, "workflow.json#main");
+        assert_eq!(main_entity.id, "workflow.json");
         assert!(main_entity.has_types(&[
             "File",
             "SoftwareSourceCode",
