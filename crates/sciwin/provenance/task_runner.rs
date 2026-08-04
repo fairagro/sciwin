@@ -12,6 +12,7 @@ use commonwl::{
     Identifiable,
     documents::{CWLDocument, StringOrDocument},
     engine::TaskBackend,
+    inputs::DefaultValue,
     packed::PackedCWL,
 };
 use rocrate::validate::Validation;
@@ -203,10 +204,20 @@ pub async fn export<T: TaskBackend>(
     };
 
     let spec = runner.specification(run_id)?;
+    let base_dir = spec.path.parent().unwrap_or(Path::new(".")).to_path_buf();
     let (packed, doc_paths) = pack_document(spec.document, &spec.path)?;
     let run = fold_run_record(&timing);
 
-    let (crate_layout, packed_workflow, sources) = match layout {
+    // Data payload: every input's declared default, plus the run's actual final outputs.
+    // Genuine step-to-step intermediates (a file produced and consumed entirely within the run,
+    // never a workflow-level output) aren't resolvable from what `TaskBackend` exposes today --
+    // they still end up in `Written::missing`, same as a REANA download that 404s.
+    let mut sources = resolve_input_sources(&packed, &base_dir);
+    if let Some(outputs) = runner.outputs(run_id, None).await? {
+        sources.extend(resolve_output_sources(&outputs, &base_dir));
+    }
+
+    let (crate_layout, packed_workflow) = match layout {
         CrateLayout::Packed => {
             let stem = spec
                 .path
@@ -219,7 +230,6 @@ pub async fn export<T: TaskBackend>(
                     file_name: file_name.clone(),
                 },
                 Some(file_name),
-                HashMap::new(),
             )
         }
         CrateLayout::Files => {
@@ -227,11 +237,12 @@ pub async fn export<T: TaskBackend>(
                 .iter()
                 .map(|(doc_id, path)| (doc_id.clone(), file_name_of(path)))
                 .collect();
-            let sources: HashMap<String, PathBuf> = doc_paths
-                .into_values()
-                .map(|path| (file_name_of(&path), path))
-                .collect();
-            (WorkflowLayout::Files { file_names }, None, sources)
+            sources.extend(
+                doc_paths
+                    .into_values()
+                    .map(|path| (file_name_of(&path), path)),
+            );
+            (WorkflowLayout::Files { file_names }, None)
         }
     };
 
@@ -260,6 +271,63 @@ fn file_name_of(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+/// Every input default across the whole packed graph (the workflow's own, and each tool's) that
+/// names a real file on disk, keyed by crate-relative file name. `CWLDocument::get_inputs()` is
+/// the one accessor that works the same way for a `Workflow`'s inputs and a
+/// `CommandLineTool`'s -- exactly the two kinds of document `pack_document` ever produces.
+fn resolve_input_sources(packed: &PackedCWL, base_dir: &Path) -> HashMap<String, PathBuf> {
+    let mut sources = HashMap::new();
+    for doc in &packed.graph {
+        for input in doc.get_inputs() {
+            let Some(file) = input.default.as_ref().and_then(DefaultValue::as_file) else {
+                continue;
+            };
+            let Some(path) = resolve_file_path(base_dir, file) else {
+                continue;
+            };
+            if path.exists() {
+                sources.insert(file_name_of(&path), path);
+            }
+        }
+    }
+    sources
+}
+
+/// The run's own final outputs (from [`WorkflowRunner::outputs`]) that name a real file,
+/// keyed the same way as [`resolve_input_sources`].
+fn resolve_output_sources(
+    outputs: &HashMap<String, DefaultValue>,
+    base_dir: &Path,
+) -> HashMap<String, PathBuf> {
+    let mut sources = HashMap::new();
+    for value in outputs.values() {
+        let Some(file) = value.as_file() else { continue };
+        let Some(path) = resolve_file_path(base_dir, file) else {
+            continue;
+        };
+        if path.exists() {
+            sources.insert(file_name_of(&path), path);
+        }
+    }
+    sources
+}
+
+/// A `File`'s `path` if it has one, else `location` resolved against `base_dir` (stripping a
+/// `file://` scheme first, and left alone if already absolute).
+fn resolve_file_path(base_dir: &Path, file: &commonwl::files::File) -> Option<PathBuf> {
+    if let Some(path) = &file.path {
+        return Some(PathBuf::from(path));
+    }
+    let location = file.location.as_deref()?;
+    let location = location.strip_prefix("file://").unwrap_or(location);
+    let candidate = PathBuf::from(location);
+    Some(if candidate.is_absolute() {
+        candidate
+    } else {
+        base_dir.join(candidate)
+    })
 }
 
 #[cfg(test)]
@@ -366,6 +434,63 @@ mod tests {
             file_names.get("../calculation/calculation.cwl").unwrap(),
             "calculation.cwl"
         );
+    }
+
+    #[test]
+    fn test_resolve_input_sources_finds_real_data_files() {
+        let entry = hello_world_main();
+        let contents = std::fs::read_to_string(&entry).unwrap();
+        let document = commonwl::from_str(&contents).unwrap();
+        let (packed, _) = pack_document(document, &entry).unwrap();
+        let base_dir = entry.parent().unwrap();
+
+        let sources = resolve_input_sources(&packed, base_dir);
+
+        let population = sources.get("population.csv").unwrap();
+        assert!(population.exists());
+        assert!(population.ends_with("data/population.csv"));
+
+        let speakers = sources.get("speakers_revised.csv").unwrap();
+        assert!(speakers.exists());
+        assert!(speakers.ends_with("data/speakers_revised.csv"));
+    }
+
+    #[test]
+    fn test_resolve_output_sources_finds_real_files_and_skips_missing() {
+        use commonwl::files::{File, FileOrDirectory};
+
+        let dir = tempfile::tempdir().unwrap();
+        let real_file = dir.path().join("results.svg");
+        std::fs::write(&real_file, "svg").unwrap();
+
+        let mut outputs = HashMap::new();
+        outputs.insert(
+            "out".to_string(),
+            DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                File::builder()
+                    .path(real_file.to_string_lossy().into_owned())
+                    .build(),
+            )),
+        );
+        outputs.insert(
+            "gone".to_string(),
+            DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                File::builder()
+                    .path(
+                        dir.path()
+                            .join("does-not-exist.txt")
+                            .to_string_lossy()
+                            .into_owned(),
+                    )
+                    .build(),
+            )),
+        );
+
+        let sources = resolve_output_sources(&outputs, dir.path());
+
+        assert_eq!(sources.len(), 1);
+        assert_eq!(sources.get("results.svg"), Some(&real_file));
+        assert!(!sources.contains_key("does-not-exist.txt"));
     }
 
     #[test]
