@@ -6,7 +6,7 @@ use futures::future::try_join_all;
 use reana::{
     api::{client::ReanaClient, response::WorkflowStatus},
     client::CreatedWorkspace,
-    logs::{JobLog, ReanaLogMessage, get_log_outputs},
+    logs::{JobLog, ReanaLogMessage, get_log_message, get_log_outputs},
 };
 use serde_json::Value;
 use std::{
@@ -107,7 +107,8 @@ fn to_failure(job: &JobLog) -> JobFailure {
 }
 
 fn looks_like_failure(job: &JobLog) -> bool {
-    FAILURE_KEYWORDS.iter().any(|k| job.logs.contains(k)) || job.logs.to_lowercase().contains("failed")
+    FAILURE_KEYWORDS.iter().any(|k| job.logs.contains(k))
+        || job.logs.to_lowercase().contains("failed")
 }
 
 #[async_trait::async_trait]
@@ -230,7 +231,8 @@ impl WorkflowRunner for ReanaRunner {
         try_join_all(futures).await?;
 
         let logs = reana::client::logs(self.client.clone(), id).await?;
-        let mut outputs = get_log_outputs(&logs)?;
+        let message = get_log_message(&logs)?;
+        let mut outputs = get_log_outputs(&message)?;
         if let Some(o) = outputs.as_mut() {
             update_locations(o, out_dir);
         }
@@ -396,11 +398,21 @@ mod tests {
             .unwrap();
 
         let status = runner.wait_for_completion(&run_id).await.unwrap();
-        assert!(matches!(status, RunStatus::Failed), "expected Failed, got {status:?}");
+        assert!(
+            matches!(status, RunStatus::Failed),
+            "expected Failed, got {status:?}"
+        );
 
         let failures = runner.find_failures(&run_id).await.unwrap();
-        assert!(!failures.is_empty(), "expected at least one reported failure");
-        assert!(failures[0].logs.contains("intentional failure for find_failures test"));
+        assert!(
+            !failures.is_empty(),
+            "expected at least one reported failure"
+        );
+        assert!(
+            failures[0]
+                .logs
+                .contains("intentional failure for find_failures test")
+        );
     }
 
     fn job_log(name: &str, status: WorkflowStatus, logs: &str) -> JobLog {
@@ -455,7 +467,11 @@ mod tests {
 
     #[test]
     fn find_failures_returns_empty_for_a_clean_run() {
-        let logs = log_message(vec![job_log("ok_step", WorkflowStatus::Finished, "all good")]);
+        let logs = log_message(vec![job_log(
+            "ok_step",
+            WorkflowStatus::Finished,
+            "all good",
+        )]);
         assert!(find_failures(&logs).is_empty());
     }
 }
