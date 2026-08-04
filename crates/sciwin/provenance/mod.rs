@@ -55,6 +55,10 @@ pub enum ProvenanceError {
     Runner(#[from] crate::execution::RunnerError),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
+    Commonwl(#[from] commonwl::Error),
+
+    #[error(transparent)]
     #[diagnostic(code = "std::io::Error")]
     IO(#[from] std::io::Error),
 

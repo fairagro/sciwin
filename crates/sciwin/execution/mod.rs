@@ -10,7 +10,10 @@
 //! arrive, and an internal cursor tracks how far a consumer has read so polling only ever
 //! yields what is new.
 
-use commonwl::{engine::InputObject, inputs::DefaultValue};
+use commonwl::{
+    engine::{InputObject, StepTiming},
+    inputs::DefaultValue,
+};
 use futures::Stream;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
@@ -116,6 +119,16 @@ impl From<WorkflowStatus> for RunStatus {
     }
 }
 
+/// Timing a local run produced -- kept separate from the (potentially large) stdout/stderr an
+/// [`commonwl::engine::ExecutionResult`] also carries, since this is the only part
+/// `provenance::task_runner` needs once a run finishes.
+#[derive(Debug, Clone, Default)]
+pub struct ExecutionTiming {
+    pub started_at: Option<chrono::NaiveDateTime>,
+    pub finished_at: Option<chrono::NaiveDateTime>,
+    pub step_timings: Vec<StepTiming>,
+}
+
 #[derive(Debug)]
 struct JobHandle {
     cancel: CancellationToken,
@@ -123,6 +136,7 @@ struct JobHandle {
     #[allow(dead_code)]
     task: JoinHandle<()>,
     outputs: Arc<Mutex<Option<HashMap<String, DefaultValue>>>>,
+    timing: Arc<Mutex<Option<ExecutionTiming>>>,
 }
 pub struct LogStream(Pin<Box<dyn Stream<Item = RunnerResult<LogLine>> + Send>>);
 impl LogStream {

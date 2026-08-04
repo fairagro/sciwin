@@ -1,5 +1,6 @@
 use crate::execution::{
-    JobHandle, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner,
+    ExecutionTiming, JobHandle, LogStream, RunId, RunStatus, RunnerError, RunnerResult,
+    WorkflowRunner,
 };
 use commonwl::{
     engine::{
@@ -30,6 +31,18 @@ impl<T: TaskBackend> TaskRunner<T> {
             jobs: Arc::new(Mutex::new(HashMap::new())),
         }
     }
+
+    /// The timing `id`'s run produced, once `execute` has returned a result -- `None` while the
+    /// run is still going, or if it errored before producing one at all (nothing to record in
+    /// that case; see `execution::RunnerError` for why it failed instead).
+    ///
+    /// # Errors
+    /// `id` is not a run this `TaskRunner` knows about.
+    pub fn execution_timing(&self, id: &RunId) -> RunnerResult<Option<ExecutionTiming>> {
+        let jobs = self.jobs.lock().unwrap();
+        let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
+        Ok(job.timing.lock().unwrap().clone())
+    }
 }
 
 #[async_trait::async_trait]
@@ -53,6 +66,8 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
 
         let outputs_slot = Arc::new(Mutex::new(None));
         let outputs_for_task = outputs_slot.clone();
+        let timing_slot = Arc::new(Mutex::new(None));
+        let timing_for_task = timing_slot.clone();
 
         let task = tokio::spawn(
             async move {
@@ -61,6 +76,11 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
 
                 let final_status = match &result {
                     Ok(r) => {
+                        *timing_for_task.lock().unwrap() = Some(ExecutionTiming {
+                            started_at: r.started_at,
+                            finished_at: r.finished_at,
+                            step_timings: r.step_timings.clone().unwrap_or_default(),
+                        });
                         let code = evaluate_exitcodes(&r.exit_status, &request.specification);
                         if matches!(code, EngineStatus::Success(_)) {
                             *outputs_for_task.lock().unwrap() = Some(r.outputs.clone());
@@ -84,6 +104,7 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
                 status: status_tx,
                 task,
                 outputs: outputs_slot,
+                timing: timing_slot,
             },
         );
 
