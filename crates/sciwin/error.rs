@@ -31,4 +31,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Project(#[from] crate::project::ProjectError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Provenance(#[from] crate::provenance::ProvenanceError),
 }

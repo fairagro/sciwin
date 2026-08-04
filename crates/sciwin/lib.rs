@@ -67,6 +67,7 @@ pub mod execution;
 pub mod project;
 pub mod repository;
 pub mod visualize;
+pub mod provenance;
 
 mod error;
 pub use error::{Error, Result};
