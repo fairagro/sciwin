@@ -1,6 +1,7 @@
 use miette::Diagnostic;
 use thiserror::Error;
 
+pub mod graph;
 pub mod inputs;
 pub mod reana_runner;
 pub mod task_runner;
