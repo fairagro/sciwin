@@ -1,0 +1,488 @@
+{
+  "@context": [
+    "https://w3id.org/ro/crate/1.1/context",
+    "https://w3id.org/ro/terms/workflow-run"
+  ],
+  "@graph": [
+    {
+      "@id": "ro-crate-metadata.json",
+      "@type": "CreativeWork",
+      "about": {
+        "@id": "./"
+      },
+      "conformsTo": [
+        {
+          "@id": "https://w3id.org/ro/crate/1.1"
+        },
+        {
+          "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0"
+        }
+      ]
+    },
+    {
+      "@id": "https://w3id.org/workflowhub/workflow-ro-crate#cwl",
+      "@type": "ComputerLanguage",
+      "alternateName": "CWL",
+      "identifier": {
+        "@id": "https://w3id.org/cwl/v1.2/"
+      },
+      "name": "Common Workflow Language",
+      "url": {
+        "@id": "https://www.commonwl.org/"
+      },
+      "version": "v1.2"
+    },
+    {
+      "@id": "https://w3id.org/ro/wfrun/process/0.5",
+      "@type": "CreativeWork",
+      "name": "Process Run Crate",
+      "version": "0.5"
+    },
+    {
+      "@id": "https://w3id.org/ro/wfrun/workflow/0.5",
+      "@type": "CreativeWork",
+      "name": "Workflow Run Crate",
+      "version": "0.5"
+    },
+    {
+      "@id": "https://w3id.org/ro/wfrun/provenance/0.5",
+      "@type": "CreativeWork",
+      "name": "Provenance Run Crate",
+      "version": "0.5"
+    },
+    {
+      "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0",
+      "@type": "CreativeWork",
+      "name": "Workflow RO-Crate",
+      "version": "1.0"
+    },
+    {
+      "@id": "#8c20aae4-6275-4e18-b5bf-c4a425b27f7d",
+      "@type": "ContainerImage",
+      "additionalType": {
+        "@id": "https://w3id.org/ro/terms/workflow-run#DockerImage"
+      },
+      "name": "pandas/pandas",
+      "registry": "docker.io",
+      "tag": "pip-all"
+    },
+    {
+      "@id": "workflow.json#calculation.cwl",
+      "@type": "SoftwareApplication",
+      "name": "calculation.cwl",
+      "input": [
+        {
+          "@id": "workflow.json#calculation.cwl/population"
+        },
+        {
+          "@id": "workflow.json#calculation.cwl/speakers"
+        }
+      ],
+      "output": [
+        {
+          "@id": "workflow.json#calculation.cwl/results"
+        }
+      ]
+    },
+    {
+      "@id": "workflow.json#main/calculation",
+      "@type": "HowToStep",
+      "position": "0",
+      "connection": [
+        {
+          "@id": "#39ca96f2-e531-4baf-af40-8593385e7d4e"
+        },
+        {
+          "@id": "#966d5263-182d-4d7b-80ed-058d489a53c2"
+        }
+      ],
+      "workExample": {
+        "@id": "workflow.json#calculation.cwl"
+      }
+    },
+    {
+      "@id": "#1d9e15d5-7cc7-4560-a50e-7df1fe2c5229",
+      "@type": "ControlAction",
+      "name": "orchestrate calculation.cwl",
+      "instrument": {
+        "@id": "workflow.json#main/calculation"
+      },
+      "object": {
+        "@id": "#fc249806-f814-42a7-b7dc-f6e4103990ad"
+      }
+    },
+    {
+      "@id": "#fc249806-f814-42a7-b7dc-f6e4103990ad",
+      "@type": "CreateAction",
+      "name": "Run of workflow.json#main/calculation",
+      "instrument": {
+        "@id": "workflow.json#calculation.cwl"
+      },
+      "object": [
+        {
+          "@id": "population.csv"
+        },
+        {
+          "@id": "speakers_revised.csv"
+        }
+      ],
+      "result": {
+        "@id": "results.csv"
+      },
+      "startTime": "2025-04-30 08:31:09,301",
+      "endTime": "2025-04-30 08:31:14,951",
+      "containerImage": {
+        "@id": "#8c20aae4-6275-4e18-b5bf-c4a425b27f7d"
+      }
+    },
+    {
+      "@id": "#a84a1e35-eb20-4ab9-89c0-6c299b2e9fe6",
+      "@type": "ContainerImage",
+      "additionalType": {
+        "@id": "https://w3id.org/ro/terms/workflow-run#DockerImage"
+      },
+      "name": "user12398/pytest",
+      "registry": "docker.io",
+      "tag": "v1.0.0"
+    },
+    {
+      "@id": "workflow.json#plot.cwl",
+      "@type": "SoftwareApplication",
+      "name": "plot.cwl",
+      "input": [
+        {
+          "@id": "workflow.json#plot.cwl/results"
+        }
+      ],
+      "output": [
+        {
+          "@id": "workflow.json#plot.cwl/results"
+        }
+      ]
+    },
+    {
+      "@id": "workflow.json#main/plot",
+      "@type": "HowToStep",
+      "position": "1",
+      "connection": [
+        {
+          "@id": "#cd5f856b-7ac7-4b41-8fad-71dc0759a311"
+        }
+      ],
+      "workExample": {
+        "@id": "workflow.json#plot.cwl"
+      }
+    },
+    {
+      "@id": "#96e8c8e4-ad2a-4066-8bef-4e141ed2660a",
+      "@type": "ControlAction",
+      "name": "orchestrate plot.cwl",
+      "instrument": {
+        "@id": "workflow.json#main/plot"
+      },
+      "object": {
+        "@id": "#411762bf-1187-45bd-89ab-9ea50404fff5"
+      }
+    },
+    {
+      "@id": "#411762bf-1187-45bd-89ab-9ea50404fff5",
+      "@type": "CreateAction",
+      "name": "Run of workflow.json#main/plot",
+      "instrument": {
+        "@id": "workflow.json#plot.cwl"
+      },
+      "object": {
+        "@id": "results.csv"
+      },
+      "result": {
+        "@id": "results.svg"
+      },
+      "startTime": "2025-04-30 08:31:15,940",
+      "endTime": "2025-04-30 08:31:26,291",
+      "containerImage": {
+        "@id": "#a84a1e35-eb20-4ab9-89c0-6c299b2e9fe6"
+      }
+    },
+    {
+      "@id": "workflow.json",
+      "@type": [
+        "File",
+        "SoftwareSourceCode",
+        "ComputationalWorkflow",
+        "HowTo"
+      ],
+      "connection": [
+        {
+          "@id": "#8df4d0df-d936-4e1c-b450-a95e99bb959b"
+        }
+      ],
+      "hasPart": [
+        {
+          "@id": "workflow.json#calculation.cwl"
+        },
+        {
+          "@id": "workflow.json#plot.cwl"
+        }
+      ],
+      "input": [
+        {
+          "@id": "workflow.json#main/population"
+        },
+        {
+          "@id": "workflow.json#main/speakers"
+        }
+      ],
+      "output": [
+        {
+          "@id": "workflow.json#main/out"
+        }
+      ],
+      "name": "workflow.json",
+      "programmingLanguage": {
+        "@id": "https://w3id.org/workflowhub/workflow-ro-crate#cwl"
+      },
+      "step": [
+        {
+          "@id": "workflow.json#main/calculation"
+        },
+        {
+          "@id": "workflow.json#main/plot"
+        }
+      ]
+    },
+    {
+      "@id": "./",
+      "@type": "Dataset",
+      "datePublished": "2025-06-25T15:27:11.284062866+00:00",
+      "description": "some test workflow",
+      "conformsTo": [
+        {
+          "@id": "https://w3id.org/ro/wfrun/process/0.5"
+        },
+        {
+          "@id": "https://w3id.org/ro/wfrun/workflow/0.5"
+        },
+        {
+          "@id": "https://w3id.org/ro/wfrun/provenance/0.5"
+        },
+        {
+          "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0"
+        }
+      ],
+      "hasPart": [
+        {
+          "@id": "population.csv"
+        },
+        {
+          "@id": "results.csv"
+        },
+        {
+          "@id": "results.svg"
+        },
+        {
+          "@id": "speakers_revised.csv"
+        },
+        {
+          "@id": "workflow.json"
+        }
+      ],
+      "license": "https://spdx.org/licenses/CC-BY-4.0.html",
+      "mainEntity": {
+        "@id": "workflow.json"
+      },
+      "name": "hello_s4n",
+      "mentions": {
+        "@id": "#a8a329a6-85f3-4062-8fd4-9c8936384cc9"
+      }
+    },
+    {
+      "@id": "#a8a329a6-85f3-4062-8fd4-9c8936384cc9",
+      "@type": "CreateAction",
+      "name": "Run of workflow.json",
+      "instrument": {
+        "@id": "workflow.json"
+      },
+      "object": [
+        {
+          "@id": "population.csv"
+        },
+        {
+          "@id": "speakers_revised.csv"
+        }
+      ],
+      "result": {
+        "@id": "results.svg"
+      },
+      "startTime": "2025-04-30 08:31:07,894",
+      "endTime": "2025-04-30 08:31:27,511"
+    },
+    {
+      "@id": "workflow.json#calculation.cwl/population",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "name": "population",
+      "defaultValue": "file:///mnt/c/Users/leidel/Documents/M4_4/advanced/hello_world/data/population.csv"
+    },
+    {
+      "@id": "workflow.json#calculation.cwl/speakers",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "name": "speakers",
+      "defaultValue": "file:///mnt/c/Users/leidel/Documents/M4_4/advanced/hello_world/data/speakers_revised.csv"
+    },
+    {
+      "@id": "workflow.json#calculation.cwl/results",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "name": "results",
+      "defaultValue": "results.csv"
+    },
+    {
+      "@id": "workflow.json#plot.cwl/results",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "name": "results",
+      "defaultValue": "file:///mnt/c/Users/leidel/Documents/M4_4/advanced/hello_world/results.csv"
+    },
+    {
+      "@id": "workflow.json#main/population",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "name": "population"
+    },
+    {
+      "@id": "workflow.json#main/speakers",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "name": "speakers"
+    },
+    {
+      "@id": "workflow.json#main/out",
+      "@type": "FormalParameter",
+      "additionalType": "File",
+      "name": "out"
+    },
+    {
+      "@id": "#cd5f856b-7ac7-4b41-8fad-71dc0759a311",
+      "@type": "ParameterConnection",
+      "sourceParameter": {
+        "@id": "workflow.json#calculation.cwl/results"
+      },
+      "targetParameter": {
+        "@id": "workflow.json#plot.cwl/results"
+      }
+    },
+    {
+      "@id": "#39ca96f2-e531-4baf-af40-8593385e7d4e",
+      "@type": "ParameterConnection",
+      "sourceParameter": {
+        "@id": "workflow.json#main/population"
+      },
+      "targetParameter": {
+        "@id": "workflow.json#calculation.cwl/population"
+      }
+    },
+    {
+      "@id": "#966d5263-182d-4d7b-80ed-058d489a53c2",
+      "@type": "ParameterConnection",
+      "sourceParameter": {
+        "@id": "workflow.json#main/speakers"
+      },
+      "targetParameter": {
+        "@id": "workflow.json#calculation.cwl/speakers"
+      }
+    },
+    {
+      "@id": "#8df4d0df-d936-4e1c-b450-a95e99bb959b",
+      "@type": "ParameterConnection",
+      "sourceParameter": {
+        "@id": "workflow.json#plot.cwl/results"
+      },
+      "targetParameter": {
+        "@id": "workflow.json#main/out"
+      }
+    },
+    {
+      "@id": "#b1ac6aa2-e70e-47ca-a968-21e14b68ea29",
+      "@type": "SoftwareApplication",
+      "name": "cwltool 3.1.20210628163208"
+    },
+    {
+      "@id": "results.csv",
+      "@type": "File",
+      "alternateName": "results.csv",
+      "contentSize": "unknown",
+      "exampleOfWork": [
+        {
+          "@id": "workflow.json#calculation.cwl/results"
+        },
+        {
+          "@id": "workflow.json#plot.cwl/results"
+        }
+      ]
+    },
+    {
+      "@id": "population.csv",
+      "@type": "File",
+      "alternateName": "population.csv",
+      "contentSize": "unknown",
+      "exampleOfWork": [
+        {
+          "@id": "workflow.json#main/population"
+        },
+        {
+          "@id": "workflow.json#calculation.cwl/population"
+        }
+      ]
+    },
+    {
+      "@id": "speakers_revised.csv",
+      "@type": "File",
+      "alternateName": "speakers_revised.csv",
+      "contentSize": "unknown",
+      "exampleOfWork": [
+        {
+          "@id": "workflow.json#main/speakers"
+        },
+        {
+          "@id": "workflow.json#calculation.cwl/speakers"
+        }
+      ]
+    },
+    {
+      "@id": "results.svg",
+      "@type": "File",
+      "alternateName": "results.svg",
+      "contentSize": "unknown",
+      "exampleOfWork": [
+        {
+          "@id": "workflow.json#plot.cwl/results"
+        },
+        {
+          "@id": "workflow.json#main/out"
+        }
+      ]
+    },
+    {
+      "@id": "#7bc7214d-70f7-4492-962e-0f547aed0af7",
+      "@type": "OrganizeAction",
+      "name": "Run of cwltool 3.1.20210628163208",
+      "instrument": {
+        "@id": "#b1ac6aa2-e70e-47ca-a968-21e14b68ea29"
+      },
+      "object": [
+        {
+          "@id": "#1d9e15d5-7cc7-4560-a50e-7df1fe2c5229"
+        },
+        {
+          "@id": "#96e8c8e4-ad2a-4066-8bef-4e141ed2660a"
+        }
+      ],
+      "result": {
+        "@id": "#a8a329a6-85f3-4062-8fd4-9c8936384cc9"
+      },
+      "startTime": "2025-04-30 08:31:07,894",
+      "endTime": "2025-04-30 08:31:27,511"
+    }
+  ]
+}
