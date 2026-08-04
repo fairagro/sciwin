@@ -1625,6 +1625,7 @@ dependencies = [
  "cwl_salad",
  "dunce",
  "miette",
+ "oneormany",
  "regex",
  "serde",
  "serde-saphyr",
@@ -3659,6 +3660,15 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
+
+[[package]]
+name = "oneormany"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d65991516ea0396b7f634016ff7f979755cb31a5848e5cf99bae62dc2893c87"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "openssl-probe"
