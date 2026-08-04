@@ -13,8 +13,9 @@ use sciwin::{
     authoring::tool::parser::guess_type,
     execution::{ReanaRunner, RunStatus, TaskRunner, WorkflowRunner},
     project,
-    provenance::reana_runner as rocrate_export,
+    provenance::{Written, reana_runner as rocrate_export, task_runner as local_rocrate_export},
     reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
+    rocrate::validate::Validation,
 };
 use serde_json::{Number, Value};
 use std::{
@@ -91,11 +92,35 @@ pub struct LocalExecuteArgs {
     #[arg(help = "CWL File to execute")]
     pub file: PathBuf,
     #[arg(
+        long = "rocrate",
+        num_args = 0..=1,
+        default_missing_value = "files",
+        value_enum,
+        help = "Create a Provenance Run Crate after execution. Bare --rocrate (or --rocrate files) \
+                keeps the original CWL files, directly re-executable; --rocrate packed writes one \
+                packed JSON file instead"
+    )]
+    pub rocrate: Option<RocrateLayout>,
+    #[arg(
+        long = "rocrate_dir",
+        default_value = "./rocrate",
+        help = "Directory to save the RO-Crate to"
+    )]
+    pub rocrate_dir: PathBuf,
+    #[arg(
         trailing_var_arg = true,
         help = "Other arguments provided to cwl file",
         allow_hyphen_values = true
     )]
     pub args: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum RocrateLayout {
+    /// One packed JSON file holds the whole workflow graph.
+    Packed,
+    /// The original CWL files, still directly re-executable. What bare `--rocrate` means.
+    Files,
 }
 
 #[derive(Debug, Args)]
@@ -150,8 +175,8 @@ pub enum RemoteSubcommands {
         #[arg(
             short = 'd',
             long = "rocrate_dir",
-            default_value = "rocrate",
-            help = "Optional directory to save RO-Crate to, default rocrate"
+            default_value = "./rocrate",
+            help = "Optional directory to save RO-Crate to, default ./rocrate"
         )]
         output_dir: Option<String>,
     },
@@ -216,13 +241,45 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
         }
     };
 
-    // `run_workflow` submits, streams logs live, waits for completion, prints outputs on
-    // success (folding in `evaluate_exitcodes`, so a nonzero process exit that the tool's own
-    // `successCodes` accepts still counts as finished) and returns an error on anything else.
-    runner
-        .run_workflow(&args.file, inputs, args.out_dir.as_deref())
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    // Not `run_workflow` (submit + stream logs + wait + print outputs, all in one): `--rocrate`
+    // needs the run id afterward, which that convenience wrapper doesn't hand back. TaskRunner's
+    // `logs()` is `NotSupported` anyway (subprocess output already goes to the terminal via
+    // tracing as it runs), so nothing is lost by not using it here.
+    let run_id = runner
+        .submit(&args.file, inputs, args.out_dir.as_deref())
+        .await?;
+    let status = runner.wait_for_completion(&run_id).await?;
+
+    #[allow(clippy::disallowed_macros)]
+    match status {
+        RunStatus::Finished => {
+            if let Some(outputs) = runner.outputs(&run_id, args.out_dir.as_deref()).await? {
+                println!("{}", serde_json::to_string_pretty(&outputs)?);
+            }
+        }
+        _ => anyhow::bail!("workflow ended with status {status:?}"),
+    }
+
+    if let Some(layout_arg) = args.rocrate {
+        let layout = match layout_arg {
+            RocrateLayout::Packed => local_rocrate_export::CrateLayout::Packed,
+            RocrateLayout::Files => local_rocrate_export::CrateLayout::Files,
+        };
+        let cwd = env::current_dir()?;
+        let metadata = project::read_config(&cwd)?.workflow;
+
+        let (written, validation) = local_rocrate_export::export(
+            &runner,
+            &run_id,
+            metadata,
+            &args.rocrate_dir,
+            Utc::now(),
+            layout,
+        )
+        .await?;
+
+        report_rocrate_export(&written, &validation, "this run doesn't have on disk");
+    }
 
     Ok(())
 }
@@ -286,7 +343,7 @@ async fn execute_remote_start(
 
         if rocrate {
             if status == RunStatus::Finished {
-                export_rocrate(&run_id, runner.get_client(), Path::new("rocrate")).await?;
+                export_rocrate(&run_id, runner.get_client(), Path::new("./rocrate")).await?;
             } else {
                 warn!(
                     "--rocrate requested, but the run did not finish (status {status:?}); no crate was created"
@@ -336,7 +393,7 @@ async fn execute_remote_rocrate(
     output_dir: Option<&str>,
 ) -> anyhow::Result<()> {
     let runner = reana_runner()?;
-    let out_dir = PathBuf::from(output_dir.unwrap_or("rocrate"));
+    let out_dir = PathBuf::from(output_dir.unwrap_or("./rocrate"));
     export_rocrate(workflow_name, runner.get_client(), &out_dir).await
 }
 
@@ -353,11 +410,21 @@ async fn export_rocrate(
     let (written, validation) =
         rocrate_export::export(client, workflow_name, metadata, output_dir, Utc::now()).await?;
 
+    report_rocrate_export(&written, &validation, "REANA did not have on its workspace");
+
+    Ok(())
+}
+
+/// Logs what an export produced: where the metadata landed, which referenced files the backend
+/// didn't have (`missing_source` names whose fault that is -- REANA's workspace, or this run's
+/// own disk), and any profile violations. The library builds and writes the crate regardless of
+/// whether it's conformant; surfacing that is this CLI's job, not `sciwin::provenance`'s.
+fn report_rocrate_export(written: &Written, validation: &Validation, missing_source: &str) {
     info!("RO-Crate written to {}", written.metadata.display());
 
     if !written.missing.is_empty() {
         warn!(
-            "crate references files REANA did not have on its workspace: {:?}",
+            "crate references files {missing_source}: {:?}",
             written.missing
         );
     }
@@ -371,8 +438,6 @@ async fn export_rocrate(
     for warning in validation.warnings() {
         warn!("{warning}");
     }
-
-    Ok(())
 }
 
 async fn execute_remote_download(
