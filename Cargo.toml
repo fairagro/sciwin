@@ -28,7 +28,7 @@ authors = [
 
 [workspace.dependencies]
 # core packages
-reana = { version = "0.3.1" }
+reana = { version = "0.4.0" }
 commonwl = { version = "0.10.0", features = ["engine"] }
 git2 = { version = "0.21.0", features = ["vendored-openssl"] }
 rocrate = "0.1.0"

@@ -426,6 +426,7 @@ mod tests {
             status,
             logs: logs.to_string(),
             finished_at: None,
+            started_at: None,
         }
     }
 

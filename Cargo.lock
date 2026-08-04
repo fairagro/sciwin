@@ -4371,7 +4371,7 @@ checksum = "bb1725bf0133fe4a3279e18efd6d69f952cb8356bf8b835023042e1b98d4c646"
 
 [[package]]
 name = "reana"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4417,7 +4417,7 @@ dependencies = [
 
 [[package]]
 name = "reana-auth"
-version = "0.3.1"
+version = "0.4.0"
 dependencies = [
  "async-trait",
  "miette",
@@ -4966,7 +4966,7 @@ dependencies = [
  "miette",
  "pathdiff",
  "rand 0.10.2",
- "reana 0.3.1",
+ "reana 0.4.0",
  "rocrate",
  "rstest",
  "semver 1.0.28",
