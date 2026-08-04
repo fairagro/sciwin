@@ -80,23 +80,27 @@ pub struct Written {
     pub missing: Vec<String>,
 }
 
-/// Packages a built [`RoCrate`] onto disk: the metadata, the packed workflow itself (fixing the
-/// old generator's dangling `mainEntity` -- it referenced `workflow.json` without ever writing
-/// it), and whichever `sources` the caller already has bytes for.
+/// Packages a built [`RoCrate`] onto disk: the metadata, optionally the packed workflow itself
+///
+/// `packed_workflow` is `Some((file_name, packed))` for [`crate::provenance::inputs::WorkflowLayout::Packed`]
+/// -- write the one packed JSON file -- and `None` for
+/// [`crate::provenance::inputs::WorkflowLayout::Files`], where every crate file (including the
+/// main workflow's own) is real bytes already on disk, passed in through `sources` instead.
 ///
 /// # Errors
 /// The directory is not writable, or `packed` fails to serialize.
 pub fn write_crate(
     crate_: &RoCrate,
-    packed: &PackedCWL,
-    workflow_file: &str,
     directory: &Path,
+    packed_workflow: Option<(&str, &PackedCWL)>,
     sources: &HashMap<String, PathBuf>,
 ) -> ProvenanceResult<Written> {
     let metadata = crate_.write_directory(directory)?;
 
-    let packed_json = serde_json::to_string_pretty(packed)?;
-    std::fs::write(directory.join(workflow_file), packed_json)?;
+    if let Some((file_name, packed)) = packed_workflow {
+        let packed_json = serde_json::to_string_pretty(packed)?;
+        std::fs::write(directory.join(file_name), packed_json)?;
+    }
 
     let mut copied = Vec::new();
     for (name, source) in sources {
@@ -156,9 +160,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let written = write_crate(
             &crate_,
-            &packed,
-            "workflow.json",
             dir.path(),
+            Some(("workflow.json", &packed)),
             &HashMap::new(),
         )
         .unwrap();
@@ -194,7 +197,13 @@ mod tests {
             sources.insert(name.to_string(), source_path);
         }
 
-        let written = write_crate(&crate_, &packed, "workflow.json", dir.path(), &sources).unwrap();
+        let written = write_crate(
+            &crate_,
+            dir.path(),
+            Some(("workflow.json", &packed)),
+            &sources,
+        )
+        .unwrap();
 
         assert_eq!(written.copied.len(), 4);
         assert!(written.missing.is_empty());
@@ -206,5 +215,40 @@ mod tests {
         ] {
             assert!(dir.path().join(name).exists());
         }
+    }
+
+    #[test]
+    fn test_write_crate_files_layout_writes_no_packed_json() {
+        let packed = fixture_packed();
+        let inputs = crate::provenance::inputs::CrateInputs::builder()
+            .workflow(packed)
+            .layout(crate::provenance::inputs::WorkflowLayout::Files {
+                file_names: HashMap::from([("#main".to_string(), "main.cwl".to_string())]),
+            })
+            .metadata(WorkflowConfig {
+                name: "hello_s4n".to_string(),
+                ..Default::default()
+            })
+            .run(RunRecord::default())
+            .date_published(Utc::now())
+            .build();
+        let crate_ = crate::provenance::builder::build_crate(&inputs).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let main_source = dir.path().join("src-main.cwl");
+        fs::write(&main_source, "cwlVersion: v1.2").unwrap();
+        let sources = HashMap::from([("main.cwl".to_string(), main_source)]);
+
+        let written = write_crate(&crate_, dir.path(), None, &sources).unwrap();
+
+        assert!(written.metadata.exists());
+        assert_eq!(written.copied, vec!["main.cwl".to_string()]);
+        assert!(dir.path().join("main.cwl").exists());
+        // No packed JSON written under any name.
+        assert!(!dir.path().join("workflow.json").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("main.cwl")).unwrap(),
+            "cwlVersion: v1.2"
+        );
     }
 }

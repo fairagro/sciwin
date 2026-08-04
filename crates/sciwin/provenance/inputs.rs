@@ -14,16 +14,14 @@ pub struct Engine {
 }
 
 /// Everything [`crate::provenance::builder::build_crate`] needs, gathered from wherever the
-/// caller's backend keeps it. Building the `RoCrate` itself touches neither a clock nor the
-/// filesystem -- `date_published` is injected here instead of read from `Utc::now()`, which is
-/// what makes `build_crate` deterministic and its output byte-comparable in tests.
+/// caller's backend keeps it.
 #[derive(Debug, Clone, Builder)]
 pub struct CrateInputs {
     pub workflow: PackedCWL,
-    /// Crate-relative name the packed workflow is written under, and the prefix every entity id
-    /// derived from the packed graph carries (e.g. `"workflow.json#main/population"`).
-    #[builder(default = "workflow.json".to_string(), into)]
-    pub workflow_file: String,
+    /// How `workflow` is represented as crate payload, see [`WorkflowLayout`]. Defaults to a
+    /// single `"workflow.json"`, matching REANA (which only ever hands back one packed file).
+    #[builder(default = WorkflowLayout::Packed { file_name: "workflow.json".to_string() })]
+    pub layout: WorkflowLayout,
     pub metadata: WorkflowConfig,
     pub run: RunRecord,
     #[builder(default = default_profiles())]
@@ -33,6 +31,75 @@ pub struct CrateInputs {
     pub date_published: chrono::DateTime<Utc>,
     #[builder(default)]
     pub payload: Vec<PayloadFile>,
+}
+
+/// How the packed workflow is represented as crate payload.
+///
+/// Every entity id [`crate::provenance::builder::build_crate`] derives from the packed graph
+/// (e.g. `"#main/population"`) gets turned into a crate-relative id through whichever variant is
+/// in play -- see [`WorkflowLayout::prefixed`].
+#[derive(Debug, Clone)]
+pub enum WorkflowLayout {
+    /// One JSON file holds the whole packed `$graph`. Simple, self-contained, but not directly
+    /// runnable without unpacking it again -- what REANA always gets, since it only ever hands
+    /// back one packed file.
+    Packed { file_name: String },
+    /// The original per-file CWL project, still directly re-executable with any CWL runner.
+    /// Keyed by each document's own packed-graph id (e.g. `"#main"`, `"#calculation.cwl"`) to
+    /// the crate-relative name it's written under (e.g. `"main.cwl"`, `"calculation.cwl"`).
+    /// Only available where the original files are actually on disk -- local execution, not
+    /// REANA.
+    Files { file_names: HashMap<String, String> },
+}
+
+impl WorkflowLayout {
+    /// The crate-relative file `id` (a packed-graph id) belongs to, with no fragment --
+    /// `Packed`'s one file for anything, or whichever document's own id prefixes `id` for
+    /// `Files`. Empty if `Files` doesn't have an entry covering `id` -- callers only hit this on
+    /// ids `build_crate` derived from the same graph `file_names` was built from, so it
+    /// shouldn't happen in practice.
+    #[must_use]
+    pub fn owning_file(&self, id: &str) -> &str {
+        match self {
+            WorkflowLayout::Packed { file_name } => file_name,
+            WorkflowLayout::Files { file_names } => self
+                .owner(file_names, id)
+                .map_or("", |(_, file_name)| file_name),
+        }
+    }
+
+    /// `id`, scoped to this layout: the whole packed id appended to the one file for `Packed`
+    /// (`"workflow.json#calculation.cwl/population"`), or just the part local to whichever file
+    /// actually owns it for `Files` (`"calculation.cwl#population"`) -- repeating the owning
+    /// document's own id inside its own file would be redundant once it has one.
+    #[must_use]
+    pub fn prefixed(&self, id: &str) -> String {
+        match self {
+            WorkflowLayout::Packed { file_name } => format!("{file_name}{id}"),
+            WorkflowLayout::Files { file_names } => match self.owner(file_names, id) {
+                Some((doc_id, file_name)) if id == doc_id => file_name.to_string(),
+                Some((doc_id, file_name)) => format!("{file_name}#{}", &id[doc_id.len() + 1..]),
+                None => id.to_string(),
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn is_files(&self) -> bool {
+        matches!(self, WorkflowLayout::Files { .. })
+    }
+
+    fn owner<'a>(
+        &self,
+        file_names: &'a HashMap<String, String>,
+        id: &str,
+    ) -> Option<(&'a str, &'a str)> {
+        file_names
+            .iter()
+            .filter(|(doc_id, _)| id == doc_id.as_str() || id.starts_with(&format!("{doc_id}/")))
+            .max_by_key(|(doc_id, _)| doc_id.len())
+            .map(|(doc_id, file_name)| (doc_id.as_str(), file_name.as_str()))
+    }
 }
 
 /// Process, Workflow and Provenance Run Crate, plus Workflow RO-Crate -- the profiles a REANA

@@ -15,7 +15,7 @@ use rocrate::{RoCrate, build::Entity, validate::Validation};
 use crate::provenance::{
     ProvenanceResult,
     graph::{PortKind, PortNode, StepNode, WorkflowGraph},
-    inputs::{CrateInputs, PayloadFile, RunRecord},
+    inputs::{CrateInputs, PayloadFile, RunRecord, WorkflowLayout},
 };
 
 const CWL_ID: &str = "https://w3id.org/workflowhub/workflow-ro-crate#cwl";
@@ -31,7 +31,7 @@ const ENGINE_ID: &str = "#engine";
 /// See [`crate::provenance::ProvenanceError`].
 pub fn build_crate(inputs: &CrateInputs) -> ProvenanceResult<RoCrate> {
     let graph = WorkflowGraph::from_packed(&inputs.workflow)?;
-    let wf = inputs.workflow_file.as_str();
+    let layout = &inputs.layout;
     let run = &inputs.run;
 
     let mut rocrate_builder = RoCrate::builder()
@@ -51,14 +51,14 @@ pub fn build_crate(inputs: &CrateInputs) -> ProvenanceResult<RoCrate> {
         .unwrap_or_else(|| "v1.2".to_string());
     rocrate_builder = rocrate_builder.entity(cwl_language_entity(&cwl_version));
 
-    for entity in formal_parameter_entities(wf, &graph) {
+    for entity in formal_parameter_entities(layout, &graph) {
         rocrate_builder = rocrate_builder.entity(entity);
     }
-    for entity in file_entities(wf, &graph, &inputs.payload) {
+    for entity in file_entities(layout, &graph, &inputs.payload) {
         rocrate_builder = rocrate_builder.part(entity);
     }
 
-    let connections = connection_triples(wf, &graph);
+    let connections = connection_triples(layout, &graph);
 
     let (image_ids, image_entities) = container_images(run, &graph);
     for entity in image_entities {
@@ -68,22 +68,33 @@ pub fn build_crate(inputs: &CrateInputs) -> ProvenanceResult<RoCrate> {
     rocrate_builder = rocrate_builder.entity(engine_entity(run));
 
     let tool_ids = distinct_tool_ids(&graph);
-    for entity in tool_entities(wf, &graph, &tool_ids) {
-        rocrate_builder = rocrate_builder.entity(entity);
+    for entity in tool_entities(layout, &graph, &tool_ids) {
+        // In `Files` layout each tool is its own crate file (also `@type File`), so it belongs
+        // in the root's `hasPart` like any other data entity. In `Packed` layout it's a fragment
+        // inside the one packed file, described but not itself a part of the crate.
+        rocrate_builder = if layout.is_files() {
+            rocrate_builder.part(entity)
+        } else {
+            rocrate_builder.entity(entity)
+        };
     }
 
-    // The main workflow entity's own id is the bare crate-relative filename, not the packed
-    // graph's internal "#main" fragment -- from the crate's perspective, the workflow *is* the
-    // file. Its own ports/steps still carry the full "workflow.json#main/..." form, unaffected.
-    let workflow_id = wf.to_string();
-    rocrate_builder =
-        rocrate_builder.main_workflow(main_workflow_entity(wf, &workflow_id, &graph, &connections));
+    // The main workflow entity's own id is the bare crate-relative filename it owns, not the
+    // packed graph's internal "#main" id -- from the crate's perspective, the workflow *is* the
+    // file. Its own ports/steps still carry the full, layout-scoped fragment form, unaffected.
+    let workflow_id = layout.owning_file(&graph.workflow_id).to_string();
+    rocrate_builder = rocrate_builder.main_workflow(main_workflow_entity(
+        layout,
+        &workflow_id,
+        &graph,
+        &connections,
+    ));
 
     // Per-step HowToStep, CreateAction and ControlAction. `organize_objects` collects the
     // ControlAction ids, which is what OrganizeAction below points at.
     let mut organize_objects = Vec::new();
     for step in &graph.steps {
-        let artifacts = step_entities(wf, &graph, run, &image_ids, &connections, step);
+        let artifacts = step_entities(layout, &graph, run, &image_ids, &connections, step);
         rocrate_builder = rocrate_builder.entity(artifacts.how_to_step);
         rocrate_builder = rocrate_builder.mention(artifacts.create_action);
         rocrate_builder = rocrate_builder.mention(artifacts.control_action);
@@ -91,7 +102,7 @@ pub fn build_crate(inputs: &CrateInputs) -> ProvenanceResult<RoCrate> {
     }
 
     let (workflow_create_action, workflow_create_id) =
-        workflow_run_action(wf, &workflow_id, &graph, run);
+        workflow_run_action(&workflow_id, &graph, run);
     rocrate_builder = rocrate_builder.mention(workflow_create_action);
 
     // The engine's orchestration of the whole run. Always emitted, unlike the old generator,
@@ -148,15 +159,17 @@ fn distinct_tool_ids(graph: &WorkflowGraph) -> Vec<&str> {
     ids
 }
 
-/// One `FormalParameter` per distinct port id
-fn formal_parameter_entities(wf: &str, graph: &WorkflowGraph) -> Vec<Entity> {
+/// One `FormalParameter` per distinct port id -- deduplicated, since a badly-authored tool can
+/// reuse the same id for both its input and its output (seen in the fixture data: a tool whose
+/// sole input and sole output are both named `results`).
+fn formal_parameter_entities(layout: &WorkflowLayout, graph: &WorkflowGraph) -> Vec<Entity> {
     let mut seen: HashSet<&str> = HashSet::new();
     let mut entities = Vec::new();
     for port in all_ports(graph) {
         if !seen.insert(&port.id) {
             continue;
         }
-        let mut entity = Entity::new(prefixed(wf, &port.id), "FormalParameter")
+        let mut entity = Entity::new(layout.prefixed(&port.id), "FormalParameter")
             .set("name", last_segment(&port.id));
         if let Some(ty) = port.additional_type {
             entity = entity.set("additionalType", ty.to_string());
@@ -166,15 +179,22 @@ fn formal_parameter_entities(wf: &str, graph: &WorkflowGraph) -> Vec<Entity> {
     entities
 }
 
-/// One `File` per distinct crate-relative file name, referencing every `FormalParameter` it satisfies.
-fn file_entities(wf: &str, graph: &WorkflowGraph, payload: &[PayloadFile]) -> Vec<Entity> {
+/// One `File` per distinct crate-relative file name, referencing every `FormalParameter` it
+/// satisfies. A connection's two endpoints can name different files (a port id can have an
+/// input default of `results.csv` and an output glob of `results.svg`), so this is built from
+/// every port directly, not from the deduplicated formal parameters.
+fn file_entities(
+    layout: &WorkflowLayout,
+    graph: &WorkflowGraph,
+    payload: &[PayloadFile],
+) -> Vec<Entity> {
     let mut file_parameters: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for port in all_ports(graph) {
         if let Some(file_name) = &port.file_name {
             file_parameters
                 .entry(file_name.as_str())
                 .or_default()
-                .push(prefixed(wf, &port.id));
+                .push(layout.prefixed(&port.id));
         }
     }
 
@@ -196,8 +216,12 @@ fn file_entities(wf: &str, graph: &WorkflowGraph, payload: &[PayloadFile]) -> Ve
         .collect()
 }
 
-/// Connections, derived not basename-matched, given stable ids by position:  `(connection id, prefixed source, prefixed target)`.
-fn connection_triples(wf: &str, graph: &WorkflowGraph) -> Vec<(String, String, String)> {
+/// Connections, derived (not basename-matched) and given stable ids by position:
+/// `(connection id, prefixed source, prefixed target)`.
+fn connection_triples(
+    layout: &WorkflowLayout,
+    graph: &WorkflowGraph,
+) -> Vec<(String, String, String)> {
     graph
         .connections
         .iter()
@@ -205,8 +229,8 @@ fn connection_triples(wf: &str, graph: &WorkflowGraph) -> Vec<(String, String, S
         .map(|(i, (source, target))| {
             (
                 format!("#connection/{i}"),
-                prefixed(wf, source),
-                prefixed(wf, target),
+                layout.prefixed(source),
+                layout.prefixed(target),
             )
         })
         .collect()
@@ -223,6 +247,9 @@ fn connection_entities(connections: Vec<(String, String, String)>) -> Vec<Entity
         .collect()
 }
 
+/// One `ContainerImage` per distinct image actually used across all steps, plus the map from raw
+/// image string (`"pandas/pandas:pip-all"`) to its derived entity id, which the per-step
+/// `CreateAction`s below need for `containerImage`.
 fn container_images(
     run: &RunRecord,
     graph: &WorkflowGraph,
@@ -259,7 +286,16 @@ fn engine_entity(run: &RunRecord) -> Entity {
     entity
 }
 
-fn tool_entities(wf: &str, graph: &WorkflowGraph, tool_ids: &[&str]) -> Vec<Entity> {
+/// One `SoftwareApplication` per distinct tool, with its own input/output `FormalParameter`s. In
+/// `Files` layout it's also `@type File` -- it's a real crate file there, not just a fragment
+/// inside the one packed file.
+fn tool_entities(layout: &WorkflowLayout, graph: &WorkflowGraph, tool_ids: &[&str]) -> Vec<Entity> {
+    let types: Vec<&str> = if layout.is_files() {
+        vec!["File", "SoftwareApplication"]
+    } else {
+        vec!["SoftwareApplication"]
+    };
+
     tool_ids
         .iter()
         .map(|run_id| {
@@ -268,15 +304,15 @@ fn tool_entities(wf: &str, graph: &WorkflowGraph, tool_ids: &[&str]) -> Vec<Enti
                 .tool_ports
                 .iter()
                 .filter(|p| p.kind == PortKind::Input && p.id.starts_with(&prefix))
-                .map(|p| prefixed(wf, &p.id))
+                .map(|p| layout.prefixed(&p.id))
                 .collect();
             let outputs: Vec<String> = graph
                 .tool_ports
                 .iter()
                 .filter(|p| p.kind == PortKind::Output && p.id.starts_with(&prefix))
-                .map(|p| prefixed(wf, &p.id))
+                .map(|p| layout.prefixed(&p.id))
                 .collect();
-            Entity::new(prefixed(wf, run_id), "SoftwareApplication")
+            Entity::new(layout.prefixed(run_id), &types[..])
                 .set("name", run_id.trim_start_matches('#'))
                 .references("input", inputs)
                 .references("output", outputs)
@@ -284,17 +320,20 @@ fn tool_entities(wf: &str, graph: &WorkflowGraph, tool_ids: &[&str]) -> Vec<Enti
         .collect()
 }
 
-/// The main workflow entity itself. No `hasPart` of its own: the tools it runs are fragments
-/// *inside* `workflow_id` (`"workflow.json#calculation.cwl"`), not separate crate files if generated via PackedCWL
+/// The main workflow entity itself. No `hasPart` of its own: in `Packed` layout the tools it
+/// runs are fragments *inside* the one file (`"workflow.json#calculation.cwl"`), not separate
+/// crate files; in `Files` layout they're listed in the *root's* `hasPart` instead (see
+/// `tool_entities`), same as any other data entity.
 fn main_workflow_entity(
-    wf: &str,
+    layout: &WorkflowLayout,
     workflow_id: &str,
     graph: &WorkflowGraph,
     connections: &[(String, String, String)],
 ) -> Entity {
-    let workflow_inputs: Vec<String> = graph.inputs.iter().map(|p| prefixed(wf, &p.id)).collect();
-    let workflow_outputs: Vec<String> = graph.outputs.iter().map(|p| prefixed(wf, &p.id)).collect();
-    let step_refs: Vec<String> = graph.steps.iter().map(|s| prefixed(wf, &s.id)).collect();
+    let workflow_inputs: Vec<String> = graph.inputs.iter().map(|p| layout.prefixed(&p.id)).collect();
+    let workflow_outputs: Vec<String> =
+        graph.outputs.iter().map(|p| layout.prefixed(&p.id)).collect();
+    let step_refs: Vec<String> = graph.steps.iter().map(|s| layout.prefixed(&s.id)).collect();
 
     let own_connections: Vec<String> = connections
         .iter()
@@ -311,7 +350,7 @@ fn main_workflow_entity(
             "HowTo",
         ],
     )
-    .set("name", wf)
+    .set("name", workflow_id)
     .reference("programmingLanguage", CWL_ID)
     .references("input", workflow_inputs)
     .references("output", workflow_outputs)
@@ -330,7 +369,7 @@ struct StepEntities {
 }
 
 fn step_entities(
-    wf: &str,
+    layout: &WorkflowLayout,
     graph: &WorkflowGraph,
     run: &RunRecord,
     image_ids: &HashMap<String, String>,
@@ -340,16 +379,16 @@ fn step_entities(
     let step_run = run.steps.get(&step.id);
     let step_prefix = format!("{}/", step.run);
 
-    let target_prefix = format!("{wf}{step_prefix}");
+    let target_prefix = layout.prefixed(&step_prefix);
     let step_connection_ids: Vec<String> = connections
         .iter()
         .filter(|(_, _, target)| target.starts_with(&target_prefix))
         .map(|(id, _, _)| id.clone())
         .collect();
-    let how_to_step = Entity::new(prefixed(wf, &step.id), "HowToStep")
+    let how_to_step = Entity::new(layout.prefixed(&step.id), "HowToStep")
         .set("position", step.position as u64)
         .references("connection", step_connection_ids)
-        .reference("workExample", prefixed(wf, &step.run));
+        .reference("workExample", layout.prefixed(&step.run));
 
     let step_inputs: Vec<String> = graph
         .tool_ports
@@ -366,8 +405,8 @@ fn step_entities(
 
     let create_id = format!("#run/{}", step.id.trim_start_matches('#'));
     let mut create_action = Entity::new(create_id.clone(), "CreateAction")
-        .set("name", format!("Run of {}", prefixed(wf, &step.id)))
-        .reference("instrument", prefixed(wf, &step.run))
+        .set("name", format!("Run of {}", layout.prefixed(&step.id)))
+        .reference("instrument", layout.prefixed(&step.run))
         .references("object", step_inputs)
         .references("result", step_outputs);
     if let Some(started) = step_run.and_then(|s| s.started_at) {
@@ -386,7 +425,7 @@ fn step_entities(
             "name",
             format!("orchestrate {}", step.id.trim_start_matches('#')),
         )
-        .reference("instrument", prefixed(wf, &step.id))
+        .reference("instrument", layout.prefixed(&step.id))
         .reference("object", create_id);
 
     StepEntities {
@@ -397,13 +436,10 @@ fn step_entities(
     }
 }
 
-/// The workflow-level `CreateAction`
-fn workflow_run_action(
-    wf: &str,
-    workflow_id: &str,
-    graph: &WorkflowGraph,
-    run: &RunRecord,
-) -> (Entity, String) {
+/// The workflow-level `CreateAction` -- its `instrument` is the main workflow entity itself,
+/// which is what satisfies `wfrun::workflow-run`. Returns the action alongside its own id, since
+/// `OrganizeAction.result` needs to point back at it.
+fn workflow_run_action(workflow_id: &str, graph: &WorkflowGraph, run: &RunRecord) -> (Entity, String) {
     let object: Vec<String> = graph
         .inputs
         .iter()
@@ -417,7 +453,7 @@ fn workflow_run_action(
     let id = format!("#run/{}", graph.workflow_id.trim_start_matches('#'));
 
     let mut action = Entity::new(id.clone(), "CreateAction")
-        .set("name", format!("Run of {wf}"))
+        .set("name", format!("Run of {workflow_id}"))
         .reference("instrument", workflow_id)
         .references("object", object)
         .references("result", result);
@@ -457,14 +493,12 @@ fn all_ports(graph: &WorkflowGraph) -> impl Iterator<Item = &PortNode> {
         .chain(&graph.tool_ports)
 }
 
-fn prefixed(wf: &str, id: &str) -> String {
-    format!("{wf}{id}")
-}
-
 fn last_segment(id: &str) -> &str {
     id.rsplit('/').next().unwrap_or(id)
 }
 
+/// The image that actually ran a step, preferring what the run record says was pulled over what
+/// the tool declares -- REANA's `JobLog.docker_img` over the packed `DockerRequirement`.
 fn actual_container_image(run: &RunRecord, step: &StepNode) -> Option<String> {
     run.steps
         .get(&step.id)
@@ -608,5 +642,41 @@ mod tests {
             result,
             Err(crate::provenance::ProvenanceError::NoWorkflow)
         ));
+    }
+
+    #[test]
+    fn test_build_crate_files_layout_makes_tools_real_parts() {
+        let mut inputs = fixture_inputs();
+        inputs.layout = crate::provenance::inputs::WorkflowLayout::Files {
+            file_names: HashMap::from([
+                ("#main".to_string(), "main.cwl".to_string()),
+                (
+                    "#calculation.cwl".to_string(),
+                    "calculation.cwl".to_string(),
+                ),
+                ("#plot.cwl".to_string(), "plot.cwl".to_string()),
+            ]),
+        };
+        let crate_ = build_crate(&inputs).unwrap();
+        let validation = crate_.validate();
+        assert!(
+            validation.is_conformant(),
+            "{:#?}",
+            validation.errors().collect::<Vec<_>>()
+        );
+
+        let main_entity = crate_.main_entity().unwrap();
+        assert_eq!(main_entity.id, "main.cwl");
+
+        let calculation = crate_.graph.get("calculation.cwl").unwrap();
+        assert!(calculation.has_types(&["File", "SoftwareApplication"]));
+        let population = crate_.graph.get("calculation.cwl#population").unwrap();
+        assert!(population.has_type("FormalParameter"));
+
+        // calculation.cwl and plot.cwl are now real crate files, listed in the root's hasPart
+        // alongside the main workflow and the data files.
+        let root = crate_.root().unwrap();
+        assert!(root.iris("hasPart").any(|id| id == "calculation.cwl"));
+        assert!(root.iris("hasPart").any(|id| id == "plot.cwl"));
     }
 }

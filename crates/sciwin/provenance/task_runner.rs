@@ -1,13 +1,12 @@
-//! The local-execution adapter.
+//! The local-execution adapter. [`pack_document`] and [`fold_run_record`] are pure -- offline
+//! testable against real `testdata` fixtures, no running engine needed. [`export`] is the only
+//! `async` piece, mirroring `provenance::reana_runner`'s shape.
 
-use crate::execution::{ExecutionTiming, RunId, TaskRunner, WorkflowRunner};
-use crate::project::config::WorkflowConfig;
-use crate::provenance::{
-    ProvenanceError, ProvenanceResult, Written,
-    builder::build_validated,
-    inputs::{CrateInputs, Engine, RunRecord, StepRun},
-    write_crate,
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
 };
+
 use chrono::{DateTime, Utc};
 use commonwl::{
     Identifiable,
@@ -16,16 +15,36 @@ use commonwl::{
     packed::PackedCWL,
 };
 use rocrate::validate::Validation;
-use std::{collections::HashMap, path::Path};
+
+use crate::execution::{ExecutionTiming, RunId, TaskRunner, WorkflowRunner};
+use crate::project::config::WorkflowConfig;
+use crate::provenance::{
+    ProvenanceError, ProvenanceResult, Written,
+    builder::build_validated,
+    inputs::{CrateInputs, Engine, RunRecord, StepRun, WorkflowLayout},
+    write_crate,
+};
 
 const ENGINE_NAME: &str = "commonwl";
 
-/// Resolves `entry` into a `PackedCWL` for `WorkflowGraph::from_packed`.
+/// How [`export`] represents the workflow it ran as crate payload -- see
+/// [`crate::provenance::inputs::WorkflowLayout`], which this maps onto once the real files
+/// involved are known.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrateLayout {
+    /// One `<stem>.packed.cwl` JSON file holds the whole graph.
+    Packed,
+    /// The original per-file CWL project, still directly re-executable.
+    Files,
+}
+
+/// Resolves a loaded [`CWLDocument`] into a [`PackedCWL`] for [`crate::provenance::graph::WorkflowGraph::from_packed`],
+/// plus the real filesystem path behind every document involved (the workflow itself, keyed by
+/// its own id, and each externally-referenced tool, keyed by its `run:` path) -- what
+/// [`CrateLayout::Files`] needs to write the original project back out untouched.
 ///
 /// `commonwl` has no packer for a non-packed, multi-file project (steps referencing other `.cwl`
-/// files by relative path) -- if `entry` already has a `$graph`, this is just
-/// `packed_from_str`; otherwise it loads each externally-referenced tool and assembles the
-/// graph itself, giving each document an id it doesn't already have:
+/// files by relative path) -- this loads each one and gives it an id it doesn't already have:
 ///
 /// - a tool gets its `run:` path as its id (e.g. `"../calculation/calculation.cwl"`), and that
 ///   same prefix on each of its own input/output ids (`"../calculation/calculation.cwl/population"`)
@@ -37,19 +56,18 @@ const ENGINE_NAME: &str = "commonwl";
 ///   of a connection.
 ///
 /// Steps whose `run` is an inline document need none of this -- `WorkflowGraph::from_packed`
-/// already resolves those directly, packed or not.
+/// already resolves those directly, whether `document` came from a packed source or not.
 ///
 /// # Errors
-/// `entry` or a referenced tool file does not exist or does not parse.
-pub fn pack_project(entry: &Path) -> ProvenanceResult<PackedCWL> {
-    let contents = std::fs::read_to_string(entry)?;
-    if contents.contains("$graph") {
-        return Ok(commonwl::packed_from_str(&contents)?);
-    }
-
-    let mut workflow_doc = commonwl::from_str(&contents)?;
-    let base_dir = entry.parent().unwrap_or(Path::new("."));
+/// A referenced tool file does not exist or does not parse.
+pub fn pack_document(
+    document: CWLDocument,
+    entry_path: &Path,
+) -> ProvenanceResult<(PackedCWL, HashMap<String, PathBuf>)> {
+    let mut workflow_doc = document;
+    let base_dir = entry_path.parent().unwrap_or(Path::new("."));
     let mut graph = Vec::new();
+    let mut doc_paths = HashMap::new();
 
     if let CWLDocument::Workflow(workflow) = &mut workflow_doc {
         for step in &mut workflow.steps {
@@ -63,9 +81,11 @@ pub fn pack_project(entry: &Path) -> ProvenanceResult<PackedCWL> {
             }
 
             if let StringOrDocument::String(path) = &step.run {
-                let mut tool_doc = commonwl::load_cwl_file(base_dir.join(path), true)?;
+                let tool_path = base_dir.join(path);
+                let mut tool_doc = commonwl::load_cwl_file(&tool_path, true)?;
                 tool_doc.set_id(path);
                 qualify_tool_ports(&mut tool_doc, path);
+                doc_paths.insert(path.clone(), tool_path);
                 graph.push(tool_doc);
             }
         }
@@ -74,14 +94,38 @@ pub fn pack_project(entry: &Path) -> ProvenanceResult<PackedCWL> {
     if workflow_doc.get_id().is_none() {
         workflow_doc.set_id("#main");
     }
+    let workflow_id = workflow_doc.get_id().cloned().unwrap_or_default();
+    doc_paths.insert(workflow_id, entry_path.to_path_buf());
+
     let cwl_version = workflow_doc.cwl_version().cloned();
     graph.push(workflow_doc);
 
-    Ok(PackedCWL {
-        graph,
-        cwl_version,
-        extension_fields: HashMap::new(),
-    })
+    Ok((
+        PackedCWL {
+            graph,
+            cwl_version,
+            extension_fields: HashMap::new(),
+        },
+        doc_paths,
+    ))
+}
+
+/// [`pack_document`], loading `entry` from disk first. A convenience for callers that only have
+/// a path and no live [`TaskRunner`] to pull an already-loaded document from (`export` uses
+/// [`TaskRunner::specification`] instead, to describe exactly what ran rather than whatever is
+/// at `entry` by the time this is called).
+///
+/// # Errors
+/// `entry` does not exist or does not parse; see [`pack_document`].
+pub fn pack_project(entry: &Path) -> ProvenanceResult<PackedCWL> {
+    let contents = std::fs::read_to_string(entry)?;
+    if contents.contains("$graph") {
+        return Ok(commonwl::packed_from_str(&contents)?);
+    }
+
+    let document = commonwl::from_str(&contents)?;
+    let (packed, _) = pack_document(document, entry)?;
+    Ok(packed)
 }
 
 /// Prefixes a tool's own input/output ids with `tool_id`, matching how a real packer qualifies
@@ -134,26 +178,21 @@ pub fn fold_run_record(timing: &ExecutionTiming) -> RunRecord {
     }
 }
 
-/// Builds and writes the RO-Crate for a finished local run. `entry` must be the same CWL file
-/// `run_id` was [`submit`](crate::execution::WorkflowRunner::submit)ted with -- `TaskRunner`
-/// doesn't keep it around itself.
-///
-/// The crate's payload files (the workflow's own `.cwl` files, its inputs and outputs) are not
-/// copied in yet, even though they're all sitting on the same machine this runs on -- resolving
-/// each crate-relative file name back to a filesystem path is follow-up work. Every one of them
-/// shows up in [`Written::missing`] instead of silently being absent.
+/// Builds and writes the RO-Crate for a finished local run, using exactly the document and path
+/// `run_id` was submitted with (see [`TaskRunner::specification`]) -- not a fresh reload, which
+/// could disagree with what actually ran if the file changed on disk since.
 ///
 /// # Errors
 /// The run has not produced a result yet (still running, or errored before producing one --
-/// see [`crate::execution::RunnerError`] for the latter), `entry` doesn't resolve
-/// (see [`pack_project`]), or [`write_crate`] fails.
+/// see [`crate::execution::RunnerError`] for the latter), the specification doesn't resolve
+/// (see [`pack_document`]), or [`write_crate`] fails.
 pub async fn export<T: TaskBackend>(
     runner: &TaskRunner<T>,
     run_id: &RunId,
-    entry: &Path,
     metadata: WorkflowConfig,
     directory: &Path,
     date_published: DateTime<Utc>,
+    layout: CrateLayout,
 ) -> ProvenanceResult<(Written, Validation)> {
     let Some(timing) = runner.execution_timing(run_id)? else {
         let status = runner.status(run_id).await?;
@@ -163,17 +202,42 @@ pub async fn export<T: TaskBackend>(
         });
     };
 
-    let workflow = pack_project(entry)?;
+    let spec = runner.specification(run_id)?;
+    let (packed, doc_paths) = pack_document(spec.document, &spec.path)?;
     let run = fold_run_record(&timing);
-    let workflow_file = entry
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("workflow.json")
-        .to_string();
+
+    let (crate_layout, packed_workflow, sources) = match layout {
+        CrateLayout::Packed => {
+            let stem = spec
+                .path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("workflow");
+            let file_name = format!("{stem}.packed.cwl");
+            (
+                WorkflowLayout::Packed {
+                    file_name: file_name.clone(),
+                },
+                Some(file_name),
+                HashMap::new(),
+            )
+        }
+        CrateLayout::Files => {
+            let file_names: HashMap<String, String> = doc_paths
+                .iter()
+                .map(|(doc_id, path)| (doc_id.clone(), file_name_of(path)))
+                .collect();
+            let sources: HashMap<String, PathBuf> = doc_paths
+                .into_values()
+                .map(|path| (file_name_of(&path), path))
+                .collect();
+            (WorkflowLayout::Files { file_names }, None, sources)
+        }
+    };
 
     let inputs = CrateInputs::builder()
-        .workflow(workflow)
-        .workflow_file(workflow_file)
+        .workflow(packed)
+        .layout(crate_layout)
         .metadata(metadata)
         .run(run)
         .date_published(date_published)
@@ -182,24 +246,31 @@ pub async fn export<T: TaskBackend>(
     let (crate_, validation) = build_validated(&inputs)?;
     let written = write_crate(
         &crate_,
-        &inputs.workflow,
-        &inputs.workflow_file,
         directory,
-        &HashMap::new(),
+        packed_workflow
+            .as_deref()
+            .map(|file_name| (file_name, &inputs.workflow)),
+        &sources,
     )?;
 
     Ok((written, validation))
 }
 
+fn file_name_of(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonwl::engine::StepTiming;
     use crate::provenance::graph::WorkflowGraph;
     use chrono::NaiveDate;
+    use commonwl::engine::StepTiming;
 
-    fn hello_world_main() -> std::path::PathBuf {
-        std::path::PathBuf::from(concat!(
+    fn hello_world_main() -> PathBuf {
+        PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../testdata/hello_world/workflows/main/main.cwl"
         ))
@@ -252,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_pack_project_already_packed() {
-        let path = std::path::PathBuf::from(concat!(
+        let path = PathBuf::from(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../testdata/rocrate/workflow.json"
         ));
@@ -266,6 +337,35 @@ mod tests {
 
         let packed = pack_project(&file).unwrap();
         assert_eq!(packed.graph.len(), 3);
+    }
+
+    #[test]
+    fn test_pack_document_reports_real_file_paths() {
+        let entry = hello_world_main();
+        let contents = std::fs::read_to_string(&entry).unwrap();
+        let document = commonwl::from_str(&contents).unwrap();
+
+        let (packed, doc_paths) = pack_document(document, &entry).unwrap();
+        assert_eq!(packed.graph.len(), 3);
+
+        assert_eq!(doc_paths.get("#main"), Some(&entry));
+        let calculation_path = doc_paths.get("../calculation/calculation.cwl").unwrap();
+        assert!(calculation_path.ends_with("calculation/calculation.cwl"));
+        assert!(calculation_path.exists());
+        let plot_path = doc_paths.get("../plot/plot.cwl").unwrap();
+        assert!(plot_path.ends_with("plot/plot.cwl"));
+        assert!(plot_path.exists());
+
+        // What `export`'s `CrateLayout::Files` branch derives from this map.
+        let file_names: HashMap<String, String> = doc_paths
+            .iter()
+            .map(|(doc_id, path)| (doc_id.clone(), file_name_of(path)))
+            .collect();
+        assert_eq!(file_names.get("#main").unwrap(), "main.cwl");
+        assert_eq!(
+            file_names.get("../calculation/calculation.cwl").unwrap(),
+            "calculation.cwl"
+        );
     }
 
     #[test]

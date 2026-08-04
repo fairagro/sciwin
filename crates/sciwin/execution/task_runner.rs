@@ -1,6 +1,6 @@
 use crate::execution::{
-    ExecutionTiming, JobHandle, LogStream, RunId, RunStatus, RunnerError, RunnerResult,
-    WorkflowRunner,
+    ExecutionTiming, JobHandle, LogStream, RunId, RunSpecification, RunStatus, RunnerError,
+    RunnerResult, WorkflowRunner,
 };
 use commonwl::{
     engine::{
@@ -43,6 +43,17 @@ impl<T: TaskBackend> TaskRunner<T> {
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
         Ok(job.timing.lock().unwrap().clone())
     }
+
+    /// The document and path `id` was [`submit`](WorkflowRunner::submit)ted with -- available
+    /// from submission onward, not just after the run finishes.
+    ///
+    /// # Errors
+    /// `id` is not a run this `TaskRunner` knows about.
+    pub fn specification(&self, id: &RunId) -> RunnerResult<RunSpecification> {
+        let jobs = self.jobs.lock().unwrap();
+        let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
+        Ok(job.specification.clone())
+    }
 }
 
 #[async_trait::async_trait]
@@ -58,6 +69,10 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         let (status_tx, _) = watch::channel(RunStatus::Queued);
 
         let request = create_execution_request_with_inputs(cwlfile, inputs, out_dir, None)?;
+        let specification = RunSpecification {
+            document: request.specification.clone(),
+            path: dunce::canonicalize(cwlfile)?,
+        };
 
         let backend = self.backend.clone();
         let run_span = tracing::info_span!("workflow_run", run_id = %run_id);
@@ -105,6 +120,7 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
                 task,
                 outputs: outputs_slot,
                 timing: timing_slot,
+                specification,
             },
         );
 

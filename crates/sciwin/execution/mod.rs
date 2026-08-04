@@ -11,6 +11,7 @@
 //! yields what is new.
 
 use commonwl::{
+    documents::CWLDocument,
     engine::{InputObject, StepTiming},
     inputs::DefaultValue,
 };
@@ -21,7 +22,7 @@ use reana::{api::response::WorkflowStatus, logs::ReanaLogMessage};
 use std::io;
 use std::{
     collections::HashMap,
-    path::Path,
+    path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll},
@@ -129,6 +130,13 @@ pub struct ExecutionTiming {
     pub step_timings: Vec<StepTiming>,
 }
 
+/// The document `submit` was actually given, and the path it came from
+#[derive(Debug, Clone)]
+pub struct RunSpecification {
+    pub document: CWLDocument,
+    pub path: PathBuf,
+}
+
 #[derive(Debug)]
 struct JobHandle {
     cancel: CancellationToken,
@@ -137,6 +145,7 @@ struct JobHandle {
     task: JoinHandle<()>,
     outputs: Arc<Mutex<Option<HashMap<String, DefaultValue>>>>,
     timing: Arc<Mutex<Option<ExecutionTiming>>>,
+    specification: RunSpecification,
 }
 pub struct LogStream(Pin<Box<dyn Stream<Item = RunnerResult<LogLine>> + Send>>);
 impl LogStream {

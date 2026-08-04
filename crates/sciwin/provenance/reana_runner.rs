@@ -6,7 +6,7 @@ use crate::project::config::WorkflowConfig;
 use crate::provenance::{
     ProvenanceError, ProvenanceResult, Written,
     builder::build_validated,
-    inputs::{CrateInputs, Engine, PayloadFile, RunRecord, StepRun},
+    inputs::{CrateInputs, Engine, PayloadFile, RunRecord, StepRun, WorkflowLayout},
     write_crate,
 };
 use chrono::{DateTime, Utc};
@@ -124,11 +124,17 @@ pub async fn export(
     let inputs = fetch(client.clone(), workflow_id, metadata, date_published).await?;
     let (crate_, validation) = build_validated(&inputs)?;
 
+    // `fetch` only ever builds a `Packed` layout -- REANA hands back one packed specification,
+    // never the original file tree.
+    let WorkflowLayout::Packed { file_name } = &inputs.layout else {
+        unreachable!("provenance::reana_runner::fetch always builds a Packed layout")
+    };
+
     let download_dir = tempfile::tempdir()?;
     let mut sources = HashMap::new();
     for part in crate_.local_parts() {
         // Written directly from `inputs.workflow` by `write_crate`, not downloaded.
-        if part == inputs.workflow_file {
+        if part == file_name {
             continue;
         }
         match reana::client::download_file(client.clone(), workflow_id, part, download_dir.path())
@@ -143,9 +149,8 @@ pub async fn export(
 
     let written = write_crate(
         &crate_,
-        &inputs.workflow,
-        &inputs.workflow_file,
         directory,
+        Some((file_name.as_str(), &inputs.workflow)),
         &sources,
     )?;
 
