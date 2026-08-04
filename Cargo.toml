@@ -1,12 +1,5 @@
 [workspace]
 members = [
-    #"packages/cli",
-    "packages/core",
-    "packages/reana",
-    "packages/repository",
-    "packages/util",
-    "packages/test_utils",
-    "packages/remote_execution",
     #"packages/gui", 
     "crates/sciwin",
     "crates/cli",
