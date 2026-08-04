@@ -110,7 +110,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -121,7 +121,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1224,7 +1224,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1240,10 +1240,21 @@ dependencies = [
 [[package]]
 name = "commonwl"
 version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32b32845eda5cc1e706bcf937746039ab7a9369fc73885b18c3cd96d8e616c75"
 dependencies = [
- "cwl_core",
- "cwl_engine",
- "cwl_engine_storage",
+ "cwl_core 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cwl_engine 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cwl_engine_storage 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "commonwl"
+version = "0.11.0"
+dependencies = [
+ "cwl_core 0.11.0",
+ "cwl_engine 0.11.0",
+ "cwl_engine_storage 0.11.0",
 ]
 
 [[package]]
@@ -1617,12 +1628,35 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
  "bon",
- "cwl_salad",
+ "cwl_salad 0.11.0",
+ "dunce",
+ "miette",
+ "oneormany",
+ "regex",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha1 0.11.0",
+ "thiserror 2.0.19",
+ "url",
+ "validator",
+]
+
+[[package]]
+name = "cwl_core"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f98fea72fa1866d25b95238e52f507bab212363150cd338dd0b203786c2f9aa5"
+dependencies = [
+ "anyhow",
+ "base16ct 1.0.0",
+ "bon",
+ "cwl_salad 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dunce",
  "miette",
  "oneormany",
@@ -1638,7 +1672,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1648,8 +1682,49 @@ dependencies = [
  "bon",
  "chrono",
  "crankshaft",
- "cwl_core",
- "cwl_engine_storage",
+ "cwl_core 0.11.0",
+ "cwl_engine_storage 0.11.0",
+ "dunce",
+ "futures-util",
+ "horned-owl",
+ "indexmap 2.14.0",
+ "nix 0.31.3",
+ "nonempty",
+ "pathdiff",
+ "rdf",
+ "same-file",
+ "semver 1.0.28",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+ "sha1 0.11.0",
+ "sysinfo",
+ "tar",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "urlencoding",
+ "uuid",
+]
+
+[[package]]
+name = "cwl_engine"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db83ff4142ff2b79ca274868842f5f43ac284ba58d2e47df3a2468bce8e9a3bc"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "base16ct 1.0.0",
+ "boa_engine",
+ "bollard",
+ "bon",
+ "chrono",
+ "crankshaft",
+ "cwl_core 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cwl_engine_storage 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dunce",
  "futures-util",
  "horned-owl",
@@ -1677,7 +1752,29 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.10.0"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-s3",
+ "dircpy",
+ "dotenvy",
+ "dunce",
+ "glob",
+ "reqwest",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
+]
+
+[[package]]
+name = "cwl_engine_storage"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca67908bddf88e275ee8fcede76327aba9a6cdb5d5411a2d9bf0a95d92baa348"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1697,9 +1794,21 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
- "cwl_salad_derive",
+ "cwl_salad_derive 0.11.0",
+ "serde",
+ "serde-saphyr",
+ "serde_json",
+]
+
+[[package]]
+name = "cwl_salad"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "601f641ec01496515bcfcd2447daa8fce707f962c3653e50440e873d7d58d572"
+dependencies = [
+ "cwl_salad_derive 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde-saphyr",
  "serde_json",
@@ -1707,7 +1816,18 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.10.0"
+version = "0.11.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
+name = "cwl_salad_derive"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f65eed449caacb11af5682dbbaae656a644ec909b25a775c5ab1a653aa7c32bb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1858,7 +1978,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -2046,7 +2166,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3101,7 +3221,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3521,7 +3641,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4256,7 +4376,7 @@ dependencies = [
  "once_cell",
  "socket2 0.6.5",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4376,7 +4496,7 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "chrono",
- "commonwl",
+ "commonwl 0.11.0",
  "dunce",
  "glob",
  "miette",
@@ -4398,7 +4518,7 @@ version = "1.2.0"
 dependencies = [
  "anyhow",
  "chrono",
- "commonwl",
+ "commonwl 0.10.0",
  "fancy-regex 0.18.0",
  "futures",
  "httpmock",
@@ -4543,7 +4663,7 @@ version = "1.2.0"
 dependencies = [
  "anyhow",
  "colored",
- "commonwl",
+ "commonwl 0.10.0",
  "dialoguer",
  "keyring",
  "reana 1.2.0",
@@ -4727,7 +4847,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4798,7 +4918,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -4883,7 +5003,7 @@ name = "s4n_core"
 version = "1.2.0"
 dependencies = [
  "anyhow",
- "commonwl",
+ "commonwl 0.10.0",
  "dunce",
  "pathdiff",
  "rand 0.10.2",
@@ -4957,7 +5077,7 @@ dependencies = [
  "async-trait",
  "bon",
  "chrono",
- "commonwl",
+ "commonwl 0.10.0",
  "configparser",
  "dotenvy",
  "dunce",
@@ -5467,7 +5587,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5741,7 +5861,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5762,7 +5882,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -6605,7 +6725,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
