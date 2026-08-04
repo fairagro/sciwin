@@ -1200,6 +1200,8 @@ dependencies = [
 [[package]]
 name = "commonwl"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb6ff42183921828c40c94144bff33fddee2e98e6b160d6a010c444ec1052e07"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -1578,6 +1580,8 @@ dependencies = [
 [[package]]
 name = "cwl_core"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f269cd4e16dcb87ef7740043f982f92489d05bc27dd27e299172d8ddad8c0b9"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -1599,6 +1603,8 @@ dependencies = [
 [[package]]
 name = "cwl_engine"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f2bd39e22fee45b5eead39c640cd4d36b2afa056d7ca2254a46af4f45f91f9f"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1640,6 +1646,8 @@ dependencies = [
 [[package]]
 name = "cwl_engine_storage"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61eb082b4400d53620fdfdf8e1889cbc366c5f447412b0ee849601bd763d6bbc"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1660,6 +1668,8 @@ dependencies = [
 [[package]]
 name = "cwl_salad"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4686c74a85339c6ae88a2f525347c4a7e0a0e1588a392ed7e00d32a47ea6185a"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -1670,6 +1680,8 @@ dependencies = [
 [[package]]
 name = "cwl_salad_derive"
 version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "534d3ba2953d759815f3bbbae0bf5e7855507678f8c392bc761f82c1c2673140"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4187,6 +4199,8 @@ checksum = "bb1725bf0133fe4a3279e18efd6d69f952cb8356bf8b835023042e1b98d4c646"
 [[package]]
 name = "reana"
 version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "382945892f6e2de9d032511d4e17f95fec992c5ba95507c7a01e0407730a6e7e"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4209,6 +4223,8 @@ dependencies = [
 [[package]]
 name = "reana-auth"
 version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e4749db111e3f949b57243803ed4bd429472a5e90fb89d49be9adbe4ca9d962"
 dependencies = [
  "async-trait",
  "miette",
@@ -4399,6 +4415,8 @@ dependencies = [
 [[package]]
 name = "rocrate"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e9b6c3adee4aeb26cb6ef7e51c5ec6e76230944ea40ce76ebd94c2f45388bfe"
 dependencies = [
  "bon",
  "indexmap 2.14.0",
