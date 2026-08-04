@@ -57,6 +57,10 @@ pub enum ProjectError {
     #[error(transparent)]
     #[diagnostic(code = "toml::ser::Error")]
     Toml(#[from] toml::ser::Error),
+
+    #[error(transparent)]
+    #[diagnostic(code = "toml::de::Error")]
+    TomlDe(#[from] toml::de::Error),
 }
 
 /// Initializes a new project in the specified folder. If no folder is provided, it initializes in the current directory.
@@ -90,6 +94,8 @@ pub fn initialize_project(folder: impl AsRef<Path>) -> ProjectResult<()> {
     Ok(())
 }
 
+const WORKFLOW_TOML: &str = "workflow.toml";
+
 fn write_config(dir: &Path) -> ProjectResult<()> {
     let dir = verify_relative_to_cwd(dir)?;
 
@@ -100,9 +106,18 @@ fn write_config(dir: &Path) -> ProjectResult<()> {
         .unwrap_or_default()
         .to_string_lossy()
         .into_owned();
-    fs::write(dir.join("workflow.toml"), toml::to_string_pretty(&cfg)?)?;
+    fs::write(dir.join(WORKFLOW_TOML), toml::to_string_pretty(&cfg)?)?;
 
     Ok(())
+}
+
+/// Reads `workflow.toml` out of `dir`.
+///
+/// # Errors
+/// Path is not readable, or the file is not valid TOML for [`Config`]
+pub fn read_config(dir: &Path) -> ProjectResult<Config> {
+    let contents = fs::read_to_string(dir.join(WORKFLOW_TOML))?;
+    Ok(toml::from_str(&contents)?)
 }
 
 fn is_git_repo(path: &Path) -> bool {
@@ -377,6 +392,34 @@ mod tests {
             let full_path = PathBuf::from(temp_dir.path()).join(dir);
             assert!(full_path.exists(), "Directory {dir} does not exist");
         }
+    }
+
+    #[test]
+    #[serial]
+    fn test_read_config_roundtrip() {
+        let temp_dir = tempdir().unwrap();
+
+        write_config(temp_dir.path()).unwrap();
+        let cfg = read_config(temp_dir.path()).unwrap();
+
+        assert_eq!(
+            cfg.workflow.name,
+            temp_dir
+                .path()
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn test_read_config_missing() {
+        let temp_dir = tempdir().unwrap();
+
+        let result = read_config(temp_dir.path());
+        assert!(result.is_err(), "Expected missing workflow.toml to fail");
     }
 
     #[test]
