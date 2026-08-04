@@ -397,11 +397,16 @@ mod tests {
     #[test]
     #[serial]
     fn test_read_config_roundtrip() {
+        let cwd = env::current_dir().unwrap();
         let temp_dir = tempdir().unwrap();
+        env::set_current_dir(temp_dir.path()).unwrap();
 
         write_config(temp_dir.path()).unwrap();
-        let cfg = read_config(temp_dir.path()).unwrap();
+        let cfg = read_config(temp_dir.path());
 
+        env::set_current_dir(cwd).unwrap();
+
+        let cfg = cfg.unwrap();
         assert_eq!(
             cfg.workflow.name,
             temp_dir
