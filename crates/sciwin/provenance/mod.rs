@@ -1,11 +1,10 @@
+use commonwl::packed::PackedCWL;
+use miette::Diagnostic;
+use rocrate::RoCrate;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-
-use commonwl::packed::PackedCWL;
-use miette::Diagnostic;
-use rocrate::RoCrate;
 use thiserror::Error;
 
 pub mod builder;
@@ -151,8 +150,14 @@ mod tests {
         let crate_ = fixture_crate(&packed);
 
         let dir = tempfile::tempdir().unwrap();
-        let written =
-            write_crate(&crate_, &packed, "workflow.json", dir.path(), &HashMap::new()).unwrap();
+        let written = write_crate(
+            &crate_,
+            &packed,
+            "workflow.json",
+            dir.path(),
+            &HashMap::new(),
+        )
+        .unwrap();
 
         assert!(written.metadata.exists());
         assert!(dir.path().join("workflow.json").exists());
