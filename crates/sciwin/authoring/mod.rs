@@ -91,6 +91,10 @@ pub enum AuthoringError {
     #[diagnostic(code = "commonwl::Error")]
     CWL(#[from] commonwl::Error),
 
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    CWLEngine(#[from] commonwl::engine::RunnerError),
+
     #[error(transparent)]
     #[diagnostic(code = "io::Error")]
     IO(#[from] std::io::Error),

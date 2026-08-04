@@ -46,6 +46,10 @@ pub enum RunnerError {
     #[error(transparent)]
     REANA(#[from] reana::error::ClientError),
 
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    Engine(#[from] commonwl::engine::RunnerError),
+
     #[diagnostic(code = "sciwin::error::RunnerError::JobNotFound")]
     #[error("Could not find requested job")]
     JobNotFound,
@@ -77,7 +81,6 @@ pub enum RunnerError {
     #[error("docker {command} failed: {stderr}")]
     DockerCommandFailed { command: String, stderr: String },
 
-    //add Runner Error in commonwl: https://github.com/fairagro/commonwl/issues/15
     #[diagnostic(code = "anyhow::Error")]
     #[error(transparent)]
     Unknown(#[from] anyhow::Error),
@@ -137,6 +140,26 @@ pub struct RunSpecification {
     pub path: PathBuf,
 }
 
+/// Why a run ended in [`RunStatus::Failed`] -- `RunStatus` alone is just an enum tag, this is
+/// what a caller actually wants to show a user.
+#[derive(Debug, Clone, Default)]
+pub struct FailureDetail {
+    pub exit_code: Option<i32>,
+    pub message: String,
+}
+
+/// Keeps an error message from swamping a terminal (or a caller's error type) with a whole
+/// script's output -- callers only ever want the last few lines, which is where the actual
+/// failure reason usually is.
+pub(crate) fn tail_lines(s: &str, max_lines: usize) -> String {
+    let lines: Vec<&str> = s.lines().collect();
+    if lines.len() <= max_lines {
+        s.trim().to_string()
+    } else {
+        lines[lines.len() - max_lines..].join("\n")
+    }
+}
+
 #[derive(Debug)]
 struct JobHandle {
     cancel: CancellationToken,
@@ -145,6 +168,7 @@ struct JobHandle {
     task: JoinHandle<()>,
     outputs: Arc<Mutex<Option<HashMap<String, DefaultValue>>>>,
     timing: Arc<Mutex<Option<ExecutionTiming>>>,
+    failure: Arc<Mutex<Option<FailureDetail>>>,
     specification: RunSpecification,
 }
 pub struct LogStream(Pin<Box<dyn Stream<Item = RunnerResult<LogLine>> + Send>>);
@@ -230,6 +254,14 @@ pub trait WorkflowRunner {
         out_dir: Option<&Path>,
     ) -> RunnerResult<Option<HashMap<String, DefaultValue>>>;
     async fn wait_for_completion(&self, id: &RunId) -> RunnerResult<RunStatus>;
+
+    /// Extra detail about why `id` ended in a terminal-but-not-[`RunStatus::Finished`] state --
+    /// e.g. a failing step's stderr tail, or which REANA job(s) look responsible. `Ok(None)` by
+    /// default; a backend that has more to say than the bare `RunStatus` overrides this.
+    async fn failure_detail(&self, _id: &RunId) -> RunnerResult<Option<String>> {
+        Ok(None)
+    }
+
     async fn run_workflow(
         &self,
         cwlfile: &Path,
@@ -270,7 +302,10 @@ pub trait WorkflowRunner {
             );
             Ok(())
         } else {
-            miette::bail!("workflow ended with status {status:?}")
+            match self.failure_detail(&run_id).await.ok().flatten() {
+                Some(detail) => miette::bail!("workflow ended with status {status:?}: {detail}"),
+                None => miette::bail!("workflow ended with status {status:?}"),
+            }
         }
     }
 }

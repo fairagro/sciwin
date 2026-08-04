@@ -257,7 +257,10 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
                 println!("{}", serde_json::to_string_pretty(&outputs)?);
             }
         }
-        _ => anyhow::bail!("workflow ended with status {status:?}"),
+        _ => match runner.failure_detail(&run_id).await? {
+            Some(detail) => anyhow::bail!("workflow ended with status {status:?}: {detail}"),
+            None => anyhow::bail!("workflow ended with status {status:?}"),
+        },
     }
 
     if let Some(layout_arg) = args.rocrate {

@@ -1,5 +1,5 @@
 use crate::execution::{
-    LogCursor, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner,
+    LogCursor, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner, tail_lines,
 };
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::future::try_join_all;
@@ -245,6 +245,20 @@ impl WorkflowRunner for ReanaRunner {
     async fn wait_for_completion(&self, id: &RunId) -> RunnerResult<RunStatus> {
         self.wait_for_completion_with_interval(id, Duration::from_secs(15))
             .await
+    }
+
+    async fn failure_detail(&self, id: &RunId) -> RunnerResult<Option<String>> {
+        let failures = self.find_failures(id).await?;
+        if failures.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(
+            failures
+                .iter()
+                .map(|f| format!("{}: {}", f.step, tail_lines(&f.logs, 20)))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ))
     }
 }
 

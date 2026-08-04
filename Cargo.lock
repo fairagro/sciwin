@@ -1199,7 +1199,7 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -1577,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -1598,7 +1598,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1614,6 +1614,7 @@ dependencies = [
  "futures-util",
  "horned-owl",
  "indexmap 2.14.0",
+ "miette",
  "nix 0.31.3",
  "nonempty",
  "pathdiff",
@@ -1627,6 +1628,7 @@ dependencies = [
  "sysinfo",
  "tar",
  "tempfile",
+ "thiserror 2.0.19",
  "tokio",
  "tokio-util",
  "tracing",
@@ -1637,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1657,7 +1659,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -1667,7 +1669,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1957,9 +1959,9 @@ dependencies = [
 
 [[package]]
 name = "encoding_rs_io"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cc3c5651fb62ab8aa3103998dade57efdd028544bd300516baa31840c252a83"
+checksum = "fba3fe847045ecff794b9c138293a80db914678c453ad63fbf0c6a9eb6e00b22"
 dependencies = [
  "encoding_rs",
 ]
@@ -2358,9 +2360,9 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "globset"
-version = "0.4.19"
+version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e47d37d2ae4464254884b60ab7071be2b876a9c35b696bd018ddcc76847309cd"
+checksum = "07c34a9410465b45bd9787443bc7370f37735bad04b0f0cd57ff1a3186c98988"
 dependencies = [
  "aho-corasick",
  "bstr",
@@ -2898,9 +2900,9 @@ dependencies = [
 
 [[package]]
 name = "ignore"
-version = "0.4.32"
+version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b17771570a2b94107741a7b033f19132c2eee21d59d21b24d2ced26500bd66e"
+checksum = "00b69833ed729dc5aa7d19541d96d6cf8e9137194207a04916d658e43168402f"
 dependencies = [
  "crossbeam-deque",
  "globset",
@@ -4184,7 +4186,7 @@ checksum = "bb1725bf0133fe4a3279e18efd6d69f952cb8356bf8b835023042e1b98d4c646"
 
 [[package]]
 name = "reana"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4206,7 +4208,7 @@ dependencies = [
 
 [[package]]
 name = "reana-auth"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "miette",
@@ -4288,9 +4290,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.16"
+version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fcfdb36bda0c880c5931cdc7a2bcdc8ba4556847b9d912bca70bc94708711ad"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -5084,9 +5086,9 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "similar"
-version = "3.1.1"
+version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6505efef05804732ed8a3f2d4f279429eb485bd69d5b0cc6b19cc02005cda16"
+checksum = "85ee016af5d736b69fc89e19254540fa4b5f5492853fb5503920f084011c78b6"
 dependencies = [
  "bstr",
 ]

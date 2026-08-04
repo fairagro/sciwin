@@ -1,6 +1,6 @@
 use crate::execution::{
-    ExecutionTiming, JobHandle, LogStream, RunId, RunSpecification, RunStatus, RunnerError,
-    RunnerResult, WorkflowRunner,
+    ExecutionTiming, FailureDetail, JobHandle, LogStream, RunId, RunSpecification, RunStatus,
+    RunnerError, RunnerResult, WorkflowRunner, tail_lines,
 };
 use commonwl::{
     engine::{
@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
-use tracing::Instrument;
+use tracing::{Instrument, error};
 
 #[derive(Debug)]
 pub struct TaskRunner<T: TaskBackend> {
@@ -42,6 +42,17 @@ impl<T: TaskBackend> TaskRunner<T> {
         let jobs = self.jobs.lock().unwrap();
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
         Ok(job.timing.lock().unwrap().clone())
+    }
+
+    /// Why `id`'s run ended in [`RunStatus::Failed`] -- `None` if it's still going, ended some
+    /// other way, or errored before there was anything more specific to say than that.
+    ///
+    /// # Errors
+    /// `id` is not a run this `TaskRunner` knows about.
+    pub fn failure(&self, id: &RunId) -> RunnerResult<Option<FailureDetail>> {
+        let jobs = self.jobs.lock().unwrap();
+        let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
+        Ok(job.failure.lock().unwrap().clone())
     }
 
     /// The document and path `id` was [`submit`](WorkflowRunner::submit)ted with -- available
@@ -83,12 +94,15 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         let outputs_for_task = outputs_slot.clone();
         let timing_slot = Arc::new(Mutex::new(None));
         let timing_for_task = timing_slot.clone();
+        let failure_slot = Arc::new(Mutex::new(None));
+        let failure_for_task = failure_slot.clone();
 
         let task = tokio::spawn(
             async move {
                 let _ = status_task.send(RunStatus::Running);
                 let result = execute(backend, &request, cancel_clone.clone()).await;
 
+                let mut failure_detail: Option<FailureDetail> = None;
                 let final_status = match &result {
                     Ok(r) => {
                         *timing_for_task.lock().unwrap() = Some(ExecutionTiming {
@@ -97,16 +111,39 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
                             step_timings: r.step_timings.clone().unwrap_or_default(),
                         });
                         let code = evaluate_exitcodes(&r.exit_status, &request.specification);
-                        if matches!(code, EngineStatus::Success(_)) {
+                        if let EngineStatus::Success(_) = code {
                             *outputs_for_task.lock().unwrap() = Some(r.outputs.clone());
                             RunStatus::Finished
                         } else {
+                            let exit_code = match code {
+                                EngineStatus::Failure(c) | EngineStatus::Undefined(c) => Some(c),
+                                EngineStatus::Success(_) => unreachable!(),
+                            };
+                            let stderr = tail_lines(&r.stderr, 20);
+                            failure_detail = Some(FailureDetail {
+                                exit_code,
+                                message: if stderr.is_empty() {
+                                    "command produced no stderr output".to_string()
+                                } else {
+                                    stderr
+                                },
+                            });
                             RunStatus::Failed
                         }
                     }
                     Err(_) if cancel_clone.is_cancelled() => RunStatus::Cancelled,
-                    Err(_) => RunStatus::Failed,
+                    Err(e) => {
+                        failure_detail = Some(FailureDetail {
+                            exit_code: None,
+                            message: tail_lines(&format!("{e:#}"), 20),
+                        });
+                        RunStatus::Failed
+                    }
                 };
+                if let Some(detail) = &failure_detail {
+                    error!("run failed: {}", detail.message);
+                }
+                *failure_for_task.lock().unwrap() = failure_detail;
                 let _ = status_task.send(final_status);
             }
             .instrument(run_span),
@@ -120,6 +157,7 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
                 task,
                 outputs: outputs_slot,
                 timing: timing_slot,
+                failure: failure_slot,
                 specification,
             },
         );
@@ -172,6 +210,13 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         let jobs = self.jobs.lock().unwrap();
         let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
         Ok(job.outputs.lock().unwrap().clone())
+    }
+
+    async fn failure_detail(&self, id: &RunId) -> RunnerResult<Option<String>> {
+        Ok(self.failure(id)?.map(|f| match f.exit_code {
+            Some(code) => format!("exit code {code}: {}", f.message),
+            None => f.message,
+        }))
     }
 
     async fn wait_for_completion(&self, id: &RunId) -> RunnerResult<RunStatus> {
