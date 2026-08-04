@@ -6,9 +6,9 @@ pub mod reana_runner;
 pub mod task_runner;
 
 /// Result alias for this module. See [`crate::Result`] for code spanning several modules.
-pub type Provenance<T> = Result<T, ProvenanceError>;
+pub type ProvenanceResult<T> = Result<T, ProvenanceError>;
 
-/// Anything project initialization can fail with.
+/// Anything RO-Crate provenance recording/export can fail with.
 #[derive(Error, Diagnostic, Debug)]
 pub enum ProvenanceError {
     #[error("the workflow specification has no Workflow in its $graph")]

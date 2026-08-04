@@ -59,7 +59,7 @@ pub mod reana {
 }
 pub mod rocrate {
     //! Re-export of the `rocrate` crate
-    pub use reana::*; //add a prelude to rocrate lib
+    pub use rocrate::*; //add a prelude to rocrate lib
 }
 
 pub mod authoring;
