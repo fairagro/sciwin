@@ -57,12 +57,16 @@ pub mod reana {
     //! [`crate::execution::ReanaRunner`].
     pub use reana::*; //add a prelude to reana lib
 }
+pub mod rocrate {
+    //! Re-export of the `rocrate` crate
+    pub use reana::*; //add a prelude to rocrate lib
+}
 
 pub mod authoring;
 pub mod execution;
+pub mod project;
 pub mod repository;
 pub mod visualize;
-pub mod project;
 
 mod error;
 pub use error::{Error, Result};
