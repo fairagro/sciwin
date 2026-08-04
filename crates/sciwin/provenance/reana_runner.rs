@@ -218,4 +218,63 @@ mod tests {
         assert_eq!(run.engine.version, None);
         assert!(run.steps.is_empty());
     }
+
+    /// This test needs a valid REANA instance running and a token defined by .env file. 
+    /// Ignored in CI, run manually.
+    #[tokio::test]
+    #[ignore]
+    async fn test_export_reana() {
+        use crate::execution::WorkflowRunner;
+
+        dotenvy::dotenv().unwrap();
+
+        let token = Arc::new(reana::auth::ReanaAccessToken::new(
+            std::env::var("REANA_TOKEN").unwrap(),
+        ));
+        let server_url = url::Url::parse(&std::env::var("REANA_URL").unwrap()).unwrap();
+        let client = ReanaClient::new(server_url.join("api").unwrap(), token);
+        let runner = crate::execution::ReanaRunner::new(client);
+
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let specification_path = root.join("../../testdata/hello_world/workflows/main/main.cwl");
+        let base_path = specification_path.parent().unwrap();
+        let inputs_path = root.join("../../testdata/hello_world/inputs.yml");
+        let inputs =
+            commonwl::engine::load_input_file_from_file(inputs_path, base_path).unwrap();
+
+        let run_id = runner
+            .submit(&specification_path, inputs, None)
+            .await
+            .unwrap();
+        let status = runner.wait_for_completion(&run_id).await.unwrap();
+        assert_eq!(status, crate::execution::RunStatus::Finished);
+
+        let metadata = WorkflowConfig {
+            name: "hello_s4n".to_string(),
+            license: Some("https://spdx.org/licenses/CC-BY-4.0.html".to_string()),
+            ..Default::default()
+        };
+
+        let dir = tempfile::tempdir().unwrap();
+        let written = export(
+            runner.get_client(),
+            &run_id,
+            metadata,
+            dir.path(),
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+
+        assert!(written.metadata.exists());
+        assert!(dir.path().join("workflow.json").exists());
+
+        let crate_ = rocrate::RoCrate::from_directory(dir.path()).unwrap();
+        let validation = crate_.validate();
+        assert!(
+            validation.is_conformant(),
+            "{:#?}",
+            validation.errors().collect::<Vec<_>>()
+        );
+    }
 }
