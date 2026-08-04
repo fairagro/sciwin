@@ -25,10 +25,18 @@ pub struct StepNode {
     pub container_image: Option<String>,
 }
 
+/// Whether a [`PortNode`] consumes or produces data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PortKind {
+    Input,
+    Output,
+}
+
 /// One input or output port, on the main workflow or on a tool a step runs.
 #[derive(Debug, Clone)]
 pub struct PortNode {
     pub id: String,
+    pub kind: PortKind,
     pub additional_type: Option<CWLType>,
     pub file_name: Option<String>,
 }
@@ -121,6 +129,7 @@ impl WorkflowGraph {
             .iter()
             .map(|input| PortNode {
                 id: input.id.clone().unwrap_or_default(),
+                kind: PortKind::Input,
                 additional_type: simple_input_type(&input.r#type),
                 file_name: file_name_from_default(&input.default),
             })
@@ -131,6 +140,7 @@ impl WorkflowGraph {
             .iter()
             .map(|output| PortNode {
                 id: output.id.clone().unwrap_or_default(),
+                kind: PortKind::Output,
                 additional_type: simple_output_type(&output.r#type),
                 file_name: None,
             })
@@ -192,11 +202,13 @@ fn ports_of(tool: &CWLDocument) -> Vec<PortNode> {
 
     let inputs = tool.inputs.iter().map(|input| PortNode {
         id: input.id.clone().unwrap_or_default(),
+        kind: PortKind::Input,
         additional_type: simple_command_input_type(&input.r#type),
         file_name: file_name_from_default(&input.default),
     });
     let outputs = tool.outputs.iter().map(|output| PortNode {
         id: output.id.clone().unwrap_or_default(),
+        kind: PortKind::Output,
         additional_type: simple_output_type(&output.r#type),
         file_name: output
             .output_binding
