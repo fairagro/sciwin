@@ -5,7 +5,7 @@
 use crate::project::config::WorkflowConfig;
 use crate::provenance::{
     ProvenanceError, ProvenanceResult, Written,
-    builder::build_crate,
+    builder::build_validated,
     inputs::{CrateInputs, Engine, PayloadFile, RunRecord, StepRun},
     write_crate,
 };
@@ -17,6 +17,7 @@ use reana::{
     },
     logs::{ReanaLogMessage, engine_version},
 };
+use rocrate::validate::Validation;
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 /// Folds a REANA run's progress dates and logs into a [`RunRecord`].
@@ -106,6 +107,10 @@ pub async fn fetch(
 
 /// Builds and writes the RO-Crate for `workflow_id` into `directory`.
 ///
+/// A crate that breaks a claimed profile's `Must` rules is still written, not rejected. The
+/// [`Validation`] comes back alongside [`Written`] so the caller 
+/// decides how to surface it.
+///
 /// # Errors
 /// See [`fetch`] and [`write_crate`]; a crate entity that has no matching REANA workspace file
 /// is not fatal -- it lands in [`Written::missing`] instead.
@@ -115,9 +120,9 @@ pub async fn export(
     metadata: WorkflowConfig,
     directory: &Path,
     date_published: DateTime<Utc>,
-) -> ProvenanceResult<Written> {
+) -> ProvenanceResult<(Written, Validation)> {
     let inputs = fetch(client.clone(), workflow_id, metadata, date_published).await?;
-    let crate_ = build_crate(&inputs)?;
+    let (crate_, validation) = build_validated(&inputs)?;
 
     let download_dir = tempfile::tempdir()?;
     let mut sources = HashMap::new();
@@ -136,13 +141,15 @@ pub async fn export(
         }
     }
 
-    write_crate(
+    let written = write_crate(
         &crate_,
         &inputs.workflow,
         &inputs.workflow_file,
         directory,
         &sources,
-    )
+    )?;
+
+    Ok((written, validation))
 }
 
 #[cfg(test)]
@@ -256,7 +263,7 @@ mod tests {
         };
 
         let dir = tempfile::tempdir().unwrap();
-        let written = export(
+        let (written, validation) = export(
             runner.get_client(),
             &run_id,
             metadata,
@@ -268,9 +275,6 @@ mod tests {
 
         assert!(written.metadata.exists());
         assert!(dir.path().join("workflow.json").exists());
-
-        let crate_ = rocrate::RoCrate::from_directory(dir.path()).unwrap();
-        let validation = crate_.validate();
         assert!(
             validation.is_conformant(),
             "{:#?}",

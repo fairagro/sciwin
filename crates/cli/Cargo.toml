@@ -21,6 +21,7 @@ path = "main.rs"
 
 [dependencies]
 sciwin = { path = "../sciwin" }
+chrono = { workspace = true }
 clap.workspace = true
 clap_complete.workspace = true
 anyhow = { workspace = true }

@@ -4852,6 +4852,7 @@ name = "s4n"
 version = "1.2.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "clap_complete",
  "colored",

@@ -1,3 +1,4 @@
+use chrono::Utc;
 use clap::{Args, Subcommand};
 use sciwin::{
     cwl::{
@@ -11,6 +12,8 @@ use sciwin::{
     },
     authoring::tool::parser::guess_type,
     execution::{ReanaRunner, RunStatus, TaskRunner, WorkflowRunner},
+    project,
+    provenance::reana_runner as rocrate_export,
     reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
 };
 use serde_json::{Number, Value};
@@ -42,12 +45,10 @@ pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Re
                 all,
                 output_dir,
             } => execute_remote_download(workflow_name, *all, output_dir.as_deref()).await,
-            RemoteSubcommands::Rocrate { .. } => {
-                // packages/reana's rocrate.rs (RO-Crate generation, ~1000 lines) has no
-                // equivalent in crates/sciwin yet -- it's the one gap CLAUDE.md explicitly
-                // calls out as still needing a port.
-                anyhow::bail!("RO-Crate export is not implemented yet in the new core library")
-            }
+            RemoteSubcommands::Rocrate {
+                workflow_name,
+                output_dir,
+            } => execute_remote_rocrate(workflow_name, output_dir.as_deref()).await,
             RemoteSubcommands::Logout => {
                 // crates/cli has no credential storage yet -- `reana_runner()` below reads
                 // REANA_URL/REANA_TOKEN from the environment as a stopgap until a real
@@ -284,8 +285,13 @@ async fn execute_remote_start(
         }
 
         if rocrate {
-            // See the `Rocrate` subcommand: no equivalent in crates/sciwin yet.
-            warn!("--rocrate requested, but RO-Crate export is not implemented yet");
+            if status == RunStatus::Finished {
+                export_rocrate(&run_id, runner.get_client(), Path::new("rocrate")).await?;
+            } else {
+                warn!(
+                    "--rocrate requested, but the run did not finish (status {status:?}); no crate was created"
+                );
+            }
         }
     }
 
@@ -320,6 +326,50 @@ async fn execute_remote_status(workflow_name: Option<&str>) -> anyhow::Result<()
             workflow.created,
             workflow.status.unwrap_or_default()
         );
+    }
+
+    Ok(())
+}
+
+async fn execute_remote_rocrate(
+    workflow_name: &str,
+    output_dir: Option<&str>,
+) -> anyhow::Result<()> {
+    let runner = reana_runner()?;
+    let out_dir = PathBuf::from(output_dir.unwrap_or("rocrate"));
+    export_rocrate(workflow_name, runner.get_client(), &out_dir).await
+}
+
+/// Reads the project's `workflow.toml` from the current directory, exports the RO-Crate for
+/// `workflow_name` into `output_dir`, and reports what came out of it 
+async fn export_rocrate(
+    workflow_name: &str,
+    client: Arc<ReanaClient>,
+    output_dir: &Path,
+) -> anyhow::Result<()> {
+    let cwd = env::current_dir()?;
+    let metadata = project::read_config(&cwd)?.workflow;
+
+    let (written, validation) =
+        rocrate_export::export(client, workflow_name, metadata, output_dir, Utc::now()).await?;
+
+    info!("RO-Crate written to {}", written.metadata.display());
+
+    if !written.missing.is_empty() {
+        warn!(
+            "crate references files REANA did not have on its workspace: {:?}",
+            written.missing
+        );
+    }
+
+    if !validation.is_conformant() {
+        warn!("crate does not conform to its claimed profiles:");
+        for error in validation.errors() {
+            warn!("  {error}");
+        }
+    }
+    for warning in validation.warnings() {
+        warn!("{warning}");
     }
 
     Ok(())
