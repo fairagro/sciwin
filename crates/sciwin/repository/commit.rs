@@ -26,13 +26,17 @@ pub fn get_modified_files(repo: &Repository) -> RepositoryResult<Vec<String>> {
 /// to it first.
 pub fn stage_file(repo: &Repository, path: impl AsRef<Path>) -> RepositoryResult<()> {
     let path = path.as_ref();
+
+    // `repo.workdir()` is resolved through libgit2, which follows symlinks 
     let relative = repo
         .workdir()
-        .and_then(|workdir| path.strip_prefix(workdir).ok())
-        .unwrap_or(path);
+        .and_then(|workdir| dunce::canonicalize(workdir).ok())
+        .zip(dunce::canonicalize(path).ok())
+        .and_then(|(workdir, path)| path.strip_prefix(workdir).map(Path::to_path_buf).ok())
+        .unwrap_or_else(|| path.to_path_buf());
 
     let mut index = repo.index()?;
-    index.add_path(relative)?;
+    index.add_path(&relative)?;
     Ok(index.write()?)
 }
 
