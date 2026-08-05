@@ -1,5 +1,5 @@
 use super::{BAD_WORDS, staging};
-use crate::{authoring::AuthoringResult, paths::TrustedPathExt};
+use crate::authoring::AuthoringResult;
 use commonwl::{
     IntegerOrExpression,
     documents::CommandLineTool,
@@ -12,7 +12,10 @@ use serde_json::Value;
 use slugify::slugify;
 use std::path::Path;
 
-pub(crate) fn build_inputs(args: &[&str], base: &Path) -> AuthoringResult<Vec<CommandInputParameter>> {
+pub(crate) fn build_inputs(
+    args: &[&str],
+    base: &Path,
+) -> AuthoringResult<Vec<CommandInputParameter>> {
     let mut inputs = vec![];
     let mut i = 0;
     while i < args.len() {
@@ -41,7 +44,11 @@ fn is_flag_like(s: &str) -> bool {
     s.starts_with('-') && s.parse::<f64>().is_err()
 }
 
-fn build_positional(current: &str, index: isize, base: &Path) -> AuthoringResult<CommandInputParameter> {
+fn build_positional(
+    current: &str,
+    index: isize,
+    base: &Path,
+) -> AuthoringResult<CommandInputParameter> {
     let (current, cwl_type) = parse_input(current, base)?;
 
     // detected before building id/default -- a secret must never reach the default
@@ -169,7 +176,8 @@ pub(crate) fn add_fixed_inputs(
 ///
 /// `value` is checked relative to `base` (the project root)
 pub fn guess_type(value: &str, base: &Path) -> AuthoringResult<CWLType> {
-    let path = base.join_trusted_unchecked(value)?;
+    let base = dunce::canonicalize(base)?;
+    let path = base.join(value);
     if path.exists() {
         if path.is_file() {
             return Ok(CWLType::File);
@@ -271,7 +279,8 @@ mod tests {
         let result = build_inputs(
             &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
             Path::new("."),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(result[0], expected);
     }
@@ -297,7 +306,8 @@ mod tests {
         let result = build_inputs(
             &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
             Path::new("."),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id.as_deref(), Some("threshold"));

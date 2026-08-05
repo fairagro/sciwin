@@ -12,17 +12,17 @@ use commonwl::{
 };
 use std::path::Path;
 
-use crate::authoring::tool::parser::sanitize_id;
+use crate::{authoring::{AuthoringResult, tool::parser::sanitize_id}, paths::TrustedPathExt};
 
 /// A requirement staging `path` verbatim, or `None` when it isn't an existing file.
 ///
 /// `path` is checked relative to `base` (the project root)
-pub(super) fn iwdr_for_existing_file(path: &str, base: &Path) -> Option<ToolRequirements> {
-    base.join(path).is_file().then(|| {
+pub(super) fn iwdr_for_existing_file(path: &str, base: &Path) -> AuthoringResult<Option<ToolRequirements>> {
+    Ok(base.join_trusted_unchecked(path)?.is_file().then(|| {
         ToolRequirements::InitialWorkDirRequirement(
             InitialWorkDirRequirement::new_from_filename_include(path),
         )
-    })
+    }))
 }
 
 /// Stages a fixed File input into the working dir, merging into an existing

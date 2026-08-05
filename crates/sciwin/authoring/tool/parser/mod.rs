@@ -8,9 +8,12 @@
 //! Only [`guess_type`] is public; the rest is reached through
 //! [`crate::authoring::tool::create_tool`].
 
-use crate::authoring::{
-    AuthoringResult,
-    tool::parser::command::{get_base_command, matches_script_modifier},
+use crate::{
+    authoring::{
+        AuthoringResult,
+        tool::parser::command::{get_base_command, matches_script_modifier},
+    },
+    paths::TrustedPathExt,
 };
 use commonwl::{
     OneOrMany,
@@ -68,7 +71,7 @@ pub(crate) fn parse_command_line(
             .build()
     };
 
-    stage_base_command(&mut tool, &base_command, base);
+    stage_base_command(&mut tool, &base_command, base)?;
 
     if tool.arguments.is_some() {
         tool.append_requirement_mut(ToolRequirements::ShellCommandRequirement(
@@ -80,7 +83,11 @@ pub(crate) fn parse_command_line(
 
 /// Declares whatever the base command runs -- a script file, or a module directory -- as
 /// staged, so it exists inside the tool's working directory at runtime.
-fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<String>, base: &Path) {
+fn stage_base_command(
+    tool: &mut CommandLineTool,
+    base_command: &OneOrMany<String>,
+    base: &Path,
+) -> AuthoringResult<()> {
     let tokens = match base_command {
         //if command is an existing file, add to requirements
         OneOrMany::One(cmd) => std::slice::from_ref(cmd),
@@ -93,21 +100,23 @@ fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<Strin
     } else {
         &tokens[0]
     };
-    if let Some(req) = staging::iwdr_for_existing_file(script, base) {
+    if let Ok(Some(req)) = staging::iwdr_for_existing_file(script, base) {
         tool.append_requirement_mut(req);
     }
 
     //command with `R -e script.R`
-    let Some(payload) = tokens.get(2) else { return };
+    let Some(payload) = tokens.get(2) else {
+        return Ok(());
+    };
     if !matches_script_modifier(&tokens[1]) {
-        return;
+        return Ok(());
     }
-    if let Some(req) = staging::iwdr_for_existing_file(payload, base) {
+    if let Ok(Some(req)) = staging::iwdr_for_existing_file(payload, base) {
         tool.append_requirement_mut(req);
     }
 
     //command with `python -m folder`
-    if base.join(payload).is_dir() {
+    if base.join_trusted_checked(payload)?.is_dir() {
         tool.inputs.push(
             CommandInputParameter::builder()
                 .id("module")
@@ -123,6 +132,8 @@ fn stage_base_command(tool: &mut CommandLineTool, base_command: &OneOrMany<Strin
             },
         ));
     }
+
+    Ok(())
 }
 
 pub(crate) fn sanitize_id(input: &str) -> String {

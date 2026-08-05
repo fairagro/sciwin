@@ -1,7 +1,7 @@
 //! Attaching container, network, environment and mount requirements to a tool.
 
 use super::ToolCreationOptions;
-use crate::authoring::AuthoringResult;
+use crate::{authoring::AuthoringResult, paths::TrustedPathExt};
 use anyhow::Context as _;
 use bon::Builder;
 use commonwl::{
@@ -46,7 +46,7 @@ pub(super) fn add_tool_requirements(
     if !options.mounts.is_empty() {
         let mut entries = Vec::with_capacity(options.mounts.len());
         for m in &options.mounts {
-            if project_root.join(m).is_dir() {
+            if project_root.join_trusted_checked(m)?.is_dir() {
                 entries.push(FileOrDirectory::Directory(
                     Directory::builder()
                         .location(m.to_string_lossy().into_owned())
