@@ -20,7 +20,7 @@ pub fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) {
     fs::create_dir_all(dst).unwrap();
     for entry in fs::read_dir(src).unwrap() {
         let entry = entry.unwrap();
-        let target = dst.join_trusted_checked(entry.file_name()).unwrap();
+        let target = dst.join_trusted_unchecked(entry.file_name()).unwrap();
         if entry.file_type().unwrap().is_dir() {
             copy_dir(entry.path(), target);
         } else {
