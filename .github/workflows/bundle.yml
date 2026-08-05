@@ -20,16 +20,16 @@ jobs:
       - name: Install Dioxus 📈
         run: cargo binstall dioxus-cli --force
       - name: Create bundle
-        run: dx bundle -p sciwin --desktop --release
+        run: dx bundle -p sciwin_studio --desktop --release
       - uses: actions/upload-artifact@v5
         with:
           name: Windows-Bundle
-          path: target/dx/sciwin/bundle/windows/bundle
+          path: target/dx/sciwin_studio/bundle/windows/bundle
           retention-days: 1
       - uses: actions/upload-artifact@v5
         with:
           name: Windows-Exe
-          path: target/dx/sciwin/release/windows
+          path: target/dx/sciwin_studio/release/windows
           retention-days: 1
   bundle_linux:
     name: 🎁 Bundle Linux
@@ -59,14 +59,14 @@ jobs:
       - name: Install Dioxus 📈
         run: cargo binstall dioxus-cli --force
       - name: Create bundle
-        run: dx bundle -p sciwin --desktop --release
+        run: dx bundle -p sciwin_studio --desktop --release
       - uses: actions/upload-artifact@v5
         with:
           name: Linux-Bundle
-          path: target/dx/sciwin/bundle/linux/bundle
+          path: target/dx/sciwin_studio/bundle/linux/bundle
           retention-days: 1
       - uses: actions/upload-artifact@v5
         with:
           name: Linux-Binary
-          path: target/dx/sciwin/release/linux
+          path: target/dx/sciwin_studio/release/linux
           retention-days: 1
