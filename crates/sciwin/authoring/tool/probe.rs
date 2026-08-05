@@ -6,7 +6,7 @@
 use super::{ToolCreationOptions, requirements};
 use crate::{
     authoring::AuthoringResult,
-    paths::SecureJoinExt,
+    paths::TrustedPathExt,
     repository::{self, Repository},
 };
 use anyhow::Context as _;

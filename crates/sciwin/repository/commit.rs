@@ -1,4 +1,4 @@
-use crate::repository::RepositoryResult;
+use crate::{paths::TrustedPathExt, repository::RepositoryResult};
 use git2::{Commit, IndexAddOption, Repository, Status, StatusOptions};
 use std::{iter, path::Path};
 
@@ -27,7 +27,7 @@ pub fn get_modified_files(repo: &Repository) -> RepositoryResult<Vec<String>> {
 pub fn stage_file(repo: &Repository, path: impl AsRef<Path>) -> RepositoryResult<()> {
     let path = path.as_ref();
 
-    // `repo.workdir()` is resolved through libgit2, which follows symlinks 
+    // `repo.workdir()` is resolved through libgit2, which follows symlinks
     let relative = repo
         .workdir()
         .and_then(|workdir| dunce::canonicalize(workdir).ok())
@@ -42,9 +42,17 @@ pub fn stage_file(repo: &Repository, path: impl AsRef<Path>) -> RepositoryResult
 
 pub fn stage_dir(repo: &Repository, path: impl AsRef<Path>) -> RepositoryResult<()> {
     let paths = std::fs::read_dir(path)?;
+    let workdir = repo.workdir().ok_or(git2::Error::new(
+        git2::ErrorCode::Directory,
+        git2::ErrorClass::None,
+        "No Workdir",
+    ))?;
+
     for entry in paths {
         let entry = entry?;
         let file_path = entry.path();
+        let file_path = workdir.canonicalize_trusted(&file_path)?;
+
         if file_path.is_file() {
             stage_file(repo, file_path)?;
         }

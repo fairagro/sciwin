@@ -2,10 +2,8 @@
 
 use crate::{
     authoring::{
-        AuthoringError, AuthoringResult, tool::paths::resolve_path,
-        tool::postprocess::post_process_cwl,
-    },
-    repository::{self, Repository},
+        AuthoringError, AuthoringResult, tool::{paths::resolve_path, postprocess::post_process_cwl},
+    }, paths::TrustedPathExt, repository::{self, Repository},
 };
 use anyhow::Context as _;
 use commonwl::{
@@ -32,7 +30,7 @@ pub(super) fn save_tool_to_disk(
     repo: &Repository,
     commit: bool,
 ) -> AuthoringResult<()> {
-    let target = project_root.join(path);
+    let target = project_root.build_trusted_path(path)?;
 
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)
