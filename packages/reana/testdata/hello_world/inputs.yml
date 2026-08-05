@@ -1,6 +1,0 @@
-population:
-  class: File
-  location: data/population.csv
-speakers:
-  class: File
-  location: data/speakers_revised.csv
