@@ -2,8 +2,10 @@
 ///This file contains all examples described here: <https://fairagro.github.io/sciwin/examples/tool-creation>/
 mod common;
 
+use common::{
+    check_git_user, copy_dir, load_workflow, local_runner, setup_python, tool_path, with_workflow,
+};
 use commonwl::{OneOrMany, engine::InputObject};
-use common::{copy_dir, load_workflow, local_runner, tool_path, with_workflow};
 use sciwin::authoring::tool::{ContainerInfo, ToolCreationOptions, create_tool};
 use sciwin::authoring::workflow::{
     WorkflowSlot, add_workflow_input_connection, add_workflow_output_connection,
@@ -15,7 +17,6 @@ use sciwin::repository::{Repository, commit, stage_file};
 use serial_test::serial;
 use std::{env, fs, path::PathBuf};
 use tempfile::{TempDir, tempdir};
-use test_utils::{check_git_user, setup_python};
 
 fn setup() -> (PathBuf, TempDir) {
     let dir = tempdir().unwrap();

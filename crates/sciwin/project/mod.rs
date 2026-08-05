@@ -264,7 +264,35 @@ mod tests {
     use serial_test::serial;
     use std::{env, path::Path};
     use tempfile::{Builder, NamedTempFile, tempdir};
-    use test_utils::check_git_user;
+
+    /// Ensures a `user.name`/`user.email` are configured so `git2::Repository::signature()`
+    /// succeeds on CI runners that don't have a global git identity set. Retries because
+    /// parallel test binaries can race on the same global git config file.
+    fn check_git_user() -> Result<(), git2::Error> {
+        let mut last_err: Option<git2::Error> = None;
+        for i in 0..5 {
+            match write_git_user() {
+                Ok(()) => return Ok(()),
+                Err(err) => {
+                    last_err = Some(err);
+                    eprintln!("git config is currently being accessed. Attempt #{i}");
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+            }
+        }
+        Err(last_err.expect("last_err must be set after retries are exhausted"))
+    }
+
+    fn write_git_user() -> Result<(), git2::Error> {
+        let mut config = git2::Config::open_default()?;
+        if config.get_string("user.name").is_err() {
+            config.set_str("user.name", "s4n-test")?;
+        }
+        if config.get_string("user.email").is_err() {
+            config.set_str("user.email", "s4n-test@example.com")?;
+        }
+        Ok(())
+    }
 
     #[test]
     #[serial]

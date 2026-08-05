@@ -84,6 +84,7 @@ fn prepare_save(tool: &mut CommandLineTool, path: &Path) -> AuthoringResult<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::MAIN_SEPARATOR;
     use commonwl::{
         OneOrMany,
         files::{Dirent, File, FileOrDirectory},
@@ -95,10 +96,12 @@ mod tests {
         types::CWLType,
     };
     use serde_json::Value;
-    use test_utils::os_path;
 
     #[test]
     pub fn test_cwl_save() {
+        fn os_path(s: &str) -> String {
+            s.split('/').collect::<Vec<_>>().join(&MAIN_SEPARATOR.to_string())
+        }
         let inputs = vec![
             CommandInputParameter::builder()
                 .id("positional1")

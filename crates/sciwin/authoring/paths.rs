@@ -94,7 +94,14 @@ pub(crate) fn resolve_path<P: AsRef<Path>, Q: AsRef<Path>>(filename: P, relative
 mod tests {
     use super::*;
     use rstest::rstest;
-    use test_utils::os_path;
+
+    fn os_path(path: &str) -> String {
+        if cfg!(target_os = "windows") {
+            Path::new(path).to_string_lossy().replace('/', "\\")
+        } else {
+            path.to_string()
+        }
+    }
 
     #[rstest]
     #[case("results.csv", "results")]

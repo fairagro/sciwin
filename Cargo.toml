@@ -105,7 +105,6 @@ syntect = { version = "5.2.0", default-features = false, features = [
 
 
 # dev dependencies
-test_utils = { path = "packages/test_utils" }
 rstest = "0.26.1"
 fstest = "0.4.0"
 serial_test = "3.4.0"

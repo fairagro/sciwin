@@ -1,6 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 mod common;
 
+use common::{copy_dir, os_path};
 use commonwl::{
     OneOrMany,
     documents::Argument,
@@ -10,7 +11,6 @@ use commonwl::{
     },
     types::CWLType,
 };
-use common::copy_dir;
 use sciwin::authoring::AuthoringError;
 use sciwin::authoring::tool::{ContainerInfo, ToolCreationOptions, create_tool};
 use sciwin::repository::{self, Repository};
@@ -19,7 +19,6 @@ use std::{
     path::{Path, PathBuf},
 };
 use tempfile::{TempDir, tempdir};
-use test_utils::os_path;
 
 /// Builds an isolated project in a fresh tempdir: `files` are copied in by basename
 /// (mirroring the old `#[fstest(files = [...])]`) and committed to a real git repo.

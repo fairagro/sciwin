@@ -10,6 +10,7 @@ use sciwin::{execution::TaskRunner, paths::TrustedPathExt};
 use std::{
     env, fs,
     path::{Path, PathBuf},
+    process::Command,
     sync::Arc,
 };
 
@@ -69,4 +70,87 @@ pub fn with_workflow(name: &str, f: impl FnOnce(&mut Workflow)) {
     let mut wf = load_workflow(name);
     f(&mut wf);
     save_workflow(name, wf);
+}
+
+/// Ensures a `user.name`/`user.email` are configured so `git2::Repository::signature()`
+/// succeeds on CI runners that don't have a global git identity set. Retries because
+/// parallel test binaries can race on the same global git config file.
+pub fn check_git_user() -> Result<(), git2::Error> {
+    let mut last_err: Option<git2::Error> = None;
+    for i in 0..5 {
+        match write_git_user() {
+            Ok(()) => return Ok(()),
+            Err(err) => {
+                last_err = Some(err);
+                eprintln!("git config is currently being accessed. Attempt #{i}");
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+    }
+    Err(last_err.expect("last_err must be set after retries are exhausted"))
+}
+
+fn write_git_user() -> Result<(), git2::Error> {
+    let mut config = git2::Config::open_default()?;
+    if config.get_string("user.name").is_err() {
+        config.set_str("user.name", "s4n-test")?;
+    }
+    if config.get_string("user.email").is_err() {
+        config.set_str("user.email", "s4n-test@example.com")?;
+    }
+    Ok(())
+}
+
+pub fn os_path(path: &str) -> String {
+    if cfg!(target_os = "windows") {
+        Path::new(path).to_string_lossy().replace('/', "\\")
+    } else {
+        path.to_string()
+    }
+}
+
+pub fn setup_python(dir_str: &str) -> (String, String) {
+    //windows stuff
+    let ext = if cfg!(target_os = "windows") {
+        ".exe"
+    } else {
+        ""
+    };
+    let path_sep = if cfg!(target_os = "windows") {
+        ";"
+    } else {
+        ":"
+    };
+    let venv_scripts = if cfg!(target_os = "windows") {
+        "Scripts"
+    } else {
+        "bin"
+    };
+
+    //set up python venv
+    let output = Command::new("python3")
+        .arg("-m")
+        .arg("venv")
+        .arg(".venv")
+        .output()
+        .expect("Could not create venv");
+    eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+
+    let old_path = env::var("PATH").unwrap();
+    let python_path = format!("{dir_str}/.venv/{venv_scripts}");
+    let new_path = format!("{python_path}{path_sep}{old_path}");
+
+    //install packages
+    let req_path = format!("{dir_str}/requirements.txt");
+    let output = Command::new(python_path + "/pip" + ext)
+        .arg("install")
+        .arg("-r")
+        .arg(req_path)
+        .output()
+        .expect("Could not find pip");
+    eprintln!("{}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+
+    (new_path, old_path)
 }

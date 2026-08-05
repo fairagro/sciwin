@@ -378,7 +378,14 @@ mod tests {
     };
     use std::{fs, path::Path};
     use tempfile::tempdir;
-    use test_utils::os_path;
+
+    fn os_path(path: &str) -> String {
+        if cfg!(target_os = "windows") {
+            Path::new(path).to_string_lossy().replace('/', "\\")
+        } else {
+            path.to_string()
+        }
+    }
 
     fn write_tool(path: &Path, input: &str, output: &str) {
         let tool = CommandLineTool::builder()
