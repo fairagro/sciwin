@@ -4,6 +4,27 @@ use std::{
 };
 
 pub trait TrustedPathExt: AsRef<Path> {
+    /// Joins `untrusted` on `self` without checking the existance of resulting path
+    fn join_trusted_unchecked(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
+        let canonical_root = dunce::canonicalize(self.as_ref())?;
+
+        if !canonical_root.exists() {
+            return Err(io::Error::other("base directory does not exist"));
+        }
+
+        let untrusted = untrusted.as_ref();
+        if untrusted
+            .components()
+            .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_)))
+        {
+            return Err(io::Error::other("path must not contain '..' or prefix"));
+        }
+
+        let path = canonical_root.join(untrusted);
+
+        Ok(path)
+    }
+    
     /// Joins `untrusted` on `self` with checking the existance of resulting path
     fn join_trusted_checked(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
         let canonical_root = dunce::canonicalize(self.as_ref())?;
@@ -44,27 +65,6 @@ pub trait TrustedPathExt: AsRef<Path> {
         }
 
         Ok(canonical_untrusted)
-    }
-
-    /// Joins `untrusted` on `self` without checking the existance of resulting path
-    fn join_trusted_unchecked(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
-        let canonical_root = dunce::canonicalize(self.as_ref())?;
-
-        if !canonical_root.exists() {
-            return Err(io::Error::other("base directory does not exist"));
-        }
-
-        let untrusted = untrusted.as_ref();
-        if untrusted
-            .components()
-            .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_)))
-        {
-            return Err(io::Error::other("path must not contain '..' or prefix"));
-        }
-
-        let path = canonical_root.join(untrusted);
-
-        Ok(path)
     }
 }
 
