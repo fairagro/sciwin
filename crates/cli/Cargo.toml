@@ -20,7 +20,7 @@ name = "s4n"
 path = "main.rs"
 
 [dependencies]
-sciwin = { path = "../sciwin" }
+sciwin.workspace = true
 chrono = { workspace = true }
 clap.workspace = true
 clap_complete.workspace = true
