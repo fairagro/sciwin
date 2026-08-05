@@ -10,7 +10,8 @@ use tracing_subscriber::{
 pub fn init_logger(level: LevelFilter) {
     let format_layer = tracing_subscriber::fmt::layer()
         .event_format(CustomFormatter)
-        .with_writer(std::io::stderr);
+        .with_writer(std::io::stderr)
+        .with_ansi_sanitization(false);
 
     tracing_subscriber::registry()
         .with(format_layer)
