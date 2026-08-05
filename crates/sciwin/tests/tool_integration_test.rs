@@ -326,6 +326,7 @@ pub async fn tool_create_test_is_clean() {
 }
 
 #[tokio::test]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 pub async fn tool_create_test_container_image() {
     let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
     let root = dir.path();
@@ -355,6 +356,7 @@ pub async fn tool_create_test_container_image() {
 }
 
 #[tokio::test]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 pub async fn tool_create_test_dockerfile() {
     let dir = workspace(&[
         "../../testdata/Dockerfile",
