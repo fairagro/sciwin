@@ -26,5 +26,5 @@ outputs:
     glob: results.txt
 
 baseCommand:
-- python
+- python3
 - echo.py
