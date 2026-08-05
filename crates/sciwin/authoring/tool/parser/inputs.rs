@@ -1,5 +1,5 @@
 use super::{BAD_WORDS, staging};
-use crate::authoring::AuthoringResult;
+use crate::{authoring::AuthoringResult, paths::TrustedPathExt};
 use commonwl::{
     IntegerOrExpression,
     documents::CommandLineTool,
@@ -176,9 +176,10 @@ pub(crate) fn add_fixed_inputs(
 ///
 /// `value` is checked relative to `base` (the project root)
 pub fn guess_type(value: &str, base: &Path) -> AuthoringResult<CWLType> {
-    let base = dunce::canonicalize(base)?;
-    let path = base.join(value);
-    if path.exists() {
+    let base = dunce::canonicalize(base)?; 
+
+    //implies existence, too
+    if let Ok(path) = base.join_trusted_unchecked(value) {
         if path.is_file() {
             return Ok(CWLType::File);
         }
