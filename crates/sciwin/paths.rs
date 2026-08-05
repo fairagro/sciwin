@@ -4,9 +4,12 @@ use std::{
 };
 
 pub trait SecureJoinExt: AsRef<Path> {
+    // makes sure path is inside base directory
     fn secure_join(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
         let root = self.as_ref();
-        if !root.exists() {
+        let canonical_root = dunce::canonicalize(root)?;
+
+        if !canonical_root.exists() {
             return Err(io::Error::other("base directory does not exist"));
         }
 
@@ -15,14 +18,13 @@ pub trait SecureJoinExt: AsRef<Path> {
             .components()
             .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_)))
         {
-            return Err(io::Error::other("path must not container '..' or prefix"));
+            return Err(io::Error::other("path must not contain '..' or prefix"));
         }
 
-        let path = root.join(untrusted);
-        let canonical_path =
-            dunce::canonicalize(&path).inspect_err(|e| eprintln!("canon;:{e:?}"))?;
+        let path = canonical_root.join(untrusted);
+        let canonical_path = dunce::canonicalize(&path)?;
 
-        if !canonical_path.starts_with(root) {
+        if !canonical_path.starts_with(&canonical_root) {
             return Err(io::Error::other("path escapes the base directory"));
         }
 
