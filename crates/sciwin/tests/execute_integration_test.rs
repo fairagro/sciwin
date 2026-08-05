@@ -1,15 +1,15 @@
 #![allow(clippy::disallowed_macros)]
 mod common;
 
+use common::{copy_dir, local_runner};
 use commonwl::{
     engine::{InputObject, load_input_file_from_file},
     files::{File, FileOrDirectory},
     inputs::DefaultValue,
 };
-use common::{copy_dir, local_runner};
+use sciwin::execution::{RunStatus, WorkflowRunner};
 use serde_json::Value;
 use serial_test::serial;
-use sciwin::execution::{RunStatus, WorkflowRunner};
 use std::{collections::HashMap, fs, path::PathBuf};
 use tempfile::tempdir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -310,6 +310,7 @@ pub async fn test_execute_local_with_binary_input() {
 /// through the local engine, which is integration-test territory, not a narrow unit check.
 #[tokio::test]
 #[serial]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 async fn test_execution_commonwl() {
     let runner = local_runner();
 
@@ -346,6 +347,7 @@ async fn test_execution_commonwl() {
 /// Moved from `execution::task_runner`'s unit tests alongside `test_execution_commonwl`.
 #[tokio::test]
 #[serial]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 async fn test_cancel_commonwl() {
     let runner = local_runner();
 
