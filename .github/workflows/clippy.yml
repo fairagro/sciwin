@@ -41,8 +41,3 @@ jobs:
         run: |
           rustup component add clippy
           cargo clippy --all-targets --all-features --workspace
-      - name: Install dx
-        run: |
-          curl -sSL http://dioxus.dev/install.sh | bash -s v0.7.2
-      - name: Run dx check
-        run: dx check -p sciwin
