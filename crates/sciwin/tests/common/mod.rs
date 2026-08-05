@@ -6,7 +6,7 @@ use commonwl::{
     load_cwl_file,
     storage::{StorageBackend, StoragePath},
 };
-use sciwin::execution::TaskRunner;
+use sciwin::{execution::TaskRunner, paths::TrustedPathExt};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -20,7 +20,7 @@ pub fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) {
     fs::create_dir_all(dst).unwrap();
     for entry in fs::read_dir(src).unwrap() {
         let entry = entry.unwrap();
-        let target = dst.join(entry.file_name());
+        let target = dst.join_trusted_checked(entry.file_name()).unwrap();
         if entry.file_type().unwrap().is_dir() {
             copy_dir(entry.path(), target);
         } else {
@@ -43,7 +43,9 @@ pub fn local_runner() -> TaskRunner<LocalBackend> {
 /// Where `create_workflow`/the tests below expect a workflow named `name` to live, following
 /// the same `workflows/<name>/<name>.cwl` convention `create_tool` uses.
 pub fn tool_path(name: &str) -> PathBuf {
-    Path::new("workflows").join(name).join(format!("{name}.cwl"))
+    Path::new("workflows")
+        .join(name)
+        .join(format!("{name}.cwl"))
 }
 
 pub fn load_workflow(name: &str) -> Workflow {
