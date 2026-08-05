@@ -176,7 +176,7 @@ pub(crate) fn add_fixed_inputs(
 ///
 /// `value` is checked relative to `base` (the project root)
 pub fn guess_type(value: &str, base: &Path) -> AuthoringResult<CWLType> {
-    let base = dunce::canonicalize(base)?; 
+    let base = dunce::canonicalize(base)?;
 
     //implies existence, too
     if let Ok(path) = base.join_trusted_unchecked(value) {
@@ -351,13 +351,11 @@ mod tests {
         // existence is tested against a real tempdir rather than an incidental path relative
         // to the crate.
         let base = &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
-        let dir = tempfile::tempdir().unwrap();
-        let dir_path = format!("{}/", dir.path().to_string_lossy());
 
         let inputs = &[
             ("README.md", CWLType::File),
             ("/some/path/that/does/not/exist.txt", CWLType::String),
-            (dir_path.as_str(), CWLType::Directory),
+            ("testdata/hello_world", CWLType::Directory),
             ("--option", CWLType::String),
             ("2", CWLType::Int),
             ("1.5", CWLType::Float),
