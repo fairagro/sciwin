@@ -1,4 +1,5 @@
 use clap::Args;
+use miette::IntoDiagnostic;
 use sciwin::authoring::paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name};
 use sciwin::repository::Repository;
 use sciwin::repository::{commit, stage_file};
@@ -14,10 +15,10 @@ pub struct SaveArgs {
     pub name: String,
 }
 
-pub fn save_workflow(args: &SaveArgs) -> anyhow::Result<()> {
+pub fn save_workflow(args: &SaveArgs) -> miette::Result<()> {
     //get workflow
     let filename = get_qualified_filename_by_name(&args.name, Path::new(WORKFLOWS_FOLDER).join(&args.name));
-    let repo = Repository::open(".")?;
+    let repo = Repository::open(".").into_diagnostic()?;
     stage_file(&repo, &filename)?;
     let msg = &format!("✅ Saved workflow {}", args.name);
     info!("{msg}");

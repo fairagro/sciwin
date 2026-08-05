@@ -4628,7 +4628,6 @@ checksum = "04d056b875a9d2e6cb9a61d127afee9ac5999b9f87bcb32079d1318e505be714"
 name = "s4n"
 version = "1.2.0"
 dependencies = [
- "anyhow",
  "chrono",
  "clap",
  "clap_complete",
@@ -4638,6 +4637,7 @@ dependencies = [
  "dunce",
  "fstest",
  "ignore",
+ "miette",
  "prettytable-rs",
  "reqwest",
  "sciwin",

@@ -1,6 +1,7 @@
 use clap::Args;
 use colored::Colorize;
 use ignore::WalkBuilder;
+use miette::IntoDiagnostic;
 use prettytable::{Cell, Row, Table, row};
 use sciwin::cwl::{
     Identifiable, docstring,
@@ -26,7 +27,7 @@ pub struct ListCWLArgs {
     pub list_all: bool,
 }
 
-pub fn handle_list_command(args: &ListCWLArgs) -> anyhow::Result<()> {
+pub fn handle_list_command(args: &ListCWLArgs) -> miette::Result<()> {
     if let Some(file) = &args.file {
         if file.exists() && file.is_file() {
             list_single_cwl(file)?;
@@ -34,12 +35,12 @@ pub fn handle_list_command(args: &ListCWLArgs) -> anyhow::Result<()> {
             list_multiple(file, args.list_all)?;
         }
     } else {
-        list_multiple(env::current_dir()?, args.list_all)?;
+        list_multiple(env::current_dir().into_diagnostic()?, args.list_all)?;
     }
     Ok(())
 }
 
-fn list_single_cwl(filename: impl AsRef<Path>) -> anyhow::Result<()> {
+fn list_single_cwl(filename: impl AsRef<Path>) -> miette::Result<()> {
     let filename = filename.as_ref();
     if !filename.exists() {
         info!("Tool does not exist: {}", filename.display());
@@ -47,7 +48,7 @@ fn list_single_cwl(filename: impl AsRef<Path>) -> anyhow::Result<()> {
     }
 
     let tool = load_cwl_file(filename, true)
-        .map_err(|e| anyhow::anyhow!("Could not load CWL File: {e}"))?;
+        .map_err(|e| miette::miette!("Could not load CWL File: {e}"))?;
     match tool {
         CWLDocument::CommandLineTool(clt) => list_clt(&clt, filename),
         CWLDocument::ExpressionTool(et) => list_et(&et, filename),
@@ -64,7 +65,7 @@ fn list_single_cwl(filename: impl AsRef<Path>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Result<()> {
+pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> miette::Result<()> {
     info!(
         "📂 Available CWL Files in: {}",
         cwd.as_ref().to_string_lossy().blue().bold()
@@ -142,7 +143,7 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> anyhow::Re
     Ok(())
 }
 
-fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
+fn list_clt(clt: &CommandLineTool, filename: &Path) -> miette::Result<()> {
     info!(
         "🔎 CommandLineTool: `{}`",
         filename.to_string_lossy().blue().bold()
@@ -220,7 +221,7 @@ fn list_clt(clt: &CommandLineTool, filename: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn list_et(et: &ExpressionTool, filename: &Path) -> anyhow::Result<()> {
+fn list_et(et: &ExpressionTool, filename: &Path) -> miette::Result<()> {
     info!(
         "🔎 ExpressionTool: `{}`",
         filename.to_string_lossy().blue().bold()
@@ -272,7 +273,7 @@ fn list_et(et: &ExpressionTool, filename: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn list_wf(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
+fn list_wf(wf: &Workflow, filename: &Path) -> miette::Result<()> {
     info!(
         "🔎 Workflow: `{}`",
         filename.to_string_lossy().blue().bold()
@@ -331,7 +332,7 @@ fn list_base(base: &CWLDocument, is_workflow: bool) {
     print_line();
 }
 
-fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
+fn workflow_status(wf: &Workflow, filename: &Path) -> miette::Result<()> {
     info!("Connection status:");
     let path = Path::new(&filename).parent().unwrap_or(Path::new("."));
     let mut table = Table::new();
@@ -397,10 +398,10 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> anyhow::Result<()> {
             StringOrDocument::String(run) => {
                 let CWLDocument::CommandLineTool(tool) = load_cwl_file(path.join(run), true)
                     .map_err(|e| {
-                        anyhow::anyhow!("Could not load tool {:?}: {e}", path.join(run))
+                        miette::miette!("Could not load tool {:?}: {e}", path.join(run))
                     })?
                 else {
-                    anyhow::bail!(
+                    miette::bail!(
                         "Expected CommandLineTool, but got something else for step {}",
                         step.id.as_deref().unwrap_or("<no id>")
                     );

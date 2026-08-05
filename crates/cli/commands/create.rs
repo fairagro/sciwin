@@ -1,7 +1,7 @@
 use crate::{cwl::highlight_cwl, print_diff, print_list};
-use anyhow::{anyhow, bail};
 use clap::Args;
 use colored::Colorize;
+use miette::{IntoDiagnostic, bail, miette};
 use sciwin::authoring::tool::CreatedTool;
 use sciwin::authoring::tool::ToolCreationOptions;
 use sciwin::cwl::engine::ContainerEngine;
@@ -9,7 +9,7 @@ use std::env;
 use std::{path::PathBuf, str::FromStr};
 use tracing::{info, warn};
 
-pub async fn handle_create_command(args: &CreateArgs) -> anyhow::Result<()> {
+pub async fn handle_create_command(args: &CreateArgs) -> miette::Result<()> {
     if args.command.is_empty() && args.name.is_some() {
         info!(
             "ℹ️  Workflow creation is optional. Creation will be triggered by adding the first connection, too!"
@@ -129,7 +129,7 @@ impl From<&CreateArgs> for ToolCreationOptions {
 pub struct ContainerEngineArg(pub ContainerEngine);
 
 impl FromStr for ContainerEngineArg {
-    type Err = anyhow::Error;
+    type Err = miette::Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let engine = match s.to_lowercase().as_str() {
@@ -137,15 +137,15 @@ impl FromStr for ContainerEngineArg {
             "podman" => ContainerEngine::Podman,
             "singularity" => ContainerEngine::Singularity,
             "apptainer" => ContainerEngine::Apptainer,
-            other => return Err(anyhow!("Unknown container engine: {other}")),
+            other => return Err(miette!("Unknown container engine: {other}")),
         };
         Ok(ContainerEngineArg(engine))
     }
 }
 
-pub fn create_workflow(args: &CreateArgs) -> anyhow::Result<()> {
+pub fn create_workflow(args: &CreateArgs) -> miette::Result<()> {
     let Some(name) = &args.name else {
-        return Err(anyhow!("❌ Workflow name is required"));
+        return Err(miette!("❌ Workflow name is required"));
     };
 
     let (path, yaml) = sciwin::authoring::workflow::create_workflow(name, None, args.force)?;
@@ -156,7 +156,7 @@ pub fn create_workflow(args: &CreateArgs) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
+pub async fn create_tool(args: &CreateArgs) -> miette::Result<()> {
     if args.command.is_empty() {
         bail!("❌ Command is required to create a tool");
     }
@@ -168,7 +168,7 @@ pub async fn create_tool(args: &CreateArgs) -> anyhow::Result<()> {
         document,
         path,
         yaml,
-    } = sciwin::authoring::tool::create_tool(&env::current_dir()?, &args.into()).await?;
+    } = sciwin::authoring::tool::create_tool(&env::current_dir().into_diagnostic()?, &args.into()).await?;
 
     info!("Found outputs:");
     let string_outputs: Vec<String> = document

@@ -24,7 +24,7 @@ sciwin = { path = "../sciwin" }
 chrono = { workspace = true }
 clap.workspace = true
 clap_complete.workspace = true
-anyhow = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
 colored = { workspace = true }
 dialoguer = { workspace = true }
 tracing = { workspace = true }

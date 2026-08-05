@@ -1,4 +1,3 @@
-use anyhow::Context;
 use clap::Args;
 use tracing::info;
 use std::path::PathBuf;
@@ -9,7 +8,9 @@ pub struct InitArgs {
     pub project: Option<String>,
 }
 
-pub fn handle_init_command(args: &InitArgs) -> anyhow::Result<()> {
+pub fn handle_init_command(args: &InitArgs) -> miette::Result<()> {
+    use miette::Context;
+
     let base_dir = match &args.project {
         Some(folder) => PathBuf::from(folder),
         None => PathBuf::new(),

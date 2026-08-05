@@ -1,5 +1,6 @@
 use clap::Args;
 use colored::Colorize;
+use miette::IntoDiagnostic;
 use reqwest::Url;
 use sciwin::repository::{
     Repository,
@@ -25,7 +26,7 @@ pub struct PackageArgs {
     pub identifier: String,
 }
 
-pub fn install_package(url: &str, branch: &Option<String>) -> anyhow::Result<()> {
+pub fn install_package(url: &str, branch: &Option<String>) -> miette::Result<()> {
     let url = if url.starts_with("http") {
         url
     } else {
@@ -33,13 +34,13 @@ pub fn install_package(url: &str, branch: &Option<String>) -> anyhow::Result<()>
     };
     let url = url.strip_suffix(".git").unwrap_or(url);
 
-    let url_obj = Url::parse(url)?;
+    let url_obj = Url::parse(url).into_diagnostic()?;
 
     let package_dir = Path::new("packages");
     let repo_name = url_obj.path().strip_prefix("/").unwrap();
 
     let current_dir = env::current_dir().unwrap_or(PathBuf::from("."));
-    let mut repo = Repository::open(&current_dir)?;
+    let mut repo = Repository::open(&current_dir).into_diagnostic()?;
 
     add_submodule(
         &mut repo,
@@ -54,9 +55,9 @@ pub fn install_package(url: &str, branch: &Option<String>) -> anyhow::Result<()>
     Ok(())
 }
 
-pub fn remove_package(package_id: &str) -> anyhow::Result<()> {
+pub fn remove_package(package_id: &str) -> miette::Result<()> {
     let current_dir = env::current_dir().unwrap_or(PathBuf::from("."));
-    let repo = Repository::open(&current_dir)?;
+    let repo = Repository::open(&current_dir).into_diagnostic()?;
 
     remove_submodule(
         &repo,

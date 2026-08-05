@@ -71,7 +71,7 @@ pub enum Commands {
     },
 }
 
-pub fn generate_completions<G: Generator>(generator: G, cmd: &mut Command) -> anyhow::Result<()> {
+pub fn generate_completions<G: Generator>(generator: G, cmd: &mut Command) -> miette::Result<()> {
     generate(
         generator,
         cmd,

@@ -1,5 +1,5 @@
-use anyhow::anyhow;
 use clap::{Args, ValueEnum};
+use miette::miette;
 use sciwin::cwl::{documents::CWLDocument, load_cwl_file};
 use sciwin::visualize::{DotRenderer, MermaidRenderer, render};
 use std::path::PathBuf;
@@ -26,11 +26,11 @@ pub enum Renderer {
 }
 
 #[allow(clippy::disallowed_macros)]
-pub fn visualize(filename: &PathBuf, renderer: &Renderer, no_defaults: bool) -> anyhow::Result<()> {
+pub fn visualize(filename: &PathBuf, renderer: &Renderer, no_defaults: bool) -> miette::Result<()> {
     let cwl = load_cwl_file(filename, true)
-        .map_err(|e| anyhow!("Could mot load Workflow {filename:?}: {e}"))?;
+        .map_err(|e| miette!("Could mot load Workflow {filename:?}: {e}"))?;
     let CWLDocument::Workflow(cwl) = cwl else {
-        return Err(anyhow!(
+        return Err(miette!(
             "The provided file {filename:?} does not contain a CWL Workflow"
         ));
     };
@@ -40,7 +40,7 @@ pub fn visualize(filename: &PathBuf, renderer: &Renderer, no_defaults: bool) -> 
         Renderer::Mermaid => render(&mut MermaidRenderer::default(), &cwl, filename, no_defaults),
     }
     .map_err(|e| {
-        anyhow!("Could not render visualization for {filename:?} using {renderer:?}: {e}")
+        miette!("Could not render visualization for {filename:?} using {renderer:?}: {e}")
     })?;
 
     println!("{code}");

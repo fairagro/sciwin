@@ -17,6 +17,7 @@ use sciwin::{
     reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
     rocrate::validate::Validation,
 };
+use miette::IntoDiagnostic;
 use serde_json::{Number, Value};
 use std::{
     collections::HashMap,
@@ -27,7 +28,7 @@ use std::{
 use tracing::{info, warn};
 use url::Url;
 
-pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Result<()> {
+pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> miette::Result<()> {
     match subcommand {
         ExecuteCommands::Local(args) => execute_local(args).await,
         ExecuteCommands::Remote(remote_args) => match &remote_args.command {
@@ -54,7 +55,7 @@ pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> anyhow::Re
                 // crates/cli has no credential storage yet -- `reana_runner()` below reads
                 // REANA_URL/REANA_TOKEN from the environment as a stopgap until a real
                 // keyring-backed TokenProvider exists, so there's nothing to log out of.
-                anyhow::bail!(
+                miette::bail!(
                     "Logout is not implemented yet: credentials are currently read from REANA_URL/REANA_TOKEN env vars, nothing is stored"
                 )
             }
@@ -185,7 +186,7 @@ pub enum RemoteSubcommands {
 }
 
 #[allow(clippy::disallowed_macros)]
-pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error> {
+pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
     let container_engine = if args.podman {
         ContainerEngine::Podman
     } else if args.singularity {
@@ -204,10 +205,10 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
     ));
     let runner = TaskRunner::new(backend);
 
-    let base_path = dunce::canonicalize(args.file.parent().unwrap_or(Path::new(".")))?;
+    let base_path = dunce::canonicalize(args.file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
     let inputs = if args.args.is_empty() {
         InputObject::default()
-    } else if args.args.len() == 1 && fs::exists(args.args[0].clone())? {
+    } else if args.args.len() == 1 && fs::exists(args.args[0].clone()).into_diagnostic()? {
         load_input_file_from_file(args.args[0].clone(), base_path)?
     } else {
         let raw = args
@@ -254,12 +255,12 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
     match status {
         RunStatus::Finished => {
             if let Some(outputs) = runner.outputs(&run_id, args.out_dir.as_deref()).await? {
-                println!("{}", serde_json::to_string_pretty(&outputs)?);
+                println!("{}", serde_json::to_string_pretty(&outputs).into_diagnostic()?);
             }
         }
         _ => match runner.failure_detail(&run_id).await? {
-            Some(detail) => anyhow::bail!("workflow ended with status {status:?}: {detail}"),
-            None => anyhow::bail!("workflow ended with status {status:?}"),
+            Some(detail) => miette::bail!("workflow ended with status {status:?}: {detail}"),
+            None => miette::bail!("workflow ended with status {status:?}"),
         },
     }
 
@@ -268,7 +269,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
             RocrateLayout::Packed => local_rocrate_export::CrateLayout::Packed,
             RocrateLayout::Files => local_rocrate_export::CrateLayout::Files,
         };
-        let cwd = env::current_dir()?;
+        let cwd = env::current_dir().into_diagnostic()?;
         let metadata = project::read_config(&cwd)?.workflow;
 
         let (written, validation) = local_rocrate_export::export(
@@ -288,21 +289,21 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> Result<(), anyhow::Error>
 }
 
 /// Builds a `ReanaRunner` from `REANA_URL`/`REANA_TOKEN` env vars.
-fn reana_runner() -> anyhow::Result<ReanaRunner> {
+fn reana_runner() -> miette::Result<ReanaRunner> {
     let url = env::var("REANA_URL").map_err(|_| {
-        anyhow::anyhow!(
+        miette::miette!(
             "REANA_URL is not set (no credential storage is wired up yet, see reana_runner() in execute.rs)"
         )
     })?;
     let token = env::var("REANA_TOKEN").map_err(|_| {
-        anyhow::anyhow!(
+        miette::miette!(
             "REANA_TOKEN is not set (no credential storage is wired up yet, see reana_runner() in execute.rs)"
         )
     })?;
 
-    let server_url = Url::parse(&url)?;
+    let server_url = Url::parse(&url).into_diagnostic()?;
     let token: Arc<ReanaAccessToken> = Arc::new(ReanaAccessToken::new(token));
-    let client = ReanaClient::new(server_url.join("api")?, token);
+    let client = ReanaClient::new(server_url.join("api").into_diagnostic()?, token);
     Ok(ReanaRunner::new(client))
 }
 
@@ -313,12 +314,12 @@ async fn execute_remote_start(
     rocrate: bool,
     watch: bool,
     logout: bool,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     let runner = reana_runner()?;
 
     let inputs = match input_file {
         Some(input_file) => {
-            let base_path = dunce::canonicalize(file.parent().unwrap_or(Path::new(".")))?;
+            let base_path = dunce::canonicalize(file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
             load_input_file_from_file(input_file.clone(), base_path)?
         }
         None => InputObject::default(),
@@ -335,7 +336,7 @@ async fn execute_remote_start(
         match status {
             RunStatus::Finished => {
                 if let Some(outputs) = runner.outputs(&run_id, None).await? {
-                    println!("{}", serde_json::to_string_pretty(&outputs)?);
+                    println!("{}", serde_json::to_string_pretty(&outputs).into_diagnostic()?);
                 }
             }
             RunStatus::Failed => {
@@ -363,7 +364,7 @@ async fn execute_remote_start(
     Ok(())
 }
 
-async fn execute_remote_status(workflow_name: Option<&str>) -> anyhow::Result<()> {
+async fn execute_remote_status(workflow_name: Option<&str>) -> miette::Result<()> {
     let runner = reana_runner()?;
 
     if let Some(name) = workflow_name {
@@ -394,7 +395,7 @@ async fn execute_remote_status(workflow_name: Option<&str>) -> anyhow::Result<()
 async fn execute_remote_rocrate(
     workflow_name: &str,
     output_dir: Option<&str>,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     let runner = reana_runner()?;
     let out_dir = PathBuf::from(output_dir.unwrap_or("./rocrate"));
     export_rocrate(workflow_name, runner.get_client(), &out_dir).await
@@ -406,8 +407,8 @@ async fn export_rocrate(
     workflow_name: &str,
     client: Arc<ReanaClient>,
     output_dir: &Path,
-) -> anyhow::Result<()> {
-    let cwd = env::current_dir()?;
+) -> miette::Result<()> {
+    let cwd = env::current_dir().into_diagnostic()?;
     let metadata = project::read_config(&cwd)?.workflow;
 
     let (written, validation) =
@@ -447,7 +448,7 @@ async fn execute_remote_download(
     workflow_name: &str,
     all: bool,
     output_dir: Option<&str>,
-) -> anyhow::Result<()> {
+) -> miette::Result<()> {
     let runner = reana_runner()?;
     let out_dir = output_dir
         .map(PathBuf::from)
@@ -470,17 +471,17 @@ async fn execute_remote_download(
 }
 
 #[allow(clippy::disallowed_macros)]
-pub fn make_template(filename: &PathBuf) -> anyhow::Result<()> {
+pub fn make_template(filename: &PathBuf) -> miette::Result<()> {
     let template = make_template_impl(filename)?;
-    let yaml = serde_saphyr::to_string(&template)?;
+    let yaml = serde_saphyr::to_string(&template).into_diagnostic()?;
 
     println!("{yaml}");
     Ok(())
 }
 
-fn make_template_impl(filename: &PathBuf) -> anyhow::Result<HashMap<String, DefaultValue>> {
-    let contents = fs::read_to_string(filename)?;
-    let cwl: CWLDocument = serde_saphyr::from_str(&contents)?;
+fn make_template_impl(filename: &PathBuf) -> miette::Result<HashMap<String, DefaultValue>> {
+    let contents = fs::read_to_string(filename).into_diagnostic()?;
+    let cwl: CWLDocument = serde_saphyr::from_str(&contents).into_diagnostic()?;
 
     Ok(cwl
         .get_inputs() //we assume there is no stdin

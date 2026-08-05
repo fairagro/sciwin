@@ -2,6 +2,7 @@ use crate::cwl::resolve_filename;
 use clap::Args;
 use dialoguer::Confirm;
 use ignore::WalkBuilder;
+use miette::IntoDiagnostic;
 use sciwin::cwl::documents::CWLDocument;
 use sciwin::cwl::documents::Workflow;
 use sciwin::cwl::load_cwl_file;
@@ -15,20 +16,20 @@ pub struct RemoveCWLArgs {
     pub file: String,
 }
 
-pub fn handle_remove_command(args: &RemoveCWLArgs) -> anyhow::Result<()> {
+pub fn handle_remove_command(args: &RemoveCWLArgs) -> miette::Result<()> {
     let filename = if Path::new(&args.file).exists() {
         args.file.to_string()
     } else {
         resolve_filename(&args.file)
-            .map_err(|e| anyhow::anyhow!("Could not resolve CWL File: {}", e))?
+            .map_err(|e| miette::miette!("Could not resolve CWL File: {}", e))?
     };
     remove_cwl_file(&filename)
 }
 
-fn remove_cwl_file(filename: impl AsRef<Path>) -> anyhow::Result<()> {
+fn remove_cwl_file(filename: impl AsRef<Path>) -> miette::Result<()> {
     let filename = filename.as_ref();
-    let cwd = env::current_dir()?;
-    let repo = Repository::open(&cwd)?;
+    let cwd = env::current_dir().into_diagnostic()?;
+    let repo = Repository::open(&cwd).into_diagnostic()?;
 
     if filename.exists() && filename.is_file() && filename.extension().is_some_and(|e| e == "cwl") {
         let folder = filename.parent().expect("Can not get parent dir");
@@ -45,16 +46,17 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> anyhow::Result<()> {
             let remove_anyway = Confirm::new()
                 .with_prompt(format!("Do you still want to remove '{tool_name}'?"))
                 .default(false)
-                .interact()?;
+                .interact()
+                .into_diagnostic()?;
             if !remove_anyway {
                 info!("Aborting removal of '{}'", filename.display());
                 return Ok(());
             }
         }
-        fs::remove_file(filename)?;
+        fs::remove_file(filename).into_diagnostic()?;
 
-        if folder.read_dir()?.next().is_none() {
-            fs::remove_dir_all(folder)?;
+        if folder.read_dir().into_diagnostic()?.next().is_none() {
+            fs::remove_dir_all(folder).into_diagnostic()?;
         }
 
         let message = format!("✔️  Removed CWL file: {}", filename.display());
@@ -66,7 +68,7 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> anyhow::Result<()> {
             "File {} does not exist or is not a CWL file.",
             filename.display()
         );
-        anyhow::bail!(
+        miette::bail!(
             "File does not exist or is not a CWL file: {}",
             filename.display()
         );
@@ -76,7 +78,7 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> anyhow::Result<()> {
 pub fn check_tool_usage_in_workflows(
     cwd: impl AsRef<Path>,
     tool: &str,
-) -> anyhow::Result<Vec<String>> {
+) -> miette::Result<Vec<String>> {
     let mut workflows = Vec::new();
     let tool_name = tool.strip_suffix(".cwl").unwrap_or(tool);
     for entry in WalkBuilder::new(cwd)

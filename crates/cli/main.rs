@@ -10,22 +10,23 @@ use s4n::{
     logger::init_logger,
 };
 use std::process::exit;
-use tracing::{error, level_filters::LevelFilter};
+use tracing::level_filters::LevelFilter;
 
 #[tokio::main]
 async fn main() {
     if let Err(e) = run().await {
-        error!("{e}");
-        if let Some(src) = e.source() {
-            error!("Caused by: {src}");
-        }
+        // Printed directly rather than via `tracing::error!`: the fmt subscriber's default
+        // visitor sanitizes ANSI/control bytes out of message fields (a terminal-injection
+        // guard for untrusted log content), which would also neuter miette's fancy colored
+        // report. This is the final fatal report right before exit, so it bypasses that layer.
+        eprintln!("{e:?}");
         let code = e.downcast_ref::<ExitCode>().unwrap_or(&ExitCode(1));
         exit(code.0)
     }
     exit(0);
 }
 
-async fn run() -> anyhow::Result<()> {
+async fn run() -> miette::Result<()> {
     let args = Cli::parse();
     if args.quiet {
         init_logger(LevelFilter::ERROR);
