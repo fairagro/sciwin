@@ -2,8 +2,11 @@
 
 use crate::{
     authoring::{
-        AuthoringError, AuthoringResult, tool::{paths::resolve_path, postprocess::post_process_cwl},
-    }, paths::TrustedPathExt, repository::{self, Repository},
+        AuthoringError, AuthoringResult,
+        tool::{paths::resolve_path, postprocess::post_process_cwl},
+    },
+    paths::TrustedPathExt,
+    repository::{self, Repository},
 };
 use anyhow::Context as _;
 use commonwl::{
@@ -84,7 +87,6 @@ fn prepare_save(tool: &mut CommandLineTool, path: &Path) -> AuthoringResult<Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::MAIN_SEPARATOR;
     use commonwl::{
         OneOrMany,
         files::{Dirent, File, FileOrDirectory},
@@ -96,11 +98,12 @@ mod tests {
         types::CWLType,
     };
     use serde_json::Value;
+    use std::path::MAIN_SEPARATOR_STR;
 
     #[test]
     pub fn test_cwl_save() {
         fn os_path(s: &str) -> String {
-            s.split('/').collect::<Vec<_>>().join(&MAIN_SEPARATOR.to_string())
+            s.split('/').collect::<Vec<_>>().join(MAIN_SEPARATOR_STR)
         }
         let inputs = vec![
             CommandInputParameter::builder()

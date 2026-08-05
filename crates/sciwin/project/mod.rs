@@ -484,6 +484,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_cleanup_failed_init() {
+        check_git_user().unwrap();
         let cwd = env::current_dir().unwrap();
 
         let temp_dir = tempdir().unwrap();
