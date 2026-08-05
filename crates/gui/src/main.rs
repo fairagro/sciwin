@@ -1,9 +1,9 @@
 use dioxus::desktop::tao::window::Icon;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
-use sciwin::ApplicationState;
-use sciwin::components::{ToastItem, ToastProvider};
-use sciwin::layout::Route;
+use sciwin_studio::ApplicationState;
+use sciwin_studio::components::{ToastItem, ToastProvider};
+use sciwin_studio::layout::Route;
 
 fn main() {
     dioxus::LaunchBuilder::desktop()

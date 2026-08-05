@@ -8,10 +8,13 @@ use dioxus_free_icons::{
     icons::go_icons::{GoDownload, GoCloud, GoPackage},
 };
 use serde::{Deserialize, Serialize};
-use crate::reana_integration::{get_reana_credentials, store_reana_credentials, delete_reana_credentials};
+use crate::reana_integration::{
+    build_reana_runner, delete_reana_credentials, get_reana_credentials, store_reana_credentials,
+};
 use crate::reana_integration::get_last_workflow_name;
-use remote_execution::export_rocrate;
+use sciwin::execution::WorkflowRunner;
 use crate::layout::Route;
+use std::path::PathBuf;
 
 #[derive(Clone, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum ExecutionType {
@@ -66,18 +69,23 @@ pub fn TerminalViewer(
                             use_coroutine(move |mut _co: dioxus::prelude::UnboundedReceiver<()>| {
                                 let output_dir = output_dir.clone();
                                 async move {
+                                    let (instance, _token) = match get_reana_credentials() {
+                                        Ok(Some(creds)) => creds,
+                                        Ok(None) => { eprintln!("❌ No REANA credentials found"); return; }
+                                        Err(e) => { eprintln!("❌ Failed to get REANA credentials: {e}"); return; }
+                                    };
                                     let workflow_name = match get_last_workflow_name().await {
                                         Ok(n) => n,
                                         Err(e) => { eprintln!("❌ Failed to get workflow name: {e}"); return; }
                                     };
-                                    let result = tokio::task::spawn_blocking(move || {
-                                        remote_execution::download_results(&workflow_name, false, output_dir.as_ref())
-                                            .map_err(|e| e.to_string())
-                                    }).await;
-                                    match result {
-                                        Ok(Ok(())) => eprintln!("✅ Download completed successfully."),
-                                        Ok(Err(e)) => eprintln!("❌ Download failed: {e}"),
-                                        Err(e) => eprintln!("❌ Task panicked: {e}"),
+                                    let runner = match build_reana_runner(&instance) {
+                                        Ok(r) => r,
+                                        Err(e) => { eprintln!("❌ Failed to connect to REANA: {e}"); return; }
+                                    };
+                                    let out_dir = output_dir.map(PathBuf::from);
+                                    match runner.outputs(&workflow_name, out_dir.as_deref()).await {
+                                        Ok(_) => eprintln!("✅ Download completed successfully."),
+                                        Err(e) => eprintln!("❌ Download failed: {e}"),
                                     }
                                 }
                             });
@@ -95,29 +103,45 @@ pub fn TerminalViewer(
                                 "Exporting RO-Crate...".to_string(),
                                 3,
                             ));
-                            let working_dir: Option<String> = app_state()
-                                .working_directory
-                                .as_ref()
-                                .map(|p| p.to_string_lossy().to_string());
-                            let output_dir: Option<String> = working_dir.clone().map(|dir| {
-                                std::path::Path::new(&dir).join("rocrate").to_string_lossy().into_owned()
-                            });
+                            let working_dir = app_state().working_directory.clone();
                             use_coroutine(move |mut _co: dioxus::prelude::UnboundedReceiver<()>| {
                                 let working_dir = working_dir.clone();
-                                let output_dir = output_dir.clone();
                                 async move {
+                                    let Some(working_dir) = working_dir else {
+                                        eprintln!("❌ No working directory configured.");
+                                        return;
+                                    };
+                                    let output_dir = working_dir.join("rocrate");
+                                    let (instance, _token) = match get_reana_credentials() {
+                                        Ok(Some(creds)) => creds,
+                                        Ok(None) => { eprintln!("❌ No REANA credentials found"); return; }
+                                        Err(e) => { eprintln!("❌ Failed to get REANA credentials: {e}"); return; }
+                                    };
                                     let workflow_name: String = match get_last_workflow_name().await {
                                         Ok(name) => name,
                                         Err(e) => { eprintln!("❌ Failed to get workflow name: {e}"); return; }
                                     };
-                                    let result = tokio::task::spawn_blocking(move || {
-                                        export_rocrate(&workflow_name, output_dir.as_ref(), working_dir.as_ref())
-                                            .map_err(|e| e.to_string())
-                                    }).await;
+                                    let runner = match build_reana_runner(&instance) {
+                                        Ok(r) => r,
+                                        Err(e) => { eprintln!("❌ Failed to connect to REANA: {e}"); return; }
+                                    };
+                                    let metadata = match sciwin::project::read_config(&working_dir) {
+                                        Ok(cfg) => cfg.workflow,
+                                        Err(e) => { eprintln!("❌ Failed to read project config: {e}"); return; }
+                                    };
+                                    let result = sciwin::provenance::reana_runner::export(
+                                        runner.get_client(),
+                                        &workflow_name,
+                                        metadata,
+                                        &output_dir,
+                                        chrono::Utc::now(),
+                                    )
+                                    .await;
                                     match result {
-                                        Ok(Ok(())) => eprintln!("✅ RO-Crate exported successfully."),
-                                        Ok(Err(e)) => eprintln!("❌ RO-Crate export failed: {e}"),
-                                        Err(e) => eprintln!("❌ Task panicked: {e}"),
+                                        Ok((written, _validation)) => {
+                                            eprintln!("✅ RO-Crate exported to {}.", written.metadata.display())
+                                        }
+                                        Err(e) => eprintln!("❌ RO-Crate export failed: {e}"),
                                     }
                                 }
                             });

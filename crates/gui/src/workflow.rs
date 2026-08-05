@@ -18,6 +18,7 @@ use petgraph::{
     visit::EdgeRef,
 };
 use rand::RngExt;
+use sciwin::authoring::workflow::WorkflowSlot;
 use std::{
     fs,
     io::Write,
@@ -66,7 +67,12 @@ impl VisualWorkflow {
         }
         let name = &final_name.as_str();
 
-        s4n_core::workflow::add_workflow_step(&mut self.workflow, name, path, doc);
+        let workflow_path = self
+            .path
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("workflow has no path"))?;
+        let tool_path = working_dir.join(path);
+        sciwin::authoring::workflow::add_workflow_step(&mut self.workflow, &workflow_path, name, &tool_path, doc)?;
 
         let path = Path::new(path);
         if doc.get_id().is_none() {
@@ -167,41 +173,40 @@ impl VisualWorkflow {
 
         let from_filename = &from_node.path;
         let to_filename = &to_node.path;
+        let workflow_path = self
+            .path
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("workflow has no path"))?;
 
         if self.workflow.has_step(from_name)
             && self.workflow.has_step(to_name)
             && let Some(from_filename) = from_filename
             && let Some(to_filename) = to_filename
         {
-            s4n_core::workflow::add_workflow_step_connection(
+            sciwin::authoring::workflow::add_workflow_step_connection(
                 &mut self.workflow,
-                from_filename,
-                from_name,
-                from_slot_id,
-                to_filename,
-                to_name,
-                to_slot_id,
+                &workflow_path,
+                WorkflowSlot::new(from_filename, from_name, from_slot_id),
+                WorkflowSlot::new(to_filename, to_name, to_slot_id),
             )?;
         } else if !self.workflow.has_step(from_name)
             && let Some(to_filename) = to_filename
         {
             // from name is input
-            s4n_core::workflow::add_workflow_input_connection(
+            sciwin::authoring::workflow::add_workflow_input_connection(
                 &mut self.workflow,
+                &workflow_path,
                 from_slot_id,
-                to_filename,
-                to_name,
-                to_slot_id,
+                WorkflowSlot::new(to_filename, to_name, to_slot_id),
             )?;
         } else if !self.workflow.has_step(to_name)
             && let Some(from_filename) = from_filename
         {
             // from to name is output
-            s4n_core::workflow::add_workflow_output_connection(
+            sciwin::authoring::workflow::add_workflow_output_connection(
                 &mut self.workflow,
-                from_name,
-                from_slot_id,
-                from_filename,
+                &workflow_path,
+                WorkflowSlot::new(from_filename, from_name, from_slot_id),
                 to_name,
             )?;
         } else {
@@ -241,13 +246,13 @@ impl VisualWorkflow {
         let to_slot = edge.target_port.clone();
         //todo if input/output in named like a step it is confused!
         if self.workflow.has_step(from_node) && self.workflow.has_step(to_node) {
-            s4n_core::workflow::remove_workflow_step_connection(
+            sciwin::authoring::workflow::remove_workflow_step_connection(
                 &mut self.workflow,
                 to_node,
                 &to_slot,
             )?
         } else if !self.workflow.has_step(from_node) {
-            s4n_core::workflow::remove_workflow_input_connection(
+            sciwin::authoring::workflow::remove_workflow_input_connection(
                 &mut self.workflow,
                 from_node,
                 to_node,
@@ -255,7 +260,7 @@ impl VisualWorkflow {
                 false,
             )?
         } else if !self.workflow.has_step(to_node) {
-            s4n_core::workflow::remove_workflow_output_connection(
+            sciwin::authoring::workflow::remove_workflow_output_connection(
                 &mut self.workflow,
                 to_node,
                 false,
@@ -317,7 +322,7 @@ mod tests {
     use super::*;
     use commonwl::types::CWLType;
     use dircpy::copy_dir;
-    use repository::{Repository, initial_commit};
+    use sciwin::repository::{Repository, initial_commit};
     use serial_test::serial;
     use std::env;
     use tempfile::TempDir;

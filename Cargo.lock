@@ -7794,6 +7794,7 @@ name = "sciwin_studio"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "commonwl",
  "dioxus",
@@ -7811,6 +7812,7 @@ dependencies = [
  "rfd",
  "rust-sugiyama",
  "sciwin",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_yaml",

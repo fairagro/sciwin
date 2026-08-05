@@ -3,7 +3,8 @@ use crate::layout::RELOAD_TRIGGER;
 use crate::layout::Route;
 use dioxus::prelude::*;
 use dioxus_primitives::alert_dialog::*;
-use s4n_core::{io::get_workflows_folder, workflow::create_workflow};
+use sciwin::authoring::paths::WORKFLOWS_FOLDER;
+use sciwin::authoring::workflow::create_workflow;
 use std::path::{Path, PathBuf};
 
 #[component]
@@ -122,8 +123,8 @@ fn create_workflow_impl(project_root: impl AsRef<Path>, name: String) -> anyhow:
         anyhow::bail!("Workflow name was empty. Please enter a name!")
     }
 
-    let path = project_root.as_ref().join(get_workflows_folder()).join(&name).join(format!("{name}.cwl"));
-    create_workflow(&path, false)?;
+    let output_dir = project_root.as_ref().join(WORKFLOWS_FOLDER).join(&name);
+    let (path, _yaml) = create_workflow(&name, Some(output_dir), false).map_err(|e| anyhow::anyhow!("{e}"))?;
 
     navigator().push(Route::WorkflowView {
         path: path.to_string_lossy().to_string(),

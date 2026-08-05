@@ -9,20 +9,17 @@ use crate::use_app_state;
 use dioxus::core::spawn;
 use dioxus_free_icons::Icon;
 use dioxus_free_icons::icons::go_icons::{GoCloud, GoFileDirectory, GoPlay, GoPlusCircle, GoTrash};
-use repository::Repository;
-use repository::submodule::{add_submodule, remove_submodule};
+use sciwin::repository::Repository;
+use sciwin::repository::submodule::{add_submodule, remove_submodule};
 use reqwest::Url;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::{env, fs};
 use std::sync::Arc;
-use commonwl::engine::{
-    ContainerEngine, EngineStatus, InputObject, LocalBackend, create_execution_request,
-    create_execution_request_with_inputs, evaluate_exitcodes,
-};
+use commonwl::engine::{ContainerEngine, InputObject, LocalBackend, load_input_file_from_file};
 use commonwl::storage::{StorageBackend, StoragePath};
 use futures_util::StreamExt;
-use tokio_util::sync::CancellationToken;
+use sciwin::execution::{RunStatus, TaskRunner, WorkflowRunner};
 use dioxus::prelude::*;
 
 #[component]
@@ -83,32 +80,27 @@ pub fn SolutionView(
                                 storage,
                                 local_data_store,
                             ));
+                            let runner = TaskRunner::new(backend);
 
-                            let out_dir = Some(base_dir.as_path());
-                            let request = if fs::exists(&inputs_path).unwrap_or(false) {
-                                create_execution_request(
-                                    cwl_path.clone(),
-                                    inputs_path.to_string_lossy().into_owned(),
-                                    out_dir,
-                                )?
+                            let inputs = if fs::exists(&inputs_path).unwrap_or(false) {
+                                load_input_file_from_file(inputs_path.clone(), workflow_dir.clone())
+                                    .map_err(|e| anyhow::anyhow!("{e}"))?
                             } else {
-                                create_execution_request_with_inputs(
-                                    cwl_path.clone(),
-                                    InputObject::default(),
-                                    out_dir,
-                                    None,
-                                )?
+                                InputObject::default()
                             };
 
-                            let cancellation_token = CancellationToken::new();
-                            let result =
-                                commonwl::engine::execute(backend, &request, cancellation_token).await?;
-                            let evaluated_code =
-                                evaluate_exitcodes(&result.exit_status, &request.specification);
+                            let out_dir = Some(base_dir.as_path());
+                            let run_id = runner.submit(&cwl_path, inputs, out_dir).await?;
+                            let status = runner.wait_for_completion(&run_id).await?;
 
-                            match evaluated_code {
-                                EngineStatus::Success(_) => Ok(()),
-                                _ => anyhow::bail!("Execution failed"),
+                            match status {
+                                RunStatus::Finished => Ok(()),
+                                _ => match runner.failure_detail(&run_id).await? {
+                                    Some(detail) => {
+                                        anyhow::bail!("workflow ended with status {status:?}: {detail}")
+                                    }
+                                    None => anyhow::bail!("workflow ended with status {status:?}"),
+                                },
                             }
                         }
                         .await;
@@ -314,6 +306,7 @@ pub fn SolutionView(
                                     url,
                                     &None,
                                     &working_dir.join(package_dir.join(repo_name)),
+                                    &format!("📦 Installed Package {repo_name}"),
                                 )?;
                                 *RELOAD_TRIGGER.write() += 1;
                                 processing.set(false);
@@ -364,7 +357,7 @@ pub fn Submodule_View(
                                         };
                                         if let Some(dir) = working_dir {
                                             let repo = Repository::open(dir)?;
-                                            remove_submodule(&repo, &module)?;
+                                            remove_submodule(&repo, &module, &format!("📦 Removed Package {module}"))?;
                                             *RELOAD_TRIGGER.write() += 1;
                                         }
                                         dialog_signals.1.set(false);

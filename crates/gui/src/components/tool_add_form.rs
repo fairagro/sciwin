@@ -1,13 +1,10 @@
 use crate::layout::{INPUT_TEXT_CLASSES, RELOAD_TRIGGER, Route};
 use crate::{components::Terminal, use_app_state};
-use commonwl::documents::CommandLineTool;
 use dioxus::prelude::*;
 use dioxus_free_icons::icons::go_icons::GoSync;
 use dioxus_free_icons::{Icon, icons::go_icons::GoAlert};
-use repository::Repository;
-use s4n_core::tool::{ContainerInfo, ToolCreationOptions, create_tool};
-use s4n_core::{auto_container_engine, io};
-use std::env;
+use sciwin::authoring::tool::{ContainerInfo, CreatedTool, ToolCreationOptions, auto_container_engine, create_tool};
+use sciwin::repository::Repository;
 use std::time::Duration;
 
 #[component]
@@ -34,7 +31,7 @@ pub fn ToolAddForm() -> Element {
             if let Some(working_dir) = working_dir
                 && let Ok(repo) = Repository::open(working_dir)
             {
-                modified_files.set(repository::get_modified_files(&repo));
+                modified_files.set(sciwin::repository::get_modified_files(&repo).unwrap_or_default());
             }
 
             tokio::time::sleep(Duration::from_secs(5)).await;
@@ -51,42 +48,37 @@ pub fn ToolAddForm() -> Element {
                 }
                 running.set(true);
 
-                //could refactor the create tool method to not use current dir...
-                let current = env::current_dir()?;
-                env::set_current_dir(working_dir().unwrap())?;
+                let project_root = working_dir().unwrap();
                 let tool_name = name();
                 let container_image = container_image();
                 let container_tag = container_tag();
                 let enable_network = enable_network();
                 let command = command();
 
-                let container_options = container_image
-                    .as_ref()
-                    .map(|image| ContainerInfo {
-                        image,
-                        tag: container_tag.as_deref(),
-                    });
+                let container = container_image.map(|image| ContainerInfo {
+                    image,
+                    tag: container_tag,
+                });
                 let command = shlex::split(&command).unwrap();
-                let run_container = if container_options.is_some() {
+                let run_container = if container.is_some() {
                     auto_container_engine()
                 } else {
                     None
                 };
                 let options = ToolCreationOptions {
-                    command: &command,
-                    container: container_options,
+                    command,
+                    container,
                     enable_network,
                     commit: true,
                     run_container,
+                    name: tool_name,
+                    save: true,
                     ..Default::default()
                 };
 
-                let yaml = create_tool(&options, tool_name, true).await?;
-                let cwl: CommandLineTool = serde_yaml::from_str(&yaml)?;
-                let path = io::get_qualified_filename(&cwl.base_command.unwrap(), name());
-                let path = working_dir().unwrap().join(path);
+                let CreatedTool { path, .. } = create_tool(&project_root, &options).await?;
+                let path = project_root.join(path);
                 *RELOAD_TRIGGER.write() += 1;
-                env::set_current_dir(current)?;
                 running.set(false);
                 navigator()
                     .push(Route::ToolView {

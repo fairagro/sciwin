@@ -7,8 +7,9 @@ use crate::{
 use dioxus::{html::geometry::ClientPoint, prelude::*, router::RouterContext};
 use pathdiff::diff_paths;
 use petgraph::graph::NodeIndex;
-use repository::{Repository, commit, stage_file};
-use s4n_core::{config::Config, project::initialize_project};
+use sciwin::project::config::Config;
+use sciwin::project::initialize_project;
+use sciwin::repository::{Repository, commit, stage_file};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::env;
 use std::{
@@ -254,12 +255,12 @@ mod tests {
 
         let filename = env::current_dir().unwrap().join("./test_dir/161.txt");
         let repo = Repository::open_from_env().unwrap();
-        let modified_files = repository::get_modified_files(&repo);
+        let modified_files = sciwin::repository::get_modified_files(&repo).unwrap();
         assert_eq!(modified_files.len(), 1);
 
         assert!(save_file_canonical(filename, "haha sciwin go brr").is_ok());
 
-        let modified_files = repository::get_modified_files(&repo);
+        let modified_files = sciwin::repository::get_modified_files(&repo).unwrap();
         assert_eq!(modified_files.len(), 0);
     }
 }

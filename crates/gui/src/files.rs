@@ -1,6 +1,6 @@
 use crate::components::files::{Node, read_node_type};
 use ignore::WalkBuilder;
-use repository::Repository;
+use sciwin::repository::Repository;
 use std::{collections::HashMap, path::Path};
 
 pub fn get_cwl_files(path: impl AsRef<Path>) -> Vec<Node> {

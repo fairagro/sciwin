@@ -188,6 +188,35 @@ async fn create_tool_base(
     Ok(cwl)
 }
 
+fn command_available(cmd: &str) -> bool {
+    #[cfg(unix)]
+    let checker = "which";
+    #[cfg(windows)]
+    let checker = "where";
+
+    std::process::Command::new(checker)
+        .arg(cmd)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Picks the first container engine found on `PATH`, in the order `docker`, `podman`,
+/// `apptainer`, `singularity`. Returns `None` if none of them are installed.
+pub fn auto_container_engine() -> Option<ContainerEngine> {
+    if command_available("docker") {
+        Some(ContainerEngine::Docker)
+    } else if command_available("podman") {
+        Some(ContainerEngine::Podman)
+    } else if command_available("apptainer") {
+        Some(ContainerEngine::Apptainer)
+    } else if command_available("singularity") {
+        Some(ContainerEngine::Singularity)
+    } else {
+        None
+    }
+}
+
 // Integration coverage of `create_tool` (this module's entry point) lives in
 // `crates/sciwin/tests/tool_integration_test.rs` -- it only touches public API and drives
 // real git repos and subprocesses end to end, which is integration-test territory.

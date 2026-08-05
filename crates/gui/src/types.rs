@@ -5,7 +5,7 @@ use commonwl::{
     outputs::{CommandOutputParameterType, WorkflowOutputParameter},
 };
 use dioxus::html::geometry::euclid::Point2D;
-use s4n_core::workflow::check_slot_compatibility;
+use sciwin::authoring::workflow::check_slot_compatibility;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
