@@ -1,5 +1,5 @@
 use super::{BAD_WORDS, staging};
-use crate::authoring::AuthoringResult;
+use crate::{authoring::AuthoringResult, paths::TrustedPathExt};
 use commonwl::{
     IntegerOrExpression,
     documents::CommandLineTool,
@@ -12,7 +12,7 @@ use serde_json::Value;
 use slugify::slugify;
 use std::path::Path;
 
-pub(crate) fn build_inputs(args: &[&str], base: &Path) -> Vec<CommandInputParameter> {
+pub(crate) fn build_inputs(args: &[&str], base: &Path) -> AuthoringResult<Vec<CommandInputParameter>> {
     let mut inputs = vec![];
     let mut i = 0;
     while i < args.len() {
@@ -20,19 +20,19 @@ pub(crate) fn build_inputs(args: &[&str], base: &Path) -> Vec<CommandInputParame
         let input: CommandInputParameter = if is_flag_like(arg) {
             if i + 1 < args.len() && !is_flag_like(args[i + 1]) {
                 //is not a flag, as next one is a value
-                let option = build_option(arg, args[i + 1], base);
+                let option = build_option(arg, args[i + 1], base)?;
                 i += 1;
                 option
             } else {
                 build_flag(arg)
             }
         } else {
-            build_positional(arg, i.try_into().unwrap(), base)
+            build_positional(arg, i.try_into().unwrap(), base)?
         };
         inputs.push(input);
         i += 1;
     }
-    inputs
+    Ok(inputs)
 }
 
 /// A leading `-` alone doesn't make something a flag — negative numbers
@@ -41,8 +41,8 @@ fn is_flag_like(s: &str) -> bool {
     s.starts_with('-') && s.parse::<f64>().is_err()
 }
 
-fn build_positional(current: &str, index: isize, base: &Path) -> CommandInputParameter {
-    let (current, cwl_type) = parse_input(current, base);
+fn build_positional(current: &str, index: isize, base: &Path) -> AuthoringResult<CommandInputParameter> {
+    let (current, cwl_type) = parse_input(current, base)?;
 
     // detected before building id/default -- a secret must never reach the default
     // value either, only its presence (behind a random id) may be recorded
@@ -64,7 +64,7 @@ fn build_positional(current: &str, index: isize, base: &Path) -> CommandInputPar
     // secrets are left without a default
     let default_value = (!is_secret).then(|| parse_default_value(current, &cwl_type));
 
-    CommandInputParameter::builder()
+    Ok(CommandInputParameter::builder()
         .id(&id)
         .r#type(cwl_type)
         .maybe_default(default_value)
@@ -73,7 +73,7 @@ fn build_positional(current: &str, index: isize, base: &Path) -> CommandInputPar
                 .position(IntegerOrExpression::Int(index as i32))
                 .build(),
         )
-        .build()
+        .build())
 }
 
 fn build_flag(current: &str) -> CommandInputParameter {
@@ -86,16 +86,16 @@ fn build_flag(current: &str) -> CommandInputParameter {
         .build()
 }
 
-fn build_option(current: &str, next: &str, base: &Path) -> CommandInputParameter {
-    let (next, cwl_type) = parse_input(next, base);
+fn build_option(current: &str, next: &str, base: &Path) -> AuthoringResult<CommandInputParameter> {
+    let (next, cwl_type) = parse_input(next, base)?;
     let default_value = parse_default_value(next, &cwl_type);
 
-    CommandInputParameter::builder()
+    Ok(CommandInputParameter::builder()
         .input_binding(CommandLineBinding::builder().prefix(current).build())
         .id(slugify!(current, separator = "_").as_str())
         .r#type(cwl_type)
         .default(default_value)
-        .build()
+        .build())
 }
 
 fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
@@ -115,7 +115,7 @@ fn parse_default_value(value: &str, cwl_type: &CWLType) -> DefaultValue {
     }
 }
 
-fn parse_input<'a>(input: &'a str, base: &Path) -> (&'a str, CWLType) {
+fn parse_input<'a>(input: &'a str, base: &Path) -> AuthoringResult<(&'a str, CWLType)> {
     if let Some((hint, name)) = input.split_once(':') {
         if hint.len() == 1 {
             let type_ = match hint {
@@ -128,12 +128,12 @@ fn parse_input<'a>(input: &'a str, base: &Path) -> (&'a str, CWLType) {
                 "b" => CWLType::Boolean,
                 _ => CWLType::Any, //whatever
             };
-            (name, type_)
+            Ok((name, type_))
         } else {
-            (input, guess_type(input, base))
+            Ok((input, guess_type(input, base)?))
         }
     } else {
-        (input, guess_type(input, base))
+        Ok((input, guess_type(input, base)?))
     }
 }
 
@@ -143,7 +143,7 @@ pub(crate) fn add_fixed_inputs(
     base: &Path,
 ) -> AuthoringResult<()> {
     for input in inputs {
-        let (input, type_) = parse_input(input, base);
+        let (input, type_) = parse_input(input, base)?;
 
         //todo: add requiement for directory also or add new --mount param and remove block from here
         if matches!(type_, CWLType::File) {
@@ -168,14 +168,14 @@ pub(crate) fn add_fixed_inputs(
 /// Tries to guess the CWLType of a given value.
 ///
 /// `value` is checked relative to `base` (the project root)
-pub fn guess_type(value: &str, base: &Path) -> CWLType {
-    let path = base.join(value);
+pub fn guess_type(value: &str, base: &Path) -> AuthoringResult<CWLType> {
+    let path = base.build_trusted_path(value)?;
     if path.exists() {
         if path.is_file() {
-            return CWLType::File;
+            return Ok(CWLType::File);
         }
         if path.is_dir() {
-            return CWLType::Directory;
+            return Ok(CWLType::Directory);
         }
     }
 
@@ -185,14 +185,14 @@ pub fn guess_type(value: &str, base: &Path) -> CWLType {
         || value.starts_with("s3://")
         || value.starts_with("file://")
     {
-        return CWLType::File; //urls are files!
+        return Ok(CWLType::File); //urls are files!
     }
 
     //we do not have to check for files that do not exist yet, as CWLTool would run into a failure
     let Ok(yaml_value) = serde_saphyr::from_str::<Value>(value) else {
-        return CWLType::String; // not valid YAML scalar syntax -> treat as opaque string
+        return Ok(CWLType::String); // not valid YAML scalar syntax -> treat as opaque string
     };
-    match yaml_value {
+    Ok(match yaml_value {
         Value::Null => CWLType::Null,
         Value::Bool(_) => CWLType::Boolean,
         Value::Number(number) => {
@@ -204,7 +204,7 @@ pub fn guess_type(value: &str, base: &Path) -> CWLType {
         }
         Value::String(_) => CWLType::String,
         _ => CWLType::String,
-    }
+    })
 }
 
 #[cfg(test)]
@@ -252,7 +252,7 @@ mod tests {
         let inputs_vec = shlex::split(inputs).unwrap();
         let inputs_slice: Vec<&str> = inputs_vec.iter().map(AsRef::as_ref).collect();
 
-        let result = build_inputs(&inputs_slice, Path::new("."));
+        let result = build_inputs(&inputs_slice, Path::new(".")).unwrap();
 
         assert_eq!(result, expected);
     }
@@ -271,7 +271,7 @@ mod tests {
         let result = build_inputs(
             &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
             Path::new("."),
-        );
+        ).unwrap();
 
         assert_eq!(result[0], expected);
     }
@@ -285,7 +285,7 @@ mod tests {
             .input_binding(CommandLineBinding::builder().position(0).build())
             .default(DefaultValue::Any(Value::String(arg.to_string())))
             .build();
-        let result = build_inputs(&[arg], Path::new("."));
+        let result = build_inputs(&[arg], Path::new(".")).unwrap();
         assert_eq!(result[0], expected);
     }
 
@@ -297,7 +297,7 @@ mod tests {
         let result = build_inputs(
             &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
             Path::new("."),
-        );
+        ).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].id.as_deref(), Some("threshold"));
@@ -310,7 +310,7 @@ mod tests {
 
     #[test]
     pub fn test_get_inputs_standalone_negative_number() {
-        let result = build_inputs(&["-5"], Path::new("."));
+        let result = build_inputs(&["-5"], Path::new(".")).unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].r#type, CWLType::Int.into());
     }
@@ -328,7 +328,10 @@ mod tests {
 
     #[test]
     pub fn test_guess_type_malformed_yaml_does_not_panic() {
-        assert_eq!(guess_type("{unclosed", Path::new(".")), CWLType::String);
+        assert_eq!(
+            guess_type("{unclosed", Path::new(".")).unwrap(),
+            CWLType::String
+        );
     }
 
     #[test]
@@ -336,12 +339,12 @@ mod tests {
         // guess_type checks the filesystem relative to a passed-in base, so directory
         // existence is tested against a real tempdir rather than an incidental path relative
         // to the crate.
-        let base = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let base = &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
         let dir = tempfile::tempdir().unwrap();
         let dir_path = format!("{}/", dir.path().to_string_lossy());
 
         let inputs = &[
-            ("../../README.md", CWLType::File),
+            ("README.md", CWLType::File),
             ("/some/path/that/does/not/exist.txt", CWLType::String),
             (dir_path.as_str(), CWLType::Directory),
             ("--option", CWLType::String),
@@ -351,7 +354,7 @@ mod tests {
         ];
 
         for input in inputs {
-            let t = guess_type(input.0, base);
+            let t = guess_type(input.0, base).unwrap();
             assert_eq!(t, input.1);
         }
     }
@@ -362,13 +365,13 @@ mod tests {
         // slugify, which for a multi-word flag stripped the internal dash *before*
         // slugify could turn it into the separator -- "--dry-run" became id "dryrun"
         // instead of "dry_run". slugify already handles leading/internal dashes itself.
-        let result = build_inputs(&["--dry-run"], Path::new("."));
+        let result = build_inputs(&["--dry-run"], Path::new(".")).unwrap();
         assert_eq!(result[0].id.as_deref(), Some("dry_run"));
     }
 
     #[test]
     pub fn test_get_option_multiword_id_keeps_word_boundary() {
-        let result = build_inputs(&["--max-retries", "3"], Path::new("."));
+        let result = build_inputs(&["--max-retries", "3"], Path::new(".")).unwrap();
         assert_eq!(result[0].id.as_deref(), Some("max_retries"));
     }
 

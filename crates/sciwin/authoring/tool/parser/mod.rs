@@ -8,7 +8,10 @@
 //! Only [`guess_type`] is public; the rest is reached through
 //! [`crate::authoring::tool::create_tool`].
 
-use crate::authoring::tool::parser::command::{get_base_command, matches_script_modifier};
+use crate::authoring::{
+    AuthoringResult,
+    tool::parser::command::{get_base_command, matches_script_modifier},
+};
 use commonwl::{
     OneOrMany,
     documents::CommandLineTool,
@@ -31,7 +34,10 @@ pub use inputs::guess_type;
 
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 
-pub(crate) fn parse_command_line(commands: &[&str], base: &Path) -> CommandLineTool {
+pub(crate) fn parse_command_line(
+    commands: &[&str],
+    base: &Path,
+) -> AuthoringResult<CommandLineTool> {
     let base_command = get_base_command(commands);
 
     let remainder = match &base_command {
@@ -52,7 +58,7 @@ pub(crate) fn parse_command_line(commands: &[&str], base: &Path) -> CommandLineT
         let stdout = shell::handle_redirection(&cmd[stdout_pos..]);
         let stderr = shell::handle_redirection(&cmd[stderr_pos..]);
 
-        let inputs = inputs::build_inputs(&cmd[..first_redir_pos], base);
+        let inputs = inputs::build_inputs(&cmd[..first_redir_pos], base)?;
         let args = shell::collect_arguments(piped, &inputs);
 
         tool.inputs(inputs)
@@ -69,7 +75,7 @@ pub(crate) fn parse_command_line(commands: &[&str], base: &Path) -> CommandLineT
             ShellCommandRequirement,
         ));
     }
-    tool
+    Ok(tool)
 }
 
 /// Declares whatever the base command runs -- a script file, or a module directory -- as
@@ -145,6 +151,7 @@ mod tests {
             &cmd.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
             Path::new("."),
         )
+        .unwrap()
     }
 
     #[rstest]

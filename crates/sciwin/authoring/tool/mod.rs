@@ -151,7 +151,7 @@ async fn create_tool_base(
     }
 
     //parse command
-    let mut cwl = parser::parse_command_line(&command, project_root);
+    let mut cwl = parser::parse_command_line(&command, project_root)?;
     cwl.cwl_version = Some("v1.2".to_string());
 
     // handle outputs

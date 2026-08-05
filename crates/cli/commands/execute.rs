@@ -1,6 +1,8 @@
 use chrono::Utc;
 use clap::{Args, Subcommand};
+use miette::IntoDiagnostic;
 use sciwin::{
+    authoring::tool::parser::guess_type,
     cwl::{
         OneOrMany,
         documents::CWLDocument,
@@ -10,14 +12,12 @@ use sciwin::{
         storage::{StorageBackend, StoragePath},
         types::CWLType,
     },
-    authoring::tool::parser::guess_type,
     execution::{ReanaRunner, RunStatus, TaskRunner, WorkflowRunner},
     project,
     provenance::{Written, reana_runner as rocrate_export, task_runner as local_rocrate_export},
     reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
     rocrate::validate::Validation,
 };
-use miette::IntoDiagnostic;
 use serde_json::{Number, Value};
 use std::{
     collections::HashMap,
@@ -206,12 +206,16 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
     ));
     let runner = TaskRunner::new(backend);
 
-    let base_path = dunce::canonicalize(args.file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
+    let base_path =
+        dunce::canonicalize(args.file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
     let inputs = if args.args.is_empty() {
         debug!("no trailing arguments given, running with an empty input object");
         InputObject::default()
     } else if args.args.len() == 1 && fs::exists(args.args[0].clone()).into_diagnostic()? {
-        debug!("single argument is an existing file, loading it as an input YAML: {}", args.args[0]);
+        debug!(
+            "single argument is an existing file, loading it as an input YAML: {}",
+            args.args[0]
+        );
         load_input_file_from_file(args.args[0].clone(), base_path)?
     } else {
         debug!("parsing trailing arguments as --key value pairs");
@@ -221,7 +225,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
             .filter_map(|pair| {
                 if let Some(key) = pair[0].strip_prefix("--") {
                     let raw_value = &pair[1];
-                    let value = match guess_type(raw_value, Path::new(".")) {
+                    let value = match guess_type(raw_value, Path::new(".")).ok()? {
                         CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
                             File::builder().location(raw_value.to_string()).build(),
                         )),
@@ -261,7 +265,10 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
     match status {
         RunStatus::Finished => {
             if let Some(outputs) = runner.outputs(&run_id, args.out_dir.as_deref()).await? {
-                println!("{}", serde_json::to_string_pretty(&outputs).into_diagnostic()?);
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&outputs).into_diagnostic()?
+                );
             }
         }
         _ => match runner.failure_detail(&run_id).await? {
@@ -277,7 +284,10 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
         };
         let cwd = env::current_dir().into_diagnostic()?;
         let metadata = project::read_config(&cwd)?.workflow;
-        debug!("exporting Provenance Run Crate ({layout:?}) to {:?}", args.rocrate_dir);
+        debug!(
+            "exporting Provenance Run Crate ({layout:?}) to {:?}",
+            args.rocrate_dir
+        );
 
         let (written, validation) = local_rocrate_export::export(
             &runner,
@@ -327,7 +337,8 @@ async fn execute_remote_start(
 
     let inputs = match input_file {
         Some(input_file) => {
-            let base_path = dunce::canonicalize(file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
+            let base_path =
+                dunce::canonicalize(file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
             load_input_file_from_file(input_file.clone(), base_path)?
         }
         None => InputObject::default(),
@@ -345,7 +356,10 @@ async fn execute_remote_start(
         match status {
             RunStatus::Finished => {
                 if let Some(outputs) = runner.outputs(&run_id, None).await? {
-                    println!("{}", serde_json::to_string_pretty(&outputs).into_diagnostic()?);
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&outputs).into_diagnostic()?
+                    );
                 }
             }
             RunStatus::Failed => {
@@ -413,7 +427,7 @@ async fn execute_remote_rocrate(
 }
 
 /// Reads the project's `workflow.toml` from the current directory, exports the RO-Crate for
-/// `workflow_name` into `output_dir`, and reports what came out of it 
+/// `workflow_name` into `output_dir`, and reports what came out of it
 async fn export_rocrate(
     workflow_name: &str,
     client: Arc<ReanaClient>,
