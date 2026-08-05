@@ -9,7 +9,6 @@ use commonwl::{
 };
 use sciwin::execution::{RunStatus, WorkflowRunner};
 use serde_json::Value;
-use serial_test::serial;
 use std::{collections::HashMap, fs, path::PathBuf};
 use tempfile::tempdir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -21,7 +20,6 @@ fn file_input(location: impl Into<String>) -> DefaultValue {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local() {
     let dir = tempdir().unwrap();
     let runner = local_runner();
@@ -43,7 +41,6 @@ pub async fn test_execute_local() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_with_args() {
     let dir = tempdir().unwrap();
     let runner = local_runner();
@@ -76,7 +73,6 @@ pub async fn test_execute_local_with_args() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_with_file() {
     let dir = tempdir().unwrap();
     let runner = local_runner();
@@ -103,7 +99,6 @@ pub async fn test_execute_local_with_file() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_outdir() {
     let dir = tempdir().unwrap();
     let runner = local_runner();
@@ -120,7 +115,6 @@ pub async fn test_execute_local_outdir() {
 }
 
 #[tokio::test]
-#[serial]
 //docker not working on MacOS Github Actions
 #[cfg_attr(target_os = "macos", ignore)]
 pub async fn test_execute_local_workflow() {
@@ -147,7 +141,6 @@ pub async fn test_execute_local_workflow() {
 }
 
 #[tokio::test]
-#[serial]
 #[cfg(not(target_os = "windows"))] //file system issues with windows
 pub async fn test_execute_local_tool_default_cwl() {
     let file = PathBuf::from("../../testdata/default.cwl")
@@ -186,7 +179,6 @@ pub async fn test_execute_local_tool_default_cwl() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_workflow_no_steps() {
     //has no steps, do not complain!
     let file = PathBuf::from("../../testdata/wf_inout.cwl");
@@ -202,7 +194,6 @@ pub async fn test_execute_local_workflow_no_steps() {
 }
 
 #[tokio::test]
-#[serial]
 #[cfg(not(target_os = "windows"))] //file system issues with windows
 pub async fn test_execute_local_workflow_in_param() {
     let file = PathBuf::from("../../testdata/test-wf_features.cwl")
@@ -232,7 +223,6 @@ pub async fn test_execute_local_workflow_in_param() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_workflow_dir_out() {
     let file = PathBuf::from("../../testdata/wf_inout_dir.cwl")
         .canonicalize()
@@ -250,7 +240,6 @@ pub async fn test_execute_local_workflow_dir_out() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_workflow_file_out() {
     let file = PathBuf::from("../../testdata/wf_inout_file.cwl")
         .canonicalize()
@@ -266,7 +255,6 @@ pub async fn test_execute_local_workflow_file_out() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_workflow_directory_out() {
     let file = PathBuf::from("../../testdata/mkdir_wf.cwl")
         .canonicalize()
@@ -288,7 +276,6 @@ pub async fn test_execute_local_workflow_directory_out() {
 }
 
 #[tokio::test]
-#[serial]
 pub async fn test_execute_local_with_binary_input() {
     let file = PathBuf::from("../../testdata/read_bin.cwl")
         .canonicalize()
@@ -309,7 +296,6 @@ pub async fn test_execute_local_with_binary_input() {
 /// Moved from `execution::task_runner`'s unit tests: it runs a real workflow end to end
 /// through the local engine, which is integration-test territory, not a narrow unit check.
 #[tokio::test]
-#[serial]
 #[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 async fn test_execution_commonwl() {
     let runner = local_runner();
@@ -346,7 +332,6 @@ async fn test_execution_commonwl() {
 
 /// Moved from `execution::task_runner`'s unit tests alongside `test_execution_commonwl`.
 #[tokio::test]
-#[serial]
 #[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 async fn test_cancel_commonwl() {
     let runner = local_runner();

@@ -79,7 +79,6 @@ pub fn remove_submodule(repo: &Repository, name: &str, commit_msg: &str) -> Repo
 mod tests {
     use super::*;
     use fstest::fstest;
-    use fstest::serial_test;
     use std::env;
 
     #[fstest(repo = true)]
