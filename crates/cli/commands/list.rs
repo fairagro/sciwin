@@ -14,7 +14,7 @@ use std::{
     fs::FileType,
     path::{Path, PathBuf},
 };
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Args, Debug, Default)]
 pub struct ListCWLArgs {
@@ -29,12 +29,14 @@ pub struct ListCWLArgs {
 
 pub fn handle_list_command(args: &ListCWLArgs) -> miette::Result<()> {
     if let Some(file) = &args.file {
+        debug!("explicit target given: {file:?} (is_file={}, is_dir={})", file.is_file(), file.is_dir());
         if file.exists() && file.is_file() {
             list_single_cwl(file)?;
         } else if file.is_dir() {
             list_multiple(file, args.list_all)?;
         }
     } else {
+        debug!("no target given, walking current directory instead");
         list_multiple(env::current_dir().into_diagnostic()?, args.list_all)?;
     }
     Ok(())
@@ -46,6 +48,7 @@ fn list_single_cwl(filename: impl AsRef<Path>) -> miette::Result<()> {
         info!("Tool does not exist: {}", filename.display());
         return Ok(()); //we are okay with the non existance here!
     }
+    debug!("parsing CWL document at {}", filename.display());
 
     let tool = load_cwl_file(filename, true)
         .map_err(|e| miette::miette!("Could not load CWL File: {e}"))?;
@@ -70,6 +73,7 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> miette::Re
         "📂 Available CWL Files in: {}",
         cwd.as_ref().to_string_lossy().blue().bold()
     );
+    debug!("walking directory tree, respecting .gitignore (detailed={detailed})");
 
     // Create a table
     let mut table = Table::new();
@@ -103,6 +107,7 @@ pub(crate) fn list_multiple(cwd: impl AsRef<Path>, detailed: bool) -> miette::Re
 
                 // Read the contents of the file
                 let file_path = entry.path();
+                debug!("found CWL file: {}", file_path.display());
                 let folder = entry.path().parent().unwrap_or_else(|| Path::new("."));
                 // Parse content
                 if let Ok(doc) = load_cwl_file(file_path, true) {
@@ -396,6 +401,7 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> miette::Result<()> {
     for step in &wf.steps {
         let tool = match &step.run {
             StringOrDocument::String(run) => {
+                debug!("loading step tool: {}", path.join(run).display());
                 let CWLDocument::CommandLineTool(tool) = load_cwl_file(path.join(run), true)
                     .map_err(|e| {
                         miette::miette!("Could not load tool {:?}: {e}", path.join(run))

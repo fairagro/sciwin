@@ -30,6 +30,8 @@ async fn run() -> miette::Result<()> {
     let args = Cli::parse();
     if args.quiet {
         init_logger(LevelFilter::ERROR);
+    } else if args.debug {
+        init_logger(LevelFilter::DEBUG);
     } else {
         init_logger(LevelFilter::INFO);
     }

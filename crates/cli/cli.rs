@@ -24,8 +24,16 @@ pub struct Cli {
     #[command(subcommand)]
     pub command: Commands,
 
-    #[arg(short, long, global = true)]
+    #[arg(short, long, global = true, help = "Only print errors")]
     pub quiet: bool,
+
+    #[arg(
+        long,
+        global = true,
+        conflicts_with = "quiet",
+        help = "Explain in high detail what the CLI is doing internally"
+    )]
+    pub debug: bool,
 }
 
 #[derive(Debug, Subcommand)]

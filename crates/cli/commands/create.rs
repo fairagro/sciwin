@@ -7,10 +7,11 @@ use sciwin::authoring::tool::ToolCreationOptions;
 use sciwin::cwl::engine::ContainerEngine;
 use std::env;
 use std::{path::PathBuf, str::FromStr};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 pub async fn handle_create_command(args: &CreateArgs) -> miette::Result<()> {
     if args.command.is_empty() && args.name.is_some() {
+        debug!("no command given, only a name -- creating a workflow shell, not a tool");
         info!(
             "ℹ️  Workflow creation is optional. Creation will be triggered by adding the first connection, too!"
         );
@@ -147,6 +148,7 @@ pub fn create_workflow(args: &CreateArgs) -> miette::Result<()> {
     let Some(name) = &args.name else {
         return Err(miette!("❌ Workflow name is required"));
     };
+    debug!("creating workflow '{name}' (force={})", args.force);
 
     let (path, yaml) = sciwin::authoring::workflow::create_workflow(name, None, args.force)?;
 
@@ -164,11 +166,13 @@ pub async fn create_tool(args: &CreateArgs) -> miette::Result<()> {
         warn!("User requested no execution, could not determine outputs!");
     }
 
+    let cwd = env::current_dir().into_diagnostic()?;
+    debug!("running `{}` in {cwd:?} to observe its outputs", args.command.join(" "));
     let CreatedTool {
         document,
         path,
         yaml,
-    } = sciwin::authoring::tool::create_tool(&env::current_dir().into_diagnostic()?, &args.into()).await?;
+    } = sciwin::authoring::tool::create_tool(&cwd, &args.into()).await?;
 
     info!("Found outputs:");
     let string_outputs: Vec<String> = document
@@ -177,11 +181,13 @@ pub async fn create_tool(args: &CreateArgs) -> miette::Result<()> {
         .filter_map(|o| o.output_binding.as_ref()?.glob.clone().map(|g| g.as_many()))
         .flatten()
         .collect();
+    debug!("{} output(s) detected from glob bindings", string_outputs.len());
 
     print_list(&string_outputs);
 
     //save tool
     if args.is_raw {
+        debug!("--raw given, printing CWL to terminal instead of saving to disk");
         highlight_cwl(&yaml);
     } else {
         info!(

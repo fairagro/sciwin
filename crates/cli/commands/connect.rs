@@ -9,7 +9,7 @@ use sciwin::authoring::paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name}
 use sciwin::authoring::workflow::{self, WorkflowSlot};
 use sciwin::cwl::{documents::CWLDocument, format::format_cwl, load_cwl_file};
 use std::{fs, io::Write, path::Path};
-use tracing::info;
+use tracing::{debug, info};
 
 fn workflow_filename(name: &str) -> String {
     get_qualified_filename_by_name(name, Path::new(WORKFLOWS_FOLDER).join(name))
@@ -18,6 +18,7 @@ fn workflow_filename(name: &str) -> String {
 }
 
 fn resolve(cwl_filename: &str) -> miette::Result<String> {
+    debug!("resolving '{cwl_filename}' to a CWL file path");
     resolve_filename(cwl_filename).map_err(|e| miette!("Could not resolve CWL file {cwl_filename}: {e}"))
 }
 
@@ -34,7 +35,9 @@ pub struct ConnectWorkflowArgs {
 pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> {
     //get workflow
     let filename = workflow_filename(&args.name);
+    debug!("target workflow file: {filename}");
     if !Path::new(&filename).exists() {
+        debug!("workflow '{}' does not exist yet, creating it first", args.name);
         let args = CreateArgs {
             name: Some(args.name.clone()),
             ..Default::default()
@@ -50,7 +53,9 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
 
     let from_parts = args.from.split('/').collect::<Vec<_>>();
     let to_parts = args.to.split('/').collect::<Vec<_>>();
+    debug!("parsed endpoints: from={from_parts:?} to={to_parts:?}");
     if from_parts[0] == "@inputs" || from_parts.len() == 1 {
+        debug!("'from' side is a workflow input, not a step output");
         let input = match from_parts.as_slice() {
             ["@inputs", input] => input,
             [input] => input,
@@ -76,6 +81,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
             args.to
         );
     } else if to_parts[0] == "@outputs" || to_parts.len() == 1 {
+        debug!("'to' side is a workflow output, not a step input");
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
             [output] => output,
@@ -101,6 +107,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
             args.from
         );
     } else {
+        debug!("connecting two steps directly (step-to-step)");
         let from_filename = resolve(from_parts[0])?;
         let to_filename = resolve(to_parts[0])?;
         workflow::add_workflow_step_connection(
@@ -120,6 +127,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
     }
 
     //save workflow
+    debug!("serializing and formatting updated workflow document");
     let mut yaml = serde_saphyr::to_string(&CWLDocument::Workflow(workflow)).into_diagnostic()?;
     yaml = format_cwl(&yaml).map_err(|e| miette!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename).into_diagnostic()?;
@@ -133,6 +141,7 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
 
 pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> {
     let filename = workflow_filename(&args.name);
+    debug!("target workflow file: {filename}");
     let CWLDocument::Workflow(mut workflow) = load_cwl_file(&filename, true)
         .map_err(|e| miette!("Could not load workflow {filename}: {e}"))?
     else {
@@ -141,6 +150,7 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
 
     let from_parts = args.from.split('/').collect::<Vec<_>>();
     let to_parts = args.to.split('/').collect::<Vec<_>>();
+    debug!("parsed endpoints: from={from_parts:?} to={to_parts:?}");
 
     if from_parts[0] == "@inputs" || from_parts.len() == 1 {
         let input = match from_parts.as_slice() {
@@ -210,6 +220,7 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
         info!("➖ Removed connection from {} to {} in workflow!", args.from, args.to);
     }
 
+    debug!("serializing and formatting updated workflow document");
     let mut yaml = serde_saphyr::to_string(&CWLDocument::Workflow(workflow)).into_diagnostic()?;
     yaml = format_cwl(&yaml).map_err(|e| miette!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename).into_diagnostic()?;

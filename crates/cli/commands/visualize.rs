@@ -1,5 +1,6 @@
 use clap::{Args, ValueEnum};
 use miette::miette;
+use tracing::debug;
 use sciwin::cwl::{documents::CWLDocument, load_cwl_file};
 use sciwin::visualize::{DotRenderer, MermaidRenderer, render};
 use std::path::PathBuf;
@@ -27,6 +28,7 @@ pub enum Renderer {
 
 #[allow(clippy::disallowed_macros)]
 pub fn visualize(filename: &PathBuf, renderer: &Renderer, no_defaults: bool) -> miette::Result<()> {
+    debug!("rendering {filename:?} with {renderer:?} (no_defaults={no_defaults})");
     let cwl = load_cwl_file(filename, true)
         .map_err(|e| miette!("Could mot load Workflow {filename:?}: {e}"))?;
     let CWLDocument::Workflow(cwl) = cwl else {

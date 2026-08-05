@@ -9,7 +9,7 @@ use sciwin::cwl::load_cwl_file;
 use sciwin::repository::Repository;
 use sciwin::repository::commit;
 use std::{env, fs, path::Path};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 #[derive(Args, Debug, Default)]
 pub struct RemoveCWLArgs {
@@ -18,8 +18,10 @@ pub struct RemoveCWLArgs {
 
 pub fn handle_remove_command(args: &RemoveCWLArgs) -> miette::Result<()> {
     let filename = if Path::new(&args.file).exists() {
+        debug!("'{}' is a direct path, skipping name resolution", args.file);
         args.file.to_string()
     } else {
+        debug!("'{}' is not a direct path, resolving it by name", args.file);
         resolve_filename(&args.file)
             .map_err(|e| miette::miette!("Could not resolve CWL File: {}", e))?
     };
@@ -37,6 +39,7 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> miette::Result<()> {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or_default();
+        debug!("scanning workflows under {} for uses of step '{tool_name}'", cwd.display());
         let workflows = check_tool_usage_in_workflows(&cwd, tool_name)?;
         if !workflows.is_empty() {
             warn!("Tool '{tool_name}' is used in the following workflows:");
@@ -56,11 +59,13 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> miette::Result<()> {
         fs::remove_file(filename).into_diagnostic()?;
 
         if folder.read_dir().into_diagnostic()?.next().is_none() {
+            debug!("{} is now empty, removing it too", folder.display());
             fs::remove_dir_all(folder).into_diagnostic()?;
         }
 
         let message = format!("✔️  Removed CWL file: {}", filename.display());
         info!("{}", message);
+        debug!("committing removal to git");
         commit(&repo, &message)?;
         Ok(())
     } else {

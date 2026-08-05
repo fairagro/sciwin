@@ -25,7 +25,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use url::Url;
 
 pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> miette::Result<()> {
@@ -196,6 +196,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
     } else {
         ContainerEngine::Docker
     };
+    debug!("using container engine: {container_engine:?}");
 
     let storage = Arc::new(StorageBackend::new());
     let backend = Arc::new(LocalBackend::new(
@@ -207,10 +208,13 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
 
     let base_path = dunce::canonicalize(args.file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
     let inputs = if args.args.is_empty() {
+        debug!("no trailing arguments given, running with an empty input object");
         InputObject::default()
     } else if args.args.len() == 1 && fs::exists(args.args[0].clone()).into_diagnostic()? {
+        debug!("single argument is an existing file, loading it as an input YAML: {}", args.args[0]);
         load_input_file_from_file(args.args[0].clone(), base_path)?
     } else {
+        debug!("parsing trailing arguments as --key value pairs");
         let raw = args
             .args
             .chunks_exact(2)
@@ -246,9 +250,11 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
     // needs the run id afterward, which that convenience wrapper doesn't hand back. TaskRunner's
     // `logs()` is `NotSupported` anyway (subprocess output already goes to the terminal via
     // tracing as it runs), so nothing is lost by not using it here.
+    debug!("submitting local run for {}", args.file.display());
     let run_id = runner
         .submit(&args.file, inputs, args.out_dir.as_deref())
         .await?;
+    debug!("run '{run_id}' submitted, waiting for completion");
     let status = runner.wait_for_completion(&run_id).await?;
 
     #[allow(clippy::disallowed_macros)]
@@ -271,6 +277,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
         };
         let cwd = env::current_dir().into_diagnostic()?;
         let metadata = project::read_config(&cwd)?.workflow;
+        debug!("exporting Provenance Run Crate ({layout:?}) to {:?}", args.rocrate_dir);
 
         let (written, validation) = local_rocrate_export::export(
             &runner,
@@ -302,6 +309,7 @@ fn reana_runner() -> miette::Result<ReanaRunner> {
     })?;
 
     let server_url = Url::parse(&url).into_diagnostic()?;
+    debug!("connecting to REANA at {server_url}");
     let token: Arc<ReanaAccessToken> = Arc::new(ReanaAccessToken::new(token));
     let client = ReanaClient::new(server_url.join("api").into_diagnostic()?, token);
     Ok(ReanaRunner::new(client))
@@ -325,6 +333,7 @@ async fn execute_remote_start(
         None => InputObject::default(),
     };
 
+    debug!("submitting remote run for {}", file.display());
     // `execution::reana_compat::compatibility_adjustments` isn't wired in here, yet
     let run_id = runner.submit(file, inputs, None).await?;
     info!("submitted workflow run '{run_id}'");
@@ -368,6 +377,7 @@ async fn execute_remote_status(workflow_name: Option<&str>) -> miette::Result<()
     let runner = reana_runner()?;
 
     if let Some(name) = workflow_name {
+        debug!("querying status for workflow '{name}'");
         let status = runner.status(&name.to_string()).await?;
         info!("{name}: {status:?}");
         if matches!(status, RunStatus::Failed) {
@@ -376,6 +386,7 @@ async fn execute_remote_status(workflow_name: Option<&str>) -> miette::Result<()
         return Ok(());
     }
 
+    debug!("listing all workflows known to this REANA instance");
     let list = reana_client::list(runner.get_client()).await?;
     if list.items.is_empty() {
         info!("no workflows found for this REANA instance");
@@ -410,6 +421,7 @@ async fn export_rocrate(
 ) -> miette::Result<()> {
     let cwd = env::current_dir().into_diagnostic()?;
     let metadata = project::read_config(&cwd)?.workflow;
+    debug!("exporting Provenance Run Crate for '{workflow_name}' to {output_dir:?}");
 
     let (written, validation) =
         rocrate_export::export(client, workflow_name, metadata, output_dir, Utc::now()).await?;
@@ -455,13 +467,17 @@ async fn execute_remote_download(
         .unwrap_or_else(|| PathBuf::from("."));
 
     if all {
+        debug!("--all given, downloading every file in the workspace to {out_dir:?}");
         let client = runner.get_client();
         let workspace = reana_client::workspace(client.clone(), workflow_name).await?;
+        debug!("workspace has {} item(s)", workspace.items.len());
         for item in workspace.items {
+            debug!("downloading {}", item.name);
             reana_client::download_file(client.clone(), workflow_name, &item.name, &out_dir)
                 .await?;
         }
     } else {
+        debug!("downloading only declared outputs to {out_dir:?}");
         runner
             .outputs(&workflow_name.to_string(), Some(&out_dir))
             .await?;
@@ -480,6 +496,7 @@ pub fn make_template(filename: &PathBuf) -> miette::Result<()> {
 }
 
 fn make_template_impl(filename: &PathBuf) -> miette::Result<HashMap<String, DefaultValue>> {
+    debug!("reading CWL document at {filename:?} to derive its inputs");
     let contents = fs::read_to_string(filename).into_diagnostic()?;
     let cwl: CWLDocument = serde_saphyr::from_str(&contents).into_diagnostic()?;
 

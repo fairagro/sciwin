@@ -9,6 +9,7 @@ use syntect::{
     parsing::SyntaxSet,
     util::{LinesWithEndings, as_24_bit_terminal_escaped},
 };
+use tracing::debug;
 
 /// Locates CWL File by name
 pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
@@ -16,11 +17,13 @@ pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
 
     //check if exists in workflows folder
     if let Some(path) = build_path(None, cwl_filename) {
+        debug!("candidate in top-level workflows folder: {}", path.display());
         candidates.push(path);
     }
 
     //let else = hell yeah!
     let Ok(repo) = Repository::open(".") else {
+        debug!("not inside a git repository, skipping submodule search");
         if !candidates.is_empty() {
             return Ok(candidates[0].to_string_lossy().into_owned());
         }
@@ -29,10 +32,12 @@ pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
 
     for module_path in get_submodule_paths(&repo)? {
         if let Some(path) = build_path(Some(module_path), cwl_filename) {
+            debug!("candidate in submodule: {}", path.display());
             candidates.push(path);
         }
     }
 
+    debug!("{} candidate(s) found for '{cwl_filename}'", candidates.len());
     match candidates.len() {
         1 => Ok(candidates[0].to_string_lossy().into_owned()),
         0 => Err("Could not resolve filename".into()),

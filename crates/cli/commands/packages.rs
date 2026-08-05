@@ -10,7 +10,7 @@ use std::{
     env,
     path::{Path, PathBuf},
 };
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Args, Debug)]
 pub struct InstallPackageArgs {
@@ -38,6 +38,7 @@ pub fn install_package(url: &str, branch: &Option<String>) -> miette::Result<()>
 
     let package_dir = Path::new("packages");
     let repo_name = url_obj.path().strip_prefix("/").unwrap();
+    debug!("adding '{url}' as submodule at {}", package_dir.join(repo_name).display());
 
     let current_dir = env::current_dir().unwrap_or(PathBuf::from("."));
     let mut repo = Repository::open(&current_dir).into_diagnostic()?;
@@ -58,6 +59,7 @@ pub fn install_package(url: &str, branch: &Option<String>) -> miette::Result<()>
 pub fn remove_package(package_id: &str) -> miette::Result<()> {
     let current_dir = env::current_dir().unwrap_or(PathBuf::from("."));
     let repo = Repository::open(&current_dir).into_diagnostic()?;
+    debug!("removing submodule packages/{package_id}");
 
     remove_submodule(
         &repo,
