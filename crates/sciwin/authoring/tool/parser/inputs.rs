@@ -169,7 +169,7 @@ pub(crate) fn add_fixed_inputs(
 ///
 /// `value` is checked relative to `base` (the project root)
 pub fn guess_type(value: &str, base: &Path) -> AuthoringResult<CWLType> {
-    let path = base.build_trusted_path(value)?;
+    let path = base.join_trusted_unchecked(value)?;
     if path.exists() {
         if path.is_file() {
             return Ok(CWLType::File);

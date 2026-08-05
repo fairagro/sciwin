@@ -30,7 +30,7 @@ pub(super) fn save_tool_to_disk(
     repo: &Repository,
     commit: bool,
 ) -> AuthoringResult<()> {
-    let target = project_root.build_trusted_path(path)?;
+    let target = project_root.join_trusted_unchecked(path)?;
 
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)

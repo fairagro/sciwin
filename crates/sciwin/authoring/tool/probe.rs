@@ -79,12 +79,12 @@ pub(super) async fn run_and_collect_files(
 
     if options.cleanup {
         for file in &files {
-            remove_file(project_root.secure_join(file)?)
+            remove_file(project_root.join_trusted_checked(file)?)
                 .with_context(|| format!("Failed to remove {file}"))?;
         }
     } else if options.commit {
         for file in &files {
-            let path = project_root.secure_join(file)?; //existence is implied!
+            let path = project_root.join_trusted_checked(file)?; //existence is implied!
             if path.is_dir() {
                 repository::stage_dir(repo, &path)?;
             } else {

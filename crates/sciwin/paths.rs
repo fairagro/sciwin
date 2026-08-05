@@ -4,8 +4,8 @@ use std::{
 };
 
 pub trait TrustedPathExt: AsRef<Path> {
-    // makes sure path is inside base directory
-    fn secure_join(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
+    /// Joins `untrusted` on `self` with checking the existance of resulting path
+    fn join_trusted_checked(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
         let canonical_root = dunce::canonicalize(self.as_ref())?;
 
         if !canonical_root.exists() {
@@ -46,7 +46,8 @@ pub trait TrustedPathExt: AsRef<Path> {
         Ok(canonical_untrusted)
     }
 
-    fn build_trusted_path(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
+    /// Joins `untrusted` on `self` without checking the existance of resulting path
+    fn join_trusted_unchecked(&self, untrusted: impl AsRef<Path>) -> io::Result<PathBuf> {
         let canonical_root = dunce::canonicalize(self.as_ref())?;
 
         if !canonical_root.exists() {
