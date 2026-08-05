@@ -80,9 +80,17 @@ impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
         let (status_tx, _) = watch::channel(RunStatus::Queued);
 
         let request = create_execution_request_with_inputs(cwlfile, inputs, out_dir, None)?;
+        // `cwlfile` may carry a `#fragment` selecting one document out of a packed `$graph`
+        // file (e.g. `scatter-wf3.cwl#main`), same convention `cwl_core::load_cwl_file` checks
+        // for. `dunce::canonicalize` stats the filesystem and knows nothing about fragments, so
+        // it must run against the bare file path.
+        let file_path = cwlfile
+            .to_str()
+            .and_then(|s| s.split_once('#'))
+            .map_or(cwlfile, |(path, _fragment)| Path::new(path));
         let specification = RunSpecification {
             document: request.specification.clone(),
-            path: dunce::canonicalize(cwlfile)?,
+            path: dunce::canonicalize(file_path)?,
         };
 
         let backend = self.backend.clone();
