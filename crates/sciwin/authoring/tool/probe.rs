@@ -6,6 +6,7 @@
 use super::{ToolCreationOptions, requirements};
 use crate::{
     authoring::AuthoringResult,
+    paths::SecureJoinExt,
     repository::{self, Repository},
 };
 use anyhow::Context as _;
@@ -78,20 +79,16 @@ pub(super) async fn run_and_collect_files(
 
     if options.cleanup {
         for file in &files {
-            remove_file(project_root.join(file))
+            remove_file(project_root.secure_join(file)?)
                 .with_context(|| format!("Failed to remove {file}"))?;
         }
-    }
-
-    if options.commit {
+    } else if options.commit {
         for file in &files {
-            let path = project_root.join(file);
-            if path.exists() {
-                if path.is_dir() {
-                    repository::stage_dir(repo, &path)?;
-                } else {
-                    repository::stage_file(repo, &path)?;
-                }
+            let path = project_root.secure_join(file)?; //existence is implied!
+            if path.is_dir() {
+                repository::stage_dir(repo, &path)?;
+            } else {
+                repository::stage_file(repo, &path)?;
             }
         }
     }
