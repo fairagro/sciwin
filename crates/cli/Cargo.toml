@@ -44,7 +44,6 @@ prettytable-rs.workspace = true
 
 [dev-dependencies]
 shlex = { workspace = true }
-test_utils = { workspace = true }
 serial_test = { workspace = true }
 fstest = { workspace = true }
 dircpy = { workspace = true }

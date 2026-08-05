@@ -15,6 +15,12 @@ authors = [
     "Xaver Stiensmeier",
 ]
 
+# uncomment for development environment
+#[patch.crates-io]
+#reana = { path = "../reana-client-rs/crates/reana" }
+#commonwl = { path = "../commonwl/crates/commonwl" }
+#rocrate = { path = "../rocrate" }
+
 [workspace.dependencies]
 # core packages
 sciwin = { path = "crates/sciwin" }
@@ -139,8 +145,3 @@ inherits = "dev"
 
 [profile.android-dev]
 inherits = "dev"
-
-#[patch.crates-io]
-#reana = { path = "../reana-client-rs/crates/reana" }
-#commonwl = { path = "../commonwl/crates/commonwl" }
-#rocrate = { path = "../rocrate" }

@@ -50,7 +50,6 @@ rstest.workspace = true
 fstest.workspace = true
 # required by the `#[fstest]` macro, which expands to a bare `serial_test::serial` path
 serial_test.workspace = true
-test_utils.workspace = true
 
 [lints]
 workspace = true
