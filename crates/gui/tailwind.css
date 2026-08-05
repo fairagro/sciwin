@@ -1,0 +1,25 @@
+@import "tailwindcss";
+@source "./src/**/*.{rs,html,css}";
+
+@theme {
+    --color-fairagro-mid-500: #6abf5c;
+    --color-fairagro-mid-400: #87cb7c;
+    --color-fairagro-mid-300: #a5d89d;
+    --color-fairagro-mid-200: #c3e5be;
+    --color-fairagro-mid-100: #e1f2df;
+
+    --color-fairagro-light-500: #9acb4e;
+    --color-fairagro-light-400: #aed571;
+    --color-fairagro-light-300: #c2df94;
+    --color-fairagro-light-200: #d6eab8;
+    --color-fairagro-light-100: #ebf4dc;
+
+    --color-fairagro-dark-500: #0f9884;
+    --color-fairagro-dark-400: #3fac9c;
+    --color-fairagro-dark-300: #6fc1b5;
+    --color-fairagro-dark-200: #9fd6ce;
+    --color-fairagro-dark-100: #cfeae6;
+
+    --color-fairagro-red-light: #f26e5f;
+    --color-fairagro-red: #973442;
+}

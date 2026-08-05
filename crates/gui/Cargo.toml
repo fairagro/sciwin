@@ -11,6 +11,9 @@ publish = false             # prevent dist from publishing testing version
 dist = false
 
 [dependencies]
+sciwin.workspace = true
+commonwl.workspace = true
+
 anyhow.workspace = true
 pathdiff.workspace = true
 rand.workspace = true
@@ -21,11 +24,6 @@ serde_json.workspace = true
 shlex.workspace = true
 toml.workspace = true
 
-commonwl.workspace = true
-repository = { path = "../repository" }
-s4n_core = { path = "../core" }
-remote_execution = { path = "../remote_execution" }
-reana = { path = "../reana" }
 keyring = { version = "3.6.3", features = [
     "apple-native",
     "linux-native",

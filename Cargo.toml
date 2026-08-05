@@ -1,9 +1,5 @@
 [workspace]
-members = [
-    #"packages/gui", 
-    "crates/sciwin",
-    "crates/cli",
-]
+members = ["crates/sciwin", "crates/gui", "crates/cli"]
 resolver = "3"
 
 [workspace.package]

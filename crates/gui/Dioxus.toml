@@ -1,0 +1,22 @@
+[application]
+name = "SciWIn Studio"
+default_platform = "desktop"
+
+[bundle]
+identifier = "net.fairagro.sciwin.studio"
+publisher = "FAIRagro"
+icon = ["assets/icon.ico", "assets/icon.png"]
+category = "Productivity"
+
+[bundle.windows]
+icon_path = "assets/icon.ico"
+
+[web.app]
+title = "SciWIn Studio"
+
+[web.resource]
+style = ["assets/main.css", "assets/tailwind.css", "assets/bundle.min.css"]
+script = []
+
+[web.resource.dev]
+script = []
