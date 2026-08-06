@@ -25,14 +25,14 @@ authors = [
 # core packages
 sciwin = { path = "crates/sciwin" }
 reana = { version = "0.5.0" }
-commonwl = { version = "0.12.0", features = ["engine", "tes"] }
+commonwl = { version = "0.12.1", features = ["engine", "tes"] }
 rocrate = "0.1.0"
 git2 = { version = "0.21.0", features = ["vendored-openssl"] }
 
 # serialization
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.149"
-serde-saphyr = "1.0.0"
+serde-saphyr = "1.0.1"
 serde_yaml = "0.9.34-deprecated"
 toml = "1.1.4"
 toml_edit = { version = "0.25.13", features = ["serde"] }
