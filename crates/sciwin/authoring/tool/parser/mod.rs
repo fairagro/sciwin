@@ -28,17 +28,17 @@ use commonwl::{
 use std::path::Path;
 
 pub(crate) mod command;
+mod edam;
 pub(super) mod inputs;
 pub(super) mod outputs;
 mod shell;
-mod edam;
 mod staging;
 
 pub use inputs::guess_type;
 
 pub(crate) static BAD_WORDS: &[&str] = &["sql", "postgres", "mysql", "password"];
 
-pub(crate) fn parse_command_line(
+pub(crate) async fn parse_command_line(
     commands: &[&str],
     base: &Path,
 ) -> AuthoringResult<CommandLineTool> {
@@ -62,7 +62,7 @@ pub(crate) fn parse_command_line(
         let stdout = shell::handle_redirection(&cmd[stdout_pos..]);
         let stderr = shell::handle_redirection(&cmd[stderr_pos..]);
 
-        let inputs = inputs::build_inputs(&cmd[..first_redir_pos], base)?;
+        let inputs = inputs::build_inputs(&cmd[..first_redir_pos], base).await?;
         let args = shell::collect_arguments(piped, &inputs);
 
         tool.inputs(inputs)
@@ -157,15 +157,17 @@ mod tests {
     use rstest::rstest;
     use serde_json::Value;
 
-    fn parse_command(command: &str) -> CommandLineTool {
+    async fn parse_command(command: &str) -> CommandLineTool {
         let cmd = shlex::split(command).unwrap();
         parse_command_line(
             &cmd.iter().map(|s| s.as_str()).collect::<Vec<_>>(),
             Path::new("."),
         )
+        .await
         .unwrap()
     }
 
+    #[tokio::test]
     #[rstest]
     #[case("python script.py", CommandLineTool::builder().
             base_command(OneOrMany::Many(vec!["python".to_string(), "script.py".to_string()])).build()
@@ -205,33 +207,33 @@ mod tests {
             ]).build()
 
     )]
-    pub fn test_parse_command_line(#[case] input: &str, #[case] expected: CommandLineTool) {
-        let result = parse_command(input);
+    pub async fn test_parse_command_line(#[case] input: &str, #[case] expected: CommandLineTool) {
+        let result = parse_command(input).await;
         assert_eq!(result, expected);
     }
 
-    #[test]
-    pub fn test_parse_redirect() {
-        let tool = parse_command("cat tests/test_data/input.txt \\> output.txt");
+    #[tokio::test]
+    pub async fn test_parse_redirect() {
+        let tool = parse_command("cat tests/test_data/input.txt \\> output.txt").await;
         assert!(tool.stdout == Some("output.txt".to_string()));
     }
 
-    #[test]
-    pub fn test_parse_dangling_redirect_no_panic() {
+    #[tokio::test]
+    pub async fn test_parse_dangling_redirect_no_panic() {
         // a trailing `>` with nothing after it must not index-panic
-        let tool = parse_command("echo hello \\>");
+        let tool = parse_command("echo hello \\>").await;
         assert!(tool.stdout.is_none());
     }
 
-    #[test]
-    pub fn test_parse_redirect_stderr() {
-        let tool = parse_command("cat tests/test_data/inputtxt 2\\> err.txt");
+    #[tokio::test]
+    pub async fn test_parse_redirect_stderr() {
+        let tool = parse_command("cat tests/test_data/inputtxt 2\\> err.txt").await;
         assert!(tool.stderr == Some("err.txt".to_string()));
     }
 
-    #[test]
-    pub fn test_parse_pipe_op() {
-        let tool = parse_command("df \\| grep --line-buffered tmpfs \\> df.log");
+    #[tokio::test]
+    pub async fn test_parse_pipe_op() {
+        let tool = parse_command("df \\| grep --line-buffered tmpfs \\> df.log").await;
 
         assert!(tool.arguments.is_some());
         assert!(tool.has_requirement::<ShellCommandRequirement>());
@@ -247,10 +249,11 @@ mod tests {
         assert!(tool.stdout.is_none()); //as it is in args!
     }
 
-    #[test]
-    pub fn test_badwords() {
+    #[tokio::test]
+    pub async fn test_badwords() {
         let tool =
-            parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql");
+            parse_command("pg_dump postgres://postgres:password@localhost:5432/test \\> dump.sql")
+                .await;
         // no generated input id should leak a bad word — it must have been redacted to "secret_*"
         assert!(tool.inputs.iter().all(|i| {
             let id = i.id.as_ref().unwrap().to_lowercase();

@@ -1,10 +1,16 @@
 use super::{BAD_WORDS, staging};
-use crate::{authoring::AuthoringResult, paths::TrustedPathExt};
+use crate::{
+    authoring::{AuthoringResult, tool::parser::edam},
+    paths::TrustedPathExt,
+};
 use commonwl::{
-    IntegerOrExpression,
+    IntegerOrExpression, OneOrMany,
     documents::CommandLineTool,
     files::{Directory, File, FileOrDirectory},
-    inputs::{CommandInputParameter, CommandLineBinding, DefaultValue},
+    inputs::{
+        CommandInputParameter, CommandInputParameterType, CommandInputType, CommandLineBinding,
+        DefaultValue,
+    },
     types::CWLType,
 };
 use rand::{RngExt, distr::Alphanumeric};
@@ -12,7 +18,7 @@ use serde_json::Value;
 use slugify::slugify;
 use std::path::Path;
 
-pub(crate) fn build_inputs(
+pub(crate) async fn build_inputs(
     args: &[&str],
     base: &Path,
 ) -> AuthoringResult<Vec<CommandInputParameter>> {
@@ -20,7 +26,7 @@ pub(crate) fn build_inputs(
     let mut i = 0;
     while i < args.len() {
         let arg = args[i];
-        let input: CommandInputParameter = if is_flag_like(arg) {
+        let mut input: CommandInputParameter = if is_flag_like(arg) {
             if i + 1 < args.len() && !is_flag_like(args[i + 1]) {
                 //is not a flag, as next one is a value
                 let option = build_option(arg, args[i + 1], base)?;
@@ -32,6 +38,19 @@ pub(crate) fn build_inputs(
         } else {
             build_positional(arg, i.try_into().unwrap(), base)?
         };
+
+        if matches!(
+            input.r#type,
+            CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CWLType(
+                CWLType::File
+            )))
+        ) && let Some(DefaultValue::FileOrDirectory(default)) = &input.default
+            && let Some(location) = default.location()
+        {
+            let file_type = edam::find_edam_format(location).await?;
+            input.format = Some(OneOrMany::One(file_type));
+        }
+
         inputs.push(input);
         i += 1;
     }
@@ -222,8 +241,8 @@ mod tests {
     use commonwl::requirements::{InitialWorkDirRequirement, ToolRequirements, WorkDirItems};
     use serde_json::Number;
 
-    #[test]
-    pub fn test_get_inputs() {
+    #[tokio::test]
+    pub async fn test_get_inputs() {
         let inputs = "--argument1 value1 --flag -a value2 positional1 -v 1";
         let expected = vec![
             CommandInputParameter::builder()
@@ -261,13 +280,13 @@ mod tests {
         let inputs_vec = shlex::split(inputs).unwrap();
         let inputs_slice: Vec<&str> = inputs_vec.iter().map(AsRef::as_ref).collect();
 
-        let result = build_inputs(&inputs_slice, Path::new(".")).unwrap();
+        let result = build_inputs(&inputs_slice, Path::new(".")).await.unwrap();
 
         assert_eq!(result, expected);
     }
 
-    #[test]
-    pub fn test_get_default_value_number() {
+    #[tokio::test]
+    pub async fn test_get_default_value_number() {
         let commandline_args = "-v 42";
         let expected = CommandInputParameter::builder()
             .id("v")
@@ -281,13 +300,14 @@ mod tests {
             &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
             Path::new("."),
         )
+        .await
         .unwrap();
 
         assert_eq!(result[0], expected);
     }
 
-    #[test]
-    pub fn test_get_default_value_json_str() {
+    #[tokio::test]
+    pub async fn test_get_default_value_json_str() {
         let arg = "{\"message\": \"Hello World\"}";
         let expected = CommandInputParameter::builder()
             .id("message_hello_world")
@@ -295,12 +315,12 @@ mod tests {
             .input_binding(CommandLineBinding::builder().position(0).build())
             .default(DefaultValue::Any(Value::String(arg.to_string())))
             .build();
-        let result = build_inputs(&[arg], Path::new(".")).unwrap();
+        let result = build_inputs(&[arg], Path::new(".")).await.unwrap();
         assert_eq!(result[0], expected);
     }
 
-    #[test]
-    pub fn test_get_inputs_negative_number_value() {
+    #[tokio::test]
+    pub async fn test_get_inputs_negative_number_value() {
         // "-5" must be read as the value of --threshold, not misparsed as its own flag
         let inputs = "--threshold -5";
         let args = shlex::split(inputs).unwrap();
@@ -308,6 +328,7 @@ mod tests {
             &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
             Path::new("."),
         )
+        .await
         .unwrap();
 
         assert_eq!(result.len(), 1);
@@ -319,9 +340,30 @@ mod tests {
         );
     }
 
-    #[test]
-    pub fn test_get_inputs_standalone_negative_number() {
-        let result = build_inputs(&["-5"], Path::new(".")).unwrap();
+    #[tokio::test]
+    pub async fn test_get_inputs_file() {
+        let inputs = "--input testdata/meta.json";
+        let args = shlex::split(inputs).unwrap();
+        let result = build_inputs(
+            &args.iter().map(AsRef::as_ref).collect::<Vec<&str>>(),
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../../"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].id.as_deref(), Some("input"));
+        assert_eq!(result[0].r#type, CWLType::File.into());
+
+        assert_eq!(
+            result[0].format.as_deref(),
+            Some(&["http://edamontology.org/format_3464".to_string()][..])
+        );
+    }
+
+    #[tokio::test]
+    pub async fn test_get_inputs_standalone_negative_number() {
+        let result = build_inputs(&["-5"], Path::new(".")).await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].r#type, CWLType::Int.into());
     }
@@ -368,19 +410,21 @@ mod tests {
         }
     }
 
-    #[test]
-    pub fn test_get_flag_multiword_id_keeps_word_boundary() {
+    #[tokio::test]
+    pub async fn test_get_flag_multiword_id_keeps_word_boundary() {
         // regression: get_flag/get_option used to `current.replace('-', "")` before
         // slugify, which for a multi-word flag stripped the internal dash *before*
         // slugify could turn it into the separator -- "--dry-run" became id "dryrun"
         // instead of "dry_run". slugify already handles leading/internal dashes itself.
-        let result = build_inputs(&["--dry-run"], Path::new(".")).unwrap();
+        let result = build_inputs(&["--dry-run"], Path::new(".")).await.unwrap();
         assert_eq!(result[0].id.as_deref(), Some("dry_run"));
     }
 
-    #[test]
-    pub fn test_get_option_multiword_id_keeps_word_boundary() {
-        let result = build_inputs(&["--max-retries", "3"], Path::new(".")).unwrap();
+    #[tokio::test]
+    pub async fn test_get_option_multiword_id_keeps_word_boundary() {
+        let result = build_inputs(&["--max-retries", "3"], Path::new("."))
+            .await
+            .unwrap();
         assert_eq!(result[0].id.as_deref(), Some("max_retries"));
     }
 
