@@ -47,7 +47,7 @@ jobs:
         run: |
           cargo tarpaulin \
             --engine llvm \
-            --workspace \
+            -p sciwin -p s4n \
             --out Xml \
             --exclude-files tests/* tests/**/* crates/**/tests/**/* crates/**/tests/*
       - name: Code Coverage Summary Report
