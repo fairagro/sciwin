@@ -156,7 +156,7 @@ async fn create_tool_base(
 
     // handle outputs
     if !options.outputs.is_empty() {
-        cwl.outputs = parser::outputs::get_outputs(&options.outputs);
+        cwl.outputs = parser::outputs::get_outputs(&options.outputs).await?;
     }
 
     if !options.inputs.is_empty() {
@@ -175,7 +175,7 @@ async fn create_tool_base(
         let files =
             probe::run_and_collect_files(&mut cwl, project_root, options, &repo, &modified).await?;
         if options.outputs.is_empty() {
-            cwl.outputs = parser::outputs::get_outputs(&files);
+            cwl.outputs = parser::outputs::get_outputs(&files).await?;
         }
     }
 
