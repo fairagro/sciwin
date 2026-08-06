@@ -16,7 +16,66 @@ pub(crate) fn post_process_cwl(tool: &mut CommandLineTool) -> AuthoringResult<()
     detect_array_inputs(tool)?;
     post_process_variables(tool);
     post_process_ids(tool);
+    post_process_edam_formats(tool);
     Ok(())
+}
+
+const EDAM_NAMESPACE: &str = "http://edamontology.org/";
+const EDAM_SCHEMA: &str = "https://edamontology.org/EDAM.owl";
+
+/// Rewrites `http://edamontology.org/...` format IRIs on file inputs/outputs into `edam:...`
+/// CURIEs, and attaches the matching `$namespaces`/`$schemas` entries when it does.
+fn post_process_edam_formats(tool: &mut CommandLineTool) {
+    let mut used_edam = false;
+
+    for format in tool.inputs.iter_mut().filter_map(|i| i.format.as_mut()) {
+        for value in format.iter_mut() {
+            used_edam |= curify_edam_format(value);
+        }
+    }
+    for format in tool.outputs.iter_mut().filter_map(|o| o.format.as_mut()) {
+        for value in format.iter_mut() {
+            used_edam |= curify_edam_format(value);
+        }
+    }
+
+    if used_edam {
+        attach_edam_namespace(tool);
+    }
+}
+
+/// Rewrites `value` in place into an `edam:` CURIE if it is an EDAM format IRI, returning
+/// whether it was rewritten.
+fn curify_edam_format(value: &mut String) -> bool {
+    let Some(suffix) = value.strip_prefix(EDAM_NAMESPACE) else {
+        return false;
+    };
+    *value = format!("edam:{suffix}");
+    true
+}
+
+/// Merges the `edam` prefix into `$namespaces` and the EDAM schema into `$schemas`, without
+/// clobbering entries that may already be there.
+fn attach_edam_namespace(tool: &mut CommandLineTool) {
+    let namespaces = tool
+        .extension_fields
+        .entry("$namespaces".to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    if let serde_json::Value::Object(map) = namespaces {
+        map.entry("edam".to_string())
+            .or_insert_with(|| serde_json::Value::String(EDAM_NAMESPACE.to_string()));
+    }
+
+    let schemas = tool
+        .extension_fields
+        .entry("$schemas".to_string())
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    if let serde_json::Value::Array(list) = schemas {
+        let schema = serde_json::Value::String(EDAM_SCHEMA.to_string());
+        if !list.contains(&schema) {
+            list.push(schema);
+        }
+    }
 }
 
 /// Transforms duplicate key and type entries into an array type input
@@ -249,5 +308,69 @@ mod tests {
             tool.outputs[0].output_binding.as_ref().unwrap().glob,
             Some(OneOrMany::One("$(inputs.infile.path)".to_string()))
         );
+    }
+
+    #[test]
+    pub fn test_post_process_edam_formats_rewrites_curies_and_attaches_namespace() {
+        let mut tool = CommandLineTool::builder()
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id("infile")
+                    .r#type(CWLType::File)
+                    .format(OneOrMany::One(
+                        "http://edamontology.org/format_2330".to_string(),
+                    ))
+                    .build(),
+            ])
+            .outputs(vec![
+                CommandOutputParameter::builder()
+                    .id("out")
+                    .r#type(CWLType::File)
+                    .format(OneOrMany::One(
+                        "http://edamontology.org/format_3989".to_string(),
+                    ))
+                    .build(),
+            ])
+            .build();
+
+        post_process_edam_formats(&mut tool);
+
+        assert_eq!(
+            tool.inputs[0].format,
+            Some(OneOrMany::One("edam:format_2330".to_string()))
+        );
+        assert_eq!(
+            tool.outputs[0].format,
+            Some(OneOrMany::One("edam:format_3989".to_string()))
+        );
+        assert_eq!(
+            tool.extension_fields.get("$namespaces"),
+            Some(&serde_json::json!({"edam": "http://edamontology.org/"}))
+        );
+        assert_eq!(
+            tool.extension_fields.get("$schemas"),
+            Some(&serde_json::json!(["https://edamontology.org/EDAM.owl"]))
+        );
+    }
+
+    #[test]
+    pub fn test_post_process_edam_formats_leaves_non_edam_formats_untouched() {
+        let mut tool = CommandLineTool::builder()
+            .outputs(vec![
+                CommandOutputParameter::builder()
+                    .id("out")
+                    .r#type(CWLType::File)
+                    .format(OneOrMany::One("application/x-sh".to_string()))
+                    .build(),
+            ])
+            .build();
+
+        post_process_edam_formats(&mut tool);
+
+        assert_eq!(
+            tool.outputs[0].format,
+            Some(OneOrMany::One("application/x-sh".to_string()))
+        );
+        assert!(tool.extension_fields.is_empty());
     }
 }
