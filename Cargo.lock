@@ -3371,6 +3371,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "file_type"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eedf9cbe9572bb4ed76a9abca0e202935054c02d9038849e0a0789b33c81d87f"
+dependencies = [
+ "phf 0.14.0",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6358,6 +6367,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "phf"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "010378780309880b08997fae13be7834dba947d36393bd372f2b1556deb2a2f6"
+dependencies = [
+ "phf_shared 0.14.0",
+]
+
+[[package]]
 name = "phf_codegen"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6476,6 +6494,15 @@ name = "phf_shared"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
+dependencies = [
+ "siphasher 1.0.3",
+]
+
+[[package]]
+name = "phf_shared"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6fd9027e2d9319be6349febd1db4e8d02aa544921200c9b777720ac34a3aa89"
 dependencies = [
  "siphasher 1.0.3",
 ]
@@ -7353,9 +7380,7 @@ dependencies = [
  "cookie",
  "cookie_store",
  "encoding_rs",
- "futures-channel",
  "futures-core",
- "futures-util",
  "h2 0.4.15",
  "http 1.5.0",
  "http-body 1.1.0",
@@ -7749,6 +7774,7 @@ dependencies = [
  "configparser",
  "dotenvy",
  "dunce",
+ "file_type",
  "fstest",
  "futures",
  "git2 0.21.0",
@@ -7756,6 +7782,7 @@ dependencies = [
  "pathdiff",
  "rand 0.10.2",
  "reana",
+ "reqwest 0.13.4",
  "rocrate",
  "rstest",
  "semver 1.0.28",
@@ -7775,6 +7802,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "urlencoding",
  "uuid",
  "walkdir",
 ]

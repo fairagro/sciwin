@@ -120,6 +120,10 @@ pub enum AuthoringError {
     Repository(#[from] crate::repository::RepositoryError),
 
     #[error(transparent)]
+    #[diagnostic(code = "reqwest::Error")]
+    Net(#[from] reqwest::Error),
+
+    #[error(transparent)]
     #[diagnostic(code = "authoring::Unknown")]
     Unknown(#[from] anyhow::Error),
 }

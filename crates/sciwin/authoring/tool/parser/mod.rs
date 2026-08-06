@@ -31,6 +31,7 @@ pub(crate) mod command;
 pub(super) mod inputs;
 pub(super) mod outputs;
 mod shell;
+mod edam;
 mod staging;
 
 pub use inputs::guess_type;
