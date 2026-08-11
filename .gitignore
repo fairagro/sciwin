@@ -25,6 +25,3 @@ rustc-ice-*.txt
 
 .venv
 .env
-
-CLAUDE.md
-.claude
