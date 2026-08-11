@@ -1575,9 +1575,9 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f164f5b55b6e8233b985111b025f4cec2d0369ee10223656a6e8003d817f494a"
+checksum = "2658b7ec1f9d195e6a7f7b09b01e38a0195552d6593b9748c4c81a70e5b1377d"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -2118,9 +2118,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df11d7dff4259411848b241a41a650d85f7645eba6008de4bc007682c506a3ee"
+checksum = "5a7b57d26202a0749dde14aaab548fa0078a2c00642a4cb4f64ebf1bb1236065"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -2141,9 +2141,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d2ed76fb6f1e97f6440b133f8cef9aa350a84ac3d7224d61ab25ff22fedb97d"
+checksum = "be894f35dae4822eecb8a32ad39d8d819a43aa94f398c9ecd0a52aad9d3bd88d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2185,9 +2185,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f95c4b1ec3225d5d8d84ac23b38018acb51aea40279d9d3f4648ff54e50290a"
+checksum = "6b44f16b5f6fba888684bd331923e0408f05ac5d01573af6de3355e48c408905"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2207,9 +2207,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fde34c2c5c3ef20db6808c60e02c81b0737f516f467b2fa62492652486ec71a"
+checksum = "62760eee34a17ee06d6399f2014b768dd175b326bc20bce9e95934bc09a9dd1f"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -2219,9 +2219,9 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.12.2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1479d5c58b13400532d21acaa0c187ce12fe06c6c25d1ad5a2b669653b09a27f"
+checksum = "310303ff165d00a7e018f7520d3192f82fb16fea3248ee1b76dc0bd5780f640a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3570,9 +3570,9 @@ dependencies = [
 
 [[package]]
 name = "futures"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a88cf1f829d945f548cf8fec32c61b1f202b6d93b45848602fc02af4b12ad218"
+checksum = "9a31d2a3fbaaeb2af2368bbdd904aa8e812d3c04a1ee10d3171f52d556e5d0a3"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -3585,9 +3585,9 @@ dependencies = [
 
 [[package]]
 name = "futures-channel"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "262590f4fe6afeb0bc83be1daa64e52657fe185690a958af7f3ad0e92085c5ae"
+checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -3608,15 +3608,15 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cd50c473c80f6d7c3670a752354b8e569b1a7cbfdc0419ec88e5edad85e0dc7"
+checksum = "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
 
 [[package]]
 name = "futures-executor"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6754879cc9f2c66f88c6e5c35344bb0bdb0708b0352b1201815667c7eabc7458"
+checksum = "031b47cf1a3c6cc8bc2fc76cd437f521619387907d469316e7c0bc278f1f5432"
 dependencies = [
  "futures-core",
  "futures-task",
@@ -3625,9 +3625,9 @@ dependencies = [
 
 [[package]]
 name = "futures-io"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4577ecaa3c4f96589d473f679a71b596316f6641bc350038b962a5daf0085d7a"
+checksum = "53c0fa8157de1303bfffdaa1cc2a673bfffb60102f76b0ef4441659124373fed"
 
 [[package]]
 name = "futures-lite"
@@ -3644,26 +3644,26 @@ dependencies = [
 
 [[package]]
 name = "futures-macro"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6d3cde68c518367be28956066ddfef33813991b77a55005a69dae04bf3b10b"
+checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
 name = "futures-sink"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e34418ac499d6305c2fb5ad0ed2f6ac998c5f8ca209b4510f7f94242c647e307"
+checksum = "1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d"
 
 [[package]]
 name = "futures-task"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b231ed28831efb4a61a08580c4bc233ec56bc009f4cd8f52da2c3cb97df0c109"
+checksum = "cd417de3d1d015fc3bfd2b1ea46dfc7bab72ef86f1cc7cc9c78e728b34a6d1fd"
 
 [[package]]
 name = "futures-timer"
@@ -3673,9 +3673,9 @@ checksum = "af43fadb8a98512d547e37b4e92e0ced13e205c061b87b4623eff01d918d6968"
 
 [[package]]
 name = "futures-util"
-version = "0.3.33"
+version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a77a90a256fce34da66415271e30f94ee91c57b04b8a2c042d9cf3220179deaa"
+checksum = "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc"
 dependencies = [
  "futures-channel",
  "futures-core",
@@ -7274,9 +7274,9 @@ checksum = "bb1725bf0133fe4a3279e18efd6d69f952cb8356bf8b835023042e1b98d4c646"
 
 [[package]]
 name = "reana"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3cdf4711e31654ceea24d14e37e22c2051f2082dcb627397c53b5c6fdd07454f"
+checksum = "2dff89b55ebf5f5c28b47139f0fe102f3b9891bde1bd80987a014e81906e32ec"
 dependencies = [
  "anyhow",
  "chrono",
@@ -7298,9 +7298,9 @@ dependencies = [
 
 [[package]]
 name = "reana-auth"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe04ea0804ce25588e88d45a887e4dda211374d563e7e900779aa3f901c9dd1"
+checksum = "f33ed8466402212a4a2058a7aa329bb6b9e8fea0f00b4e3e7683b2f6d9e360b6"
 dependencies = [
  "async-trait",
  "miette",
@@ -7568,9 +7568,9 @@ dependencies = [
 
 [[package]]
 name = "rocrate"
-version = "0.1.0"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e9b6c3adee4aeb26cb6ef7e51c5ec6e76230944ea40ce76ebd94c2f45388bfe"
+checksum = "fd8aa4eebcb89ea2058114fca07b7dbdcc16e2d86eb49673213e788184e7cc17"
 dependencies = [
  "bon",
  "indexmap 2.14.0",
