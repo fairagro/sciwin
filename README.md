@@ -36,6 +36,7 @@ or the FAIRagro Blogpost:
 ## 📖 Table of Contents<!-- omit from toc -->
 - [🚀 About](#-about)
 - [🏗️ How to Build and Test](#️-how-to-build-and-test)
+  - [Crate architecture \& sibling repositories](#crate-architecture--sibling-repositories)
 - [💚 SciWin Studio](#-sciwin-studio)
 - [🎯 Installation](#-installation)
 - [📚 How to Use](#-how-to-use)
@@ -79,6 +80,28 @@ To run tests (unit and integration)
 ```bash
 cargo nextest --workspace           # Run all tests
 ```
+
+### Crate architecture & sibling repositories
+This repository is a Cargo workspace with three crates:
+- **`crates/sciwin`** (lib `sciwin`) — the shared core logic for authoring, executing and annotating workflows, used by both the CLI and the GUI.
+- **`crates/cli`** (bin `s4n`) — the SciWIn-Client command-line interface, a thin wrapper around `sciwin`.
+- **`crates/gui`** (bin `sciwin_studio`) — the SciWIn-Studio desktop GUI, built with [Dioxus](https://dioxuslabs.com/), also built on top of `sciwin`.
+
+The `sciwin` crate itself builds on three sibling FAIRagro libraries, each maintained in its own repository and published as its own crate:
+| Crate | Repository | Purpose |
+|--|--|--|
+| [`commonwl`](https://github.com/fairagro/commonwl) | `commonwl` | Parses CWL documents and provides the execution engine (local, Docker and TES backends) used by `s4n execute local` |
+| [`rocrate`](https://github.com/fairagro/ro-crate-lib) | `ro-crate-lib` | Reads, writes, builds and validates [RO-Crates](https://www.researchobject.org/ro-crate/), including Workflow RO-Crates and Workflow Run Crates |
+| [`reana`](https://github.com/fairagro/reana-cwl-client) | `reana-cwl-client` | Client for [REANA](https://reanahub.io/), used as an alternative execution backend to local runs |
+
+By default these are pulled from crates.io like any other dependency, so a plain `cargo build`/`cargo run` works without checking out the other repositories. When developing a change that spans repositories (e.g. a `commonwl` API change consumed by `sciwin`), clone `commonwl`, `reana-cwl-client` and `ro-crate-lib` next to this repository and add a `[patch.crates-io]` section (in a workspace-level `.cargo/config.toml` one directory above all four checkouts, or directly in this repo's `Cargo.toml`) pointing each crate at its local path, e.g.:
+```toml
+[patch.crates-io]
+commonwl = { path = "../commonwl/crates/commonwl" }
+reana = { path = "../reana-cwl-client/crates/reana" }
+rocrate = { path = "../ro-crate-lib" }
+```
+Building from a directory where such a patch is in scope will then use the local sources instead of the published versions, and all affected repositories should be updated together.
 
 ## 💚 SciWIn-Studio
 **SciWIn-Studio** is a graphical user interface (GUI) application currently in testing that complements SciWIn-Client. It provides an intuitive visual environment for researchers who prefer graphical tools over command-line interactions.
