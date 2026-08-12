@@ -2,8 +2,23 @@ use crate::authoring::{AuthoringError, AuthoringResult};
 use file_type::{FileType, format::SourceType};
 use reqwest::Client;
 use serde::Deserialize;
-use std::path::Path;
+use std::{collections::HashMap, path::Path, sync::LazyLock};
 use tracing::debug;
+
+// small uncomplete mapping to not use live api for every call
+static COMMON_MAPPING: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
+    HashMap::from([
+        ("jpg", "http://edamontology.org/format_3579"),
+        ("png", "http://edamontology.org/format_3603"),
+        ("svg", "http://edamontology.org/format_3604"),
+        ("py", "http://edamontology.org/format_3996"),
+        ("json", "http://edamontology.org/format_3464"),
+        ("txt", "http://edamontology.org/format_2330"),
+        ("yaml", "http://edamontology.org/format_3750"),
+        ("csv", "http://edamontology.org/format_3752"),
+        ("xlsx", "http://edamontology.org/format_3620"),
+    ])
+});
 
 // SWAGGER: https://api.terminology.tib.eu/swagger-ui/index.html
 const ONTOLOGY_API_BASE: &str = "https://api.terminology.tib.eu/api/v2/ontologies/edam/entities";
@@ -46,6 +61,9 @@ pub async fn find_edam_format(path: impl AsRef<Path>) -> AuthoringResult<String>
 
     let ext_opt = path.as_ref().extension().and_then(|e| e.to_str());
     if let Some(ext) = ext_opt {
+        if let Some(hard_coded) = COMMON_MAPPING.get(ext) {
+            return Ok(hard_coded.to_string());
+        }
         let ext_lower = ext.to_lowercase();
         if let Some(iri) = query_edam_ontology_api(&ext_lower, true).await? {
             return Ok(iri);
