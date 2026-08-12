@@ -28,13 +28,15 @@ pub fn render<R: FlowchartRenderer>(
 
         for input in &step.r#in {
             if let Some(src) = &input.source {
-                let src_id = src.as_one().split('/').next().unwrap();
-                r.edge(
-                    src_id,
-                    step.id.as_ref().unwrap(),
-                    input.id.as_deref(),
-                    RenderStyle::Default,
-                );
+                for source in src.as_many() {
+                    let src_id = source.split('/').next().unwrap();
+                    r.edge(
+                        src_id,
+                        step.id.as_ref().unwrap(),
+                        input.id.as_deref(),
+                        RenderStyle::Default,
+                    );
+                }
             }
         }
 
