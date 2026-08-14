@@ -1,6 +1,10 @@
 use bon::Builder;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{collections::HashMap, fmt::Display, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    hash::Hash,
+};
 use url::Url;
 use versions::{Requirement, Versioning};
 
@@ -84,30 +88,42 @@ pub async fn resolve(
     resolve_packages_from_list(packages, &map)
 }
 
+/// Returns the build hashes shared by every requested package's matching
+/// versions, i.e. only builds where all packages' requirements are met.
 fn resolve_packages_from_list(
     packages: &[&Package],
     list: &ResolverPackageListResponse,
 ) -> AuthoringResult<Vec<String>> {
-    let matches = packages
-        .iter()
-        .flat_map(|p| {
-            list.get(&p.name).into_iter().flat_map(|m| {
-                if let Some(req) = &p.version {
-                    m.iter()
-                        .filter(|(k, _)| match k {
-                            PackageVersion::Parsed(versioning) => req.matches(versioning),
-                            PackageVersion::Raw(raw) => *raw == req.to_string(),
-                        })
-                        .flat_map(|(_, value)| value.iter().cloned())
-                        .collect::<Vec<_>>()
-                } else {
-                    m.values()
-                        .flat_map(|value| value.iter().cloned())
-                        .collect::<Vec<_>>()
-                }
+    let mut common: Option<HashSet<String>> = None;
+
+    for p in packages {
+        let matches: HashSet<String> = list
+            .get(&p.name)
+            .into_iter()
+            .flat_map(|m| {
+                m.iter().filter(|(k, _)| match &p.version {
+                    Some(req) => match k {
+                        PackageVersion::Parsed(versioning) => req.matches(versioning),
+                        PackageVersion::Raw(raw) => *raw == req.to_string(),
+                    },
+                    None => true,
+                })
             })
-        })
-        .collect::<Vec<String>>();
+            .flat_map(|(_, value)| value.iter().cloned())
+            .collect();
+
+        common = Some(match common {
+            Some(prev) => prev.intersection(&matches).cloned().collect(),
+            None => matches,
+        });
+
+        if common.as_ref().is_some_and(HashSet::is_empty) {
+            break;
+        }
+    }
+
+    let mut matches = common.unwrap_or_default().into_iter().collect::<Vec<_>>();
+    matches.sort();
     Ok(matches)
 }
 
@@ -175,7 +191,7 @@ mod tests {
             .maybe_version(Requirement::new(">=3.0.4"))
             .build();
         let matplotlib = Package::builder()
-            .name("pandas")
+            .name("matplotlib")
             .maybe_version(Requirement::new(">=3.10.6"))
             .build();
         let scienceplots = Package::builder()
@@ -184,8 +200,10 @@ mod tests {
             .build();
         let packages = vec![&pandas, &matplotlib, &scienceplots];
         let matches = resolve_packages_from_list(&packages, &list).unwrap();
-        dbg!(&matches);
-        assert_eq!(matches.len(), 1); //not sure if only 1, but wrong ones are resulted back
+        assert_eq!(
+            matches,
+            vec!["3cb1d57f1c21df316e42441331e71ea4eb6272c0b4f699e35ede75b4b8dd027d"]
+        );
     }
 
     #[test]
