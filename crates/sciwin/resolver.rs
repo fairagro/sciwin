@@ -104,17 +104,21 @@ pub async fn resolve(
     resolve_packages_from_list(packages, &map)
 }
 
-pub async fn get_images_from_digests(digests: Vec<String>) -> AuthoringResult<Vec<Image>> {
+pub async fn resolve_images_from_digests(digests: &[&str]) -> AuthoringResult<ImageList> {
     let base_url =
         Url::parse(REGISTRY_BASE_URL).map_err(|e| AuthoringError::from(anyhow::Error::from(e)))?;
     let endpoint = base_url.join("images.json")?;
     let res = reqwest::get(endpoint).await?;
-
     let image_list = res.json::<ImageResponse>().await?;
+    get_images_from_digests(&image_list.images, digests)
+}
+
+fn get_images_from_digests(images: &ImageList, digests: &[&str]) -> AuthoringResult<ImageList> {
     Ok(digests
         .iter()
-        .filter_map(|d| image_list.images.get_image_by_digest(d))
-        .collect::<Vec<_>>())
+        .filter_map(|d| images.get_image_by_digest(d))
+        .collect::<Vec<_>>()
+        .into())
 }
 
 /// Returns the build hashes shared by every requested package's matching
@@ -188,6 +192,12 @@ impl Deref for ImageList {
     }
 }
 
+impl From<Vec<Image>> for ImageList {
+    fn from(value: Vec<Image>) -> Self {
+        ImageList(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,6 +208,40 @@ mod tests {
         let packages = vec![&pandas];
         let matches = resolve(&packages, &PackageType::Python).await.unwrap();
         assert!(!matches.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_images_simple() {
+        let images = resolve_images_from_digests(&[
+            "3cb1d57f1c21df316e42441331e71ea4eb6272c0b4f699e35ede75b4b8dd027d",
+        ])
+        .await
+        .unwrap();
+        assert!(!images.is_empty());
+        assert_eq!(!images.len(), 1);
+    }
+
+    #[test]
+    fn test_resolve_sciwin_container() {
+        let list_raw = include_str!("../../testdata/resolver_response.json");
+        let list = serde_json::from_str(list_raw).unwrap();
+
+        let pandas = Package::builder().name("pandas").build();
+        let packages = vec![&pandas];
+        let matches = resolve_packages_from_list(&packages, &list).unwrap();
+
+        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
+        let digest_refs: Vec<&str> = matches.iter().map(|s| s.as_str()).collect();
+        let images = get_images_from_digests(&res.images, &digest_refs).unwrap();
+
+        assert_eq!(images.len(), 20);
+
+        let suitable_image = images.get_smallest_image_without_entrypoint();
+        assert!(suitable_image.is_some());
+        let img = suitable_image.unwrap();
+
+        assert_eq!(img.repository, "sciwin/python-datascience");
     }
 
     #[test]
