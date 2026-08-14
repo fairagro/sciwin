@@ -75,6 +75,7 @@ miette = "7.6.0"
 
 # util
 semver = { version = "1.0.28", features = ["serde"] }
+versions = { version = "7.0.0", features = ["serde"] }
 smart-default = "0.7.1"
 bon = "3.9.3"
 chrono = "0.4.45"

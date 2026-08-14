@@ -7904,6 +7904,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "versions",
  "walkdir",
 ]
 
@@ -9814,6 +9815,17 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "versions"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80a7e511ce1795821207a837b7b1c8d8aca0c648810966ad200446ae58f6667f"
+dependencies = [
+ "itertools",
+ "nom",
+ "serde",
+]
 
 [[package]]
 name = "vsimd"

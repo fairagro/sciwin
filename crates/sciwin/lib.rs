@@ -69,6 +69,7 @@ pub mod repository;
 pub mod visualize;
 pub mod provenance;
 pub mod paths;
+pub mod resolver;
 
 mod error;
 pub use error::{Error, Result};

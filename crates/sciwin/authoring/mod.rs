@@ -124,6 +124,10 @@ pub enum AuthoringError {
     Net(#[from] reqwest::Error),
 
     #[error(transparent)]
+    #[diagnostic(code = "url::ParseError")]
+    UrlParse(#[from] url::ParseError),
+
+    #[error(transparent)]
     #[diagnostic(code = "authoring::Unknown")]
     Unknown(#[from] anyhow::Error),
 }
