@@ -63,13 +63,13 @@ pub mod rocrate {
 }
 
 pub mod authoring;
+pub mod container;
 pub mod execution;
+pub mod paths;
 pub mod project;
+pub mod provenance;
 pub mod repository;
 pub mod visualize;
-pub mod provenance;
-pub mod paths;
-pub mod resolver;
 
 mod error;
 pub use error::{Error, Result};

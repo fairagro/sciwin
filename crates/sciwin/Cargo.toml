@@ -26,6 +26,7 @@ rand.workspace = true
 reana.workspace = true
 smart-default.workspace = true
 semver.workspace = true
+uv-requirements-txt.workspace = true
 versions.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true

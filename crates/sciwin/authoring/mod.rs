@@ -128,6 +128,14 @@ pub enum AuthoringError {
     UrlParse(#[from] url::ParseError),
 
     #[error(transparent)]
+    #[diagnostic(code = "uv_requirements_txt::RequirementsTxtFileError")]
+    RequirementsTxt(#[from] uv_requirements_txt::RequirementsTxtFileError),
+
+    #[error("could not parse `{spec}` as a version requirement")]
+    #[diagnostic(code = "authoring::InvalidRequirement")]
+    InvalidRequirement { spec: String },
+
+    #[error(transparent)]
     #[diagnostic(code = "authoring::Unknown")]
     Unknown(#[from] anyhow::Error),
 }

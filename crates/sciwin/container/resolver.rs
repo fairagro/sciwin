@@ -236,14 +236,14 @@ mod tests {
 
     #[test]
     fn test_resolve_sciwin_container() {
-        let list_raw = include_str!("../../testdata/resolver_response.json");
+        let list_raw = include_str!("../../../testdata/resolver_response.json");
         let list = serde_json::from_str(list_raw).unwrap();
 
         let pandas = Package::builder().name("pandas").build();
         let packages = vec![&pandas];
         let matches = resolve_packages_from_list(&packages, &list).unwrap();
 
-        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let list_raw = include_str!("../../../testdata/resolver_images.json");
         let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
         let digest_refs: Vec<&str> = matches.iter().map(|s| s.as_str()).collect();
         let images = images_by_digests(&res.images, &digest_refs).unwrap();
@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn test_resolve_check() {
-        let list_raw = include_str!("../../testdata/resolver_response.json");
+        let list_raw = include_str!("../../../testdata/resolver_response.json");
         let list = serde_json::from_str(list_raw).unwrap();
 
         let pandas = Package::builder().name("pandas").build();
@@ -271,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_resolve_check_by_version() {
-        let list_raw = include_str!("../../testdata/resolver_response.json");
+        let list_raw = include_str!("../../../testdata/resolver_response.json");
         let list = serde_json::from_str(list_raw).unwrap();
 
         let pandas = Package::builder()
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_resolve_check_greater_than() {
-        let list_raw = include_str!("../../testdata/resolver_response.json");
+        let list_raw = include_str!("../../../testdata/resolver_response.json");
         let list = serde_json::from_str(list_raw).unwrap();
 
         let pandas = Package::builder()
@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn test_resolve_check_by_list() {
-        let list_raw = include_str!("../../testdata/resolver_response.json");
+        let list_raw = include_str!("../../../testdata/resolver_response.json");
         let list = serde_json::from_str(list_raw).unwrap();
 
         let pandas = Package::builder()
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_find_smallest() {
-        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let list_raw = include_str!("../../../testdata/resolver_images.json");
         let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
 
         let image = res.images.smallest().unwrap();
@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn test_find_smallest_without_entrypoint() {
-        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let list_raw = include_str!("../../../testdata/resolver_images.json");
         let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
 
         let image = res.images.smallest_without_entrypoint().unwrap();
@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_find_smallest_by_entrypoint() {
-        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let list_raw = include_str!("../../../testdata/resolver_images.json");
         let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
 
         let entrypoint = ["Models".to_string()];
