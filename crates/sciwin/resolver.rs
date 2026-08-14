@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Display,
     hash::Hash,
+    ops::Deref,
 };
 use url::Url;
 use versions::{Requirement, Versioning};
@@ -73,6 +74,21 @@ impl Display for PackageType {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+/// minimal representation of images, other fields are unneeded
+pub struct Image {
+    pub digest: String,
+    pub repository: String,
+    pub entrypoint: Option<Vec<String>>,
+    pub size: u64,
+    pub registry: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct ImageResponse {
+    images: ImageList,
+}
+
 pub async fn resolve(
     packages: &[&Package],
     package_type: &PackageType,
@@ -86,6 +102,19 @@ pub async fn resolve(
     let map = res.json::<ResolverPackageListResponse>().await?;
 
     resolve_packages_from_list(packages, &map)
+}
+
+pub async fn get_images_from_digests(digests: Vec<String>) -> AuthoringResult<Vec<Image>> {
+    let base_url =
+        Url::parse(REGISTRY_BASE_URL).map_err(|e| AuthoringError::from(anyhow::Error::from(e)))?;
+    let endpoint = base_url.join("images.json")?;
+    let res = reqwest::get(endpoint).await?;
+
+    let image_list = res.json::<ImageResponse>().await?;
+    Ok(digests
+        .iter()
+        .filter_map(|d| image_list.images.get_image_by_digest(d))
+        .collect::<Vec<_>>())
 }
 
 /// Returns the build hashes shared by every requested package's matching
@@ -125,6 +154,38 @@ fn resolve_packages_from_list(
     let mut matches = common.unwrap_or_default().into_iter().collect::<Vec<_>>();
     matches.sort();
     Ok(matches)
+}
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ImageList(Vec<Image>);
+
+impl ImageList {
+    pub fn get_image_by_digest(&self, digest: &str) -> Option<Image> {
+        self.0.iter().find(|i| i.digest == digest).cloned()
+    }
+
+    pub fn smallest_image_where(self, predicate: impl FnMut(&Image) -> bool) -> Option<Image> {
+        self.0.into_iter().filter(predicate).min_by_key(|i| i.size)
+    }
+
+    pub fn get_smallest_image(self) -> Option<Image> {
+        self.smallest_image_where(|_| true)
+    }
+
+    pub fn get_smallest_image_without_entrypoint(self) -> Option<Image> {
+        self.get_smallest_image_by_entrypoint(None)
+    }
+
+    pub fn get_smallest_image_by_entrypoint(self, entrypoint: Option<&[String]>) -> Option<Image> {
+        self.smallest_image_where(|i| i.entrypoint.as_deref() == entrypoint)
+    }
+}
+
+impl Deref for ImageList {
+    type Target = Vec<Image>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[cfg(test)]
@@ -203,6 +264,49 @@ mod tests {
         assert_eq!(
             matches,
             vec!["3cb1d57f1c21df316e42441331e71ea4eb6272c0b4f699e35ede75b4b8dd027d"]
+        );
+    }
+
+    #[test]
+    fn test_find_smallest() {
+        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
+
+        let image = res.images.get_smallest_image().unwrap();
+        assert_eq!(
+            image.digest,
+            "edaa89ef89abb0e3d7df9408c9f2814dc2a5edb0bba63df7bc4960aa10eb76b0"
+        );
+    }
+
+    #[test]
+    fn test_find_smallest_without_entrypoint() {
+        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
+
+        let image = res.images.get_smallest_image_without_entrypoint().unwrap();
+        assert_eq!(
+            image.digest,
+            "edaa89ef89abb0e3d7df9408c9f2814dc2a5edb0bba63df7bc4960aa10eb76b0"
+        );
+        assert!(image.entrypoint.is_none());
+    }
+
+    #[test]
+    fn test_find_smallest_by_entrypoint() {
+        let list_raw = include_str!("../../testdata/resolver_images.json");
+        let res = serde_json::from_str::<ImageResponse>(list_raw).unwrap();
+
+        let entrypoint = ["Models".to_string()];
+        let image = res
+            .images
+            .get_smallest_image_by_entrypoint(Some(&entrypoint))
+            .unwrap();
+        assert_eq!(image.entrypoint, Some(vec!["Models".to_string()]));
+        assert_eq!(image.size, 375_958_618);
+        assert_eq!(
+            image.digest,
+            "6958907c15b08fefa0fd679319184241c801c1b967048c29c671577e48b8a77a"
         );
     }
 
