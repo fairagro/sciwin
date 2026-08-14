@@ -218,7 +218,7 @@ mod tests {
         .await
         .unwrap();
         assert!(!images.is_empty());
-        assert_eq!(!images.len(), 1);
+        assert_eq!(images.len(), 1);
     }
 
     #[test]
