@@ -27,6 +27,7 @@ reana.workspace = true
 smart-default.workspace = true
 semver.workspace = true
 uv-requirements-txt.workspace = true
+uv-pypi-types.workspace = true
 versions.workspace = true
 serde.workspace = true
 serde-saphyr.workspace = true

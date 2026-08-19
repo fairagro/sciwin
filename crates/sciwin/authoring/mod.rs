@@ -131,6 +131,10 @@ pub enum AuthoringError {
     #[diagnostic(code = "uv_requirements_txt::RequirementsTxtFileError")]
     RequirementsTxt(#[from] uv_requirements_txt::RequirementsTxtFileError),
 
+    #[error(transparent)]
+    #[diagnostic(code = "uv_pypi_types::MetadataError")]
+    PyProjectToml(#[from] uv_pypi_types::MetadataError),
+
     #[error("could not parse `{spec}` as a version requirement")]
     #[diagnostic(code = "authoring::InvalidRequirement")]
     InvalidRequirement { spec: String },

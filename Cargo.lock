@@ -8939,6 +8939,7 @@ dependencies = [
  "url",
  "urlencoding",
  "uuid",
+ "uv-pypi-types",
  "uv-requirements-txt",
  "versions",
  "walkdir",

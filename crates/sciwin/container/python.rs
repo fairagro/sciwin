@@ -1,4 +1,6 @@
 use std::path::Path;
+use tokio::fs;
+use uv_pypi_types::PyProjectToml;
 use uv_requirements_txt::{RequirementsTxt, RequirementsTxtRequirement};
 use versions::Requirement;
 
@@ -20,6 +22,17 @@ pub async fn get_requirements(
         .collect::<AuthoringResult<Vec<_>>>()?;
 
     Ok(Some(requirements))
+}
+
+pub async fn get_pyproject(pyproject_toml: &Path) -> AuthoringResult<Option<Vec<Package>>> {
+    let contents = fs::read_to_string(pyproject_toml).await?;
+    let raw = PyProjectToml::from_toml(&contents, "pyproject.toml")?;
+    let Some(project) = raw.project else {
+        return Ok(None);
+    };
+    dbg!(project.dependencies);
+
+    return Ok(None);
 }
 
 /// Converts a single `requirements.txt` entry into a [`Package`], failing
@@ -133,5 +146,15 @@ matplotlib
 
         let result = get_requirements(file.path(), dir.path()).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_pyproject() {
+        let file_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("..")
+            .join("testdata")
+            .join("test_pyproject.toml");
+        get_pyproject(&file_path).await.unwrap();
     }
 }

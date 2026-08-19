@@ -65,6 +65,7 @@ clap_complete = "4.5.61"
 
 # requirements parser
 uv-requirements-txt = "0.0.71"
+uv-pypi-types = "0.0.71"
 
 # terminal utils
 dialoguer = { version = "0.12.0", features = ["fuzzy-select"] }
