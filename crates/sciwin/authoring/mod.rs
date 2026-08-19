@@ -135,6 +135,10 @@ pub enum AuthoringError {
     #[diagnostic(code = "uv_pypi_types::MetadataError")]
     PyProjectToml(#[from] uv_pypi_types::MetadataError),
 
+    #[error("Error in DESCRIPTION {0}")]
+    #[diagnostic(code = "authoring::RDescription")]
+    RDescription(String),
+
     #[error("could not parse `{spec}` as a version requirement")]
     #[diagnostic(code = "authoring::InvalidRequirement")]
     InvalidRequirement { spec: String },

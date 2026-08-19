@@ -1,0 +1,10 @@
+Package: foo
+Title: My Ass
+Description: Du willst wissen, wie viel dein Auto wert ist?
+License: LGPL
+Version: 1.0.0
+Imports:
+    dplyr (>= 1.1.0),
+    ggplot2
+Suggests:
+    testthat

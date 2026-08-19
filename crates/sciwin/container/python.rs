@@ -9,7 +9,7 @@ use crate::{
     container::resolver::Package,
 };
 
-pub async fn get_requirements(
+pub async fn requirements_from_requirements_txt(
     requirements_txt: &Path,
     working_dir: &Path,
 ) -> AuthoringResult<Option<Vec<Package>>> {
@@ -24,7 +24,9 @@ pub async fn get_requirements(
     Ok(Some(requirements))
 }
 
-pub async fn get_pyproject(pyproject_toml: &Path) -> AuthoringResult<Option<Vec<Package>>> {
+pub async fn requirements_from_pyproject_toml(
+    pyproject_toml: &Path,
+) -> AuthoringResult<Option<Vec<Package>>> {
     let contents = fs::read_to_string(pyproject_toml).await?;
     let raw = PyProjectToml::from_toml(&contents, "pyproject.toml")?;
     let Some(project) = raw.project else {
@@ -39,11 +41,10 @@ pub async fn get_pyproject(pyproject_toml: &Path) -> AuthoringResult<Option<Vec<
     let requirements = deps
         .iter()
         .map(|entry| {
-            let requirement = RequirementsTxtRequirement::parse(entry, working_dir, false).map_err(|_| {
-                AuthoringError::InvalidRequirement {
+            let requirement = RequirementsTxtRequirement::parse(entry, working_dir, false)
+                .map_err(|_| AuthoringError::InvalidRequirement {
                     spec: entry.clone(),
-                }
-            })?;
+                })?;
             parse_requirement(&requirement)
         })
         .collect::<AuthoringResult<Vec<_>>>()?;
@@ -111,7 +112,7 @@ requests==2.32.5
         let mut file = NamedTempFile::new().unwrap();
         write!(file, "{reqs}").unwrap();
 
-        let requirements = get_requirements(file.path(), dir.path())
+        let requirements = requirements_from_requirements_txt(file.path(), dir.path())
             .await
             .unwrap()
             .unwrap();
@@ -137,7 +138,7 @@ matplotlib
         let mut file = NamedTempFile::new().unwrap();
         write!(file, "{reqs}").unwrap();
 
-        let requirements = get_requirements(file.path(), dir.path())
+        let requirements = requirements_from_requirements_txt(file.path(), dir.path())
             .await
             .unwrap()
             .unwrap();
@@ -160,7 +161,7 @@ matplotlib
         let mut file = NamedTempFile::new().unwrap();
         writeln!(file, "pandas~=2.3.2").unwrap();
 
-        let result = get_requirements(file.path(), dir.path()).await;
+        let result = requirements_from_requirements_txt(file.path(), dir.path()).await;
         assert!(result.is_err());
     }
 
@@ -171,7 +172,10 @@ matplotlib
             .join("..")
             .join("testdata")
             .join("test_pyproject.toml");
-        let requirements = get_pyproject(&file_path).await.unwrap().unwrap();
+        let requirements = requirements_from_pyproject_toml(&file_path)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(requirements.len(), 13);
         assert_eq!(requirements[4].name, "llama-index-embeddings-huggingface");
         assert_eq!(requirements[4].version, Requirement::new(">=0.7.0"));
