@@ -1,16 +1,14 @@
-use std::{path::Path, str::FromStr};
-
-use r_description::{
-    Version, VersionConstraint,
-    lossy::{RDescription, Relation},
-};
-use tokio::fs;
-use versions::Op;
-
 use crate::{
     authoring::{AuthoringError, AuthoringResult},
     container::resolver::Package,
 };
+use r_description::{
+    Version, VersionConstraint,
+    lossy::{RDescription, Relation},
+};
+use std::{path::Path, str::FromStr};
+use tokio::fs;
+use versions::Op;
 
 pub async fn requirements_from_description(path: &Path) -> AuthoringResult<Option<Vec<Package>>> {
     let contents = fs::read_to_string(path).await?;
@@ -56,7 +54,10 @@ fn parse_relation(relation: &Relation) -> AuthoringResult<Package> {
 /// `versions::Op` has no exclusion operator, so `!=` isn't representable
 /// and yields `None`, same as the unrepresentable PEP 440 specifiers in
 /// `python.rs`'s `parse_version_requirement`.
-fn to_versioning(constraint: &VersionConstraint, version: &Version) -> Option<versions::Requirement> {
+fn to_versioning(
+    constraint: &VersionConstraint,
+    version: &Version,
+) -> Option<versions::Requirement> {
     let op = match constraint {
         VersionConstraint::LessThan => Op::Less,
         VersionConstraint::LessThanEqual => Op::LessEq,
@@ -86,7 +87,10 @@ mod tests {
 
         assert_eq!(packages.len(), 2);
         assert_eq!(packages[0].name, "dplyr");
-        assert_eq!(packages[0].version, Some(Requirement::new(">=1.1.0").unwrap()));
+        assert_eq!(
+            packages[0].version,
+            Some(Requirement::new(">=1.1.0").unwrap())
+        );
         assert_eq!(packages[1].name, "ggplot2");
         assert_eq!(packages[1].version, None);
     }
