@@ -30,9 +30,25 @@ pub async fn get_pyproject(pyproject_toml: &Path) -> AuthoringResult<Option<Vec<
     let Some(project) = raw.project else {
         return Ok(None);
     };
-    dbg!(project.dependencies);
 
-    return Ok(None);
+    let Some(deps) = project.dependencies else {
+        return Ok(None);
+    };
+
+    let working_dir = pyproject_toml.parent().unwrap_or_else(|| Path::new(""));
+    let requirements = deps
+        .iter()
+        .map(|entry| {
+            let requirement = RequirementsTxtRequirement::parse(entry, working_dir, false).map_err(|_| {
+                AuthoringError::InvalidRequirement {
+                    spec: entry.clone(),
+                }
+            })?;
+            parse_requirement(&requirement)
+        })
+        .collect::<AuthoringResult<Vec<_>>>()?;
+
+    Ok(Some(requirements))
 }
 
 /// Converts a single `requirements.txt` entry into a [`Package`], failing
@@ -155,6 +171,9 @@ matplotlib
             .join("..")
             .join("testdata")
             .join("test_pyproject.toml");
-        get_pyproject(&file_path).await.unwrap();
+        let requirements = get_pyproject(&file_path).await.unwrap().unwrap();
+        assert_eq!(requirements.len(), 13);
+        assert_eq!(requirements[4].name, "llama-index-embeddings-huggingface");
+        assert_eq!(requirements[4].version, Requirement::new(">=0.7.0"));
     }
 }
