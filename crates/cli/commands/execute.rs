@@ -221,7 +221,7 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
         debug!("parsing trailing arguments as --key value pairs");
         let raw = args
             .args
-            .chunks_exact(2)
+            .as_chunks::<2>().0.iter()
             .filter_map(|pair| {
                 if let Some(key) = pair[0].strip_prefix("--") {
                     let raw_value = &pair[1];
