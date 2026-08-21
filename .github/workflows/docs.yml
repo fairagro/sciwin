@@ -5,11 +5,21 @@ on:
   # Using a different branch name? Replace `main` with your branch’s name
   push:
     branches: [ main ]
+    # Every release tag also refreshes the archived documentation versions (see
+    # docs/scripts/sync-versions.mjs), regardless of whether docs/** changed in that
+    # commit -- GitHub does not evaluate `paths` filters for tag pushes.
+    tags: [ 'v*.*.*' ]
     paths:
             - 'docs/**'
             - '.github/workflows/docs.yml'
   # Allows you to run this workflow manually from the Actions tab on GitHub.
   workflow_dispatch:
+
+# Only one deployment (and version sync) at a time; queue rather than cancel so an
+# in-progress commit+deploy can't be interrupted mid-way.
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
 
 # Allow this job to clone the repo and create a page deployment
 permissions:
@@ -18,16 +28,65 @@ permissions:
   id-token: write
 
 jobs:
+  sync-versions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      synced-sha: ${{ steps.resolve-sha.outputs.sha }}
+    steps:
+      - name: Checkout your repository using git
+        uses: actions/checkout@v6
+        with:
+          # Always work from the default branch, even when triggered by a release tag
+          # whose commit may be older than main's current tip.
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install dependencies
+        working-directory: docs
+        run: npm ci
+
+      - name: Refresh archived documentation versions from release tags
+        working-directory: docs
+        run: node scripts/sync-versions.mjs
+
+      - name: Commit refreshed versions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/versions.json docs/src/content/docs docs/src/content/versions docs/src/assets
+          if git diff --cached --quiet; then
+            echo "No archived documentation versions to refresh."
+          else
+            git commit -m "docs: refresh archived documentation versions [skip ci]"
+            git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          fi
+
+      - name: Resolve synced commit
+        id: resolve-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: sync-versions
     runs-on: ubuntu-latest
     steps:
       - name: Checkout your repository using git
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.sync-versions.outputs.synced-sha }}
       - name: Install, build, and upload your site
         uses: withastro/action@v6
         with:
           path: docs
-          # node-version: 20 # The specific version of Node that should be used to build your site. Defaults to 20. (optional)
+          node-version: 22 # starlight-versions requires Node >=22.12
           # package-manager: pnpm@latest # The Node package manager that should be used to install dependencies and build your site. Automatically detected based on your lockfile. (optional)
 
   deploy:

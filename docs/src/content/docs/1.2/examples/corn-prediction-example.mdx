@@ -1,0 +1,268 @@
+---
+title: Corn Prediction Example
+slug: 1.2/examples/corn-prediction-example
+---
+
+Start by cloning the demo repo: `git clone https://github.com/fairagro/m4.4_demo_corn_prediction`.
+
+## SciWIn Client Demo: Crop Yield Prediction Pipeline
+
+> ⚠️ **Important Note**: This workflow is **not a scientifically meaningful pipeline**. It is a **test demonstration** created to showcase the capabilities of the [SciWIn Client (`s4n`)](https://github.com/fairagro/sciwin).
+
+It uses a sequence of steps (e.g., merging soil and weather data, training a model, and predicting yields) to illustrate how `s4n` can be used to:
+
+* Create CommandLineTools from Python scripts
+* Connect tools into a workflow
+* Visualize the pipeline
+* Execute workflows locally and remotely
+
+It is **not intended for real-world agricultural analysis** or decision-making. The data, scripts, and logic are simplified for demonstration purposes only.
+
+***
+
+## 🔧 Installation
+
+[![GitHub Release](https://img.shields.io/github/v/release/fairagro/sciwin)](https://github.com/fairagro/sciwin/releases/latest)
+
+Install the latest version of `s4n`:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://fairagro.github.io/sciwin/get_s4n.sh | sh
+```
+
+Verify installation:
+
+```bash
+s4n -V
+```
+
+***
+
+## 🛠️ Step 1: Initialize Project
+
+```bash
+s4n init
+```
+
+***
+
+## 🧪 Step 2: Create CommandLineTools
+
+For each script in the `code/` directory, we create a CWL `CommandLineTool` using `s4n create`. These tools wrap the Python scripts and define how they are executed with inputs, outputs, and dependencies.
+
+### 🔹 1. Get Soil Data
+
+> 📌 **Note**: Most soil data has already been downloaded because downloading them takes time.
+
+The first step is to get soil data from soilgrids for the Iowa counties coordinates.
+
+```bash
+s4n create -c Dockerfile --container-tag pyplot --enable-network \
+  python3 code/get_soil.py --geojson data/iowa_counties.geojson --soil_cache data/soil_data.csv
+```
+
+This creates a new directory `workflows/get_soil` with a CWL `CommandLineTool` file `get_soil.cwl`:
+
+```cwl
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: code/get_soil.py
+    entry:
+      $include: ../../code/get_soil.py
+- class: DockerRequirement
+  dockerFile:
+    $include: ../../Dockerfile
+  dockerImageId: pyplot
+- class: NetworkAccess
+  networkAccess: true
+
+inputs:
+- id: geojson
+  type: File
+  default:
+    class: File
+    location: ../../data/iowa_counties.geojson
+  inputBinding:
+    prefix: --geojson
+- id: soil_cache
+  type: File
+  default:
+    class: File
+    location: ../../data/soil_data.csv
+  inputBinding:
+    prefix: --soil_cache
+
+outputs:
+- id: soil
+  type: File
+  outputBinding:
+    glob: soil.csv
+
+baseCommand:
+- python3
+- code/get_soil.py
+
+```
+
+### 🔹 2. Get Weather Data
+
+Next, we fetch weather data for each county, for the year that was used for prediction.
+
+```bash
+s4n create -c Dockerfile --container-tag pyplot --enable-network \
+  python3 code/get_weather.py --geojson data/iowa_counties.geojson
+```
+
+### 🔹 3. Merge Features
+
+Now we combine soil and weather data into a single feature set.
+
+```bash
+s4n create -c Dockerfile --container-tag pyplot --enable-network \
+  python3 code/merge_features.py --geojson data/iowa_counties.geojson \
+                                --weather weather.csv \
+                                --soil soil.csv
+```
+
+### 🔹 4. Train Yield Prediction Model
+
+We train a simple model using historical yield data.
+
+```bash
+s4n create -c Dockerfile --container-tag pyplot --enable-network \
+  python3 code/train_model.py --features county_features.csv \
+                             --yield data/iowa_yield.csv
+```
+
+### 🔹 5. Predict Yields
+
+Now we use the trained model to predict yields for each county.
+
+```bash
+s4n create -c Dockerfile --container-tag pyplot --enable-network \
+  python3 code/predict_yields.py --features county_features.csv \
+                                --model model.pkl \
+                                --scaler scaler.pkl
+```
+
+### 🔹 6. Plot Predictions
+
+Finally, we visualize the predictions on a map.
+
+```bash
+s4n create -c Dockerfile --container-tag pyplot --enable-network \
+  python3 code/plot_yields.py --predictions county_predictions.csv \
+                             --geojson data/iowa_counties.geojson
+```
+
+***
+
+## ⚙ Step 3: Build the Workflow
+
+Now we’ll build the workflow in three clear phases: **create**, **connect**, and **save**.
+
+### ✅ Phase 1: Create the Workflow
+
+Start by creating a new workflow named `demo`:
+
+```bash
+s4n create -n demo
+```
+
+This generates a new directory `workflows/demo/` with a `demo.cwl` file.
+
+### 🔗 Phase 2: Connect Inputs and Outputs
+
+Now connect the tools in the correct order. Use `s4n list -a` to inspect available inputs and outputs.
+
+#### 🔹 Connect Inputs
+
+```bash
+s4n connect demo --from @inputs/geojson --to get_soil/geojson
+s4n connect demo --from @inputs/soil --to get_soil/soil_cache
+s4n connect demo --from @inputs/geojson --to get_weather/geojson
+s4n connect demo --from @inputs/geojson --to merge_features/geojson
+s4n connect demo --from @inputs/yield --to train_model/yield
+```
+
+#### 🔹 Connect Intermediate Steps
+
+```bash
+s4n connect demo --from get_soil/soil --to merge_features/soil
+s4n connect demo --from get_weather/weather --to merge_features/weather
+s4n connect demo --from merge_features/county_features --to train_model/features
+s4n connect demo --from train_model/model --to predict_yields/model
+s4n connect demo --from train_model/scaler --to predict_yields/scaler
+s4n connect demo --from merge_features/county_features --to predict_yields/features
+s4n connect demo --from predict_yields/county_predictions --to plot_yields/predictions
+```
+
+#### 🔹 Connect Final Output
+
+```bash
+s4n connect demo --from @inputs/geojson --to plot_yields/geojson
+s4n connect demo --from plot_yields/iowa_county_yields --to @outputs/iowa_county_yields
+```
+
+### ✅ Phase 3: Save the Workflow
+
+Once all connections are made, save the workflow to ensure it’s committed to version control:
+
+```bash
+s4n save demo
+```
+
+***
+
+## 📊 Step 4: Visualize the Workflow
+
+Generate a visual representation of the pipeline:
+
+```bash
+s4n visualize --renderer dot workflows/demo/demo.cwl > workflow.dot
+dot -Tsvg workflow.dot -o workflow.svg
+```
+
+![the resulting workflow](https://raw.githubusercontent.com/fairagro/m4.4_demo_corn_prediction/main/workflow.svg)
+
+***
+
+## 🚀 Step 5: Execute the Workflow
+
+### 🔹 Generate Input Template
+
+```bash
+s4n execute make-template workflows/demo/demo.cwl > inputs.yml
+```
+
+Edit `inputs.yml` with real data paths:
+
+```yaml
+geojson:
+  class: File
+  location: data/iowa_counties.geojson
+soil:
+  class: File
+  location: data/soil_data.csv
+yield:
+  class: File
+  location: data/iowa_yield.csv
+```
+
+### 🔹 Run the Full Pipeline
+
+```bash
+s4n execute local workflows/demo/demo.cwl inputs.yml
+```
+
+### 🔹 Run Remotely (Optional)
+
+```bash
+s4n execute remote start workflows/demo/demo.cwl inputs.yml
+```

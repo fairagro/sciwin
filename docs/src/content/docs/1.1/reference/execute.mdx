@@ -1,0 +1,80 @@
+---
+title: execute
+sidebar:
+  order: 10
+slug: 1.1/reference/execute
+---
+
+The `execute` command provides tools to execute CWL documents locally or on a remote server.
+
+```txt frame="terminal" title="Usage"
+Execution of CWL Files locally or on remote servers
+
+Usage: s4n execute <COMMAND>
+
+Commands:
+  local          Runs CWL files locally [aliases: l]
+  remote         Runs CWL files remotely using reana [aliases: r]
+  make-template  Creates job file template for execution (e.g. inputs.yaml)
+  help           Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+```
+
+## `execute local`
+
+This command executes a given CWL File on the local machine (without the need of CWLTool).
+
+```txt frame="terminal" title="Usage"
+Runs CWL files locally
+
+Usage: s4n execute local [OPTIONS] <FILE> [ARGS]...
+
+Arguments:
+  <FILE>     CWL File to execute
+  [ARGS]...  Other arguments provided to cwl file
+
+Options:
+      --outdir <OUT_DIR>  A path to output resulting files to
+      --quiet             Runner does not print to stdout
+      --podman            Use podman instead of docker
+  -h, --help              Print help
+```
+
+## `execute remote`
+
+This command will communicate with a given [REANA](https://reanahub.io) server and schedule an execution.
+
+```txt frame="terminal" title="Usage"
+Runs CWL files remotely using reana
+
+Usage: s4n execute remote <COMMAND>
+
+Commands:
+  start     Schedules Execution on REANA
+  status    Get the status of Execution on REANA
+  download  Downloads finished Workflow from REANA
+  rocrate   Downloads finished Workflow Run RO-Crate from REANA
+  logout    Delete reana information from credential storage (a.k.a logout)
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -h, --help  Print help
+```
+
+## `execute make-template`
+
+`s4n execute make-template` is able to create a dummy CWL job file (e.g. inputs.yaml) that can be used as a template for an upoming execution of CWL.
+
+```txt frame="terminal" title="Usage"
+Creates job file template for execution (e.g. inputs.yaml)
+
+Usage: s4n execute make-template <CWL>
+
+Arguments:
+  <CWL>  CWL File to create input template for
+
+Options:
+  -h, --help  Print help
+```
