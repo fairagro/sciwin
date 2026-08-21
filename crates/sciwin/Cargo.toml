@@ -1,10 +1,13 @@
 [package]
 name = "sciwin"
+description = "Headless core library for SciWIn: authoring and running CWL workflows"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
 license.workspace = true
 authors.workspace = true
+categories = ["science"]
+keywords = ["cwl", "commonwl", "workflow", "fairagro"]
 
 [lib]
 path = "lib.rs"
