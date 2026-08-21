@@ -11,7 +11,6 @@ use chrono::{DateTime, Utc};
 use commonwl::{
     Identifiable,
     documents::{CWLDocument, StringOrDocument},
-    engine::TaskBackend,
     inputs::DefaultValue,
     packed::PackedCWL,
 };
@@ -187,8 +186,8 @@ pub fn fold_run_record(timing: &ExecutionTiming) -> RunRecord {
 /// The run has not produced a result yet (still running, or errored before producing one --
 /// see [`crate::execution::RunnerError`] for the latter), the specification doesn't resolve
 /// (see [`pack_document`]), or [`write_crate`] fails.
-pub async fn export<T: TaskBackend>(
-    runner: &TaskRunner<T>,
+pub async fn export(
+    runner: &TaskRunner,
     run_id: &RunId,
     metadata: WorkflowConfig,
     directory: &Path,

@@ -18,14 +18,19 @@ use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, error};
 
-#[derive(Debug)]
-pub struct TaskRunner<T: TaskBackend> {
-    backend: Arc<T>,
+pub struct TaskRunner {
+    backend: Arc<dyn TaskBackend>,
     jobs: Arc<Mutex<HashMap<RunId, JobHandle>>>,
 }
 
-impl<T: TaskBackend> TaskRunner<T> {
-    pub fn new(backend: Arc<T>) -> Self {
+impl std::fmt::Debug for TaskRunner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TaskRunner").finish_non_exhaustive()
+    }
+}
+
+impl TaskRunner {
+    pub fn new(backend: Arc<dyn TaskBackend>) -> Self {
         Self {
             backend,
             jobs: Arc::new(Mutex::new(HashMap::new())),
@@ -68,7 +73,7 @@ impl<T: TaskBackend> TaskRunner<T> {
 }
 
 #[async_trait::async_trait]
-impl<T: TaskBackend> WorkflowRunner for TaskRunner<T> {
+impl WorkflowRunner for TaskRunner {
     async fn submit(
         &self,
         cwlfile: &Path,

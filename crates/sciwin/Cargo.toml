@@ -17,6 +17,7 @@ bon.workspace = true
 chrono.workspace = true
 commonwl.workspace = true
 configparser.workspace = true
+crankshaft.workspace = true
 dunce.workspace = true
 futures.workspace = true
 git2.workspace = true

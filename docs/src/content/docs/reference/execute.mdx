@@ -4,7 +4,7 @@ sidebar:
   order: 10
 ---
 
-The `execute` command provides tools to execute CWL documents locally or on a remote server.
+The `execute` command provides tools to execute CWL documents with a chosen engine (locally, via Docker, via a GA4GH TES server, or on a remote [REANA](https://reanahub.io) server), plus commands to query runs already submitted to REANA.
 
 ```txt frame="terminal" title="Usage"
 Execution of CWL Files locally or on remote servers
@@ -12,8 +12,8 @@ Execution of CWL Files locally or on remote servers
 Usage: s4n execute <COMMAND>
 
 Commands:
-  local          Runs CWL files locally [aliases: l]
-  remote         Runs CWL files remotely using reana [aliases: r]
+  run            Runs a CWL file with the selected execution engine [alias: r]
+  reana          Queries or fetches results of runs already submitted to REANA
   make-template  Creates job file template for execution (e.g. inputs.yaml)
   help           Print this message or the help of the given subcommand(s)
 
@@ -21,55 +21,152 @@ Options:
   -h, --help  Print help
 ```
 
-## `execute local`
-This command executes a given CWL File on the local machine (without the need of CWLTool).
-    ```txt frame="terminal" title="Usage"
-    Runs CWL files locally
+## `execute run`
+This command executes a given CWL file with the engine selected via `--engine`.
 
-    Usage: s4n execute local [OPTIONS] <FILE> [ARGS]...
-
-    Arguments:
-      <FILE>     CWL File to execute
-      [ARGS]...  Other arguments provided to cwl file
-
-    Options:
-          --outdir <OUT_DIR>  A path to output resulting files to
-          --quiet             Runner does not print to stdout
-          --podman            Use podman instead of docker
-      -h, --help              Print help
-    ```
-
-
-## `execute remote`
-This command will communicate with a given [REANA](https://reanahub.io) server and schedule an execution.
 ```txt frame="terminal" title="Usage"
-Runs CWL files remotely using reana
+Runs a CWL file with the selected execution engine
 
-Usage: s4n execute remote <COMMAND>
+Usage: s4n execute run [OPTIONS] <FILE> [INPUT_FILE]
+
+Arguments:
+  <FILE>
+          CWL File to execute
+
+  [INPUT_FILE]
+          Input YAML/JSON job file
+
+Options:
+      --engine <ENGINE>
+          local (commonwl's runner, only containerizes DockerRequirement steps -- see --runtime),
+          docker (every step containerized via Docker directly), tes (submit to a GA4GH TES server,
+          needs TES_URL/TES_STORAGE env vars), reana (submit to REANA, needs REANA_URL/REANA_TOKEN
+          -- waits for completion unless --detach is given)
+          
+          [default: local]
+          [possible values: local, docker, tes, reana]
+
+      --runtime <RUNTIME>
+          Container runtime for DockerRequirement steps. Only meaningful for --engine local;
+          --engine docker always uses Docker directly
+          
+          [default: docker]
+          [possible values: docker, podman, singularity, apptainer]
+
+      --outdir <OUT_DIR>
+          A path to output resulting files to
+
+      --rocrate [<ROCRATE>]
+          Create a Provenance Run Crate after execution. Bare --rocrate (or --rocrate files) keeps
+          the original CWL files, directly re-executable; --rocrate packed writes one packed JSON
+          file instead. Cannot be combined with --detach. For --engine reana the export is always
+          packed regardless of the layout requested here (REANA only ever returns one packed
+          specification)
+
+          Possible values:
+          - packed: One packed JSON file holds the whole workflow graph
+          - files:  The original CWL files, still directly re-executable. What bare `--rocrate`
+            means
+
+      --rocrate_dir <ROCRATE_DIR>
+          Directory to save the RO-Crate to
+          
+          [default: ./rocrate]
+
+      --detach
+          Submit and return immediately without waiting for the run to finish. Only valid with
+          --engine reana (local/docker/tes keep no state to reconnect to after this process exits);
+          check progress later with `s4n execute reana status`. Cannot be combined with --rocrate
+
+  -h, --help
+          Print help (see a summary with '-h')
+```
+
+### Engines
+
+- **`local`** (default) — runs the workflow with commonwl's own engine, in-process. Only steps that declare a `DockerRequirement` are containerized, using the runtime selected by `--runtime` (default `docker`; `podman`, `singularity`, and `apptainer` are also supported).
+- **`docker`** — runs every step containerized via Docker directly (through the Docker daemon), regardless of whether a step declares a `DockerRequirement`. `--runtime` is not consulted for this engine.
+- **`tes`** — submits the workflow to a [GA4GH TES](https://github.com/ga4gh/task-execution-schemas) server. Requires the environment variables `TES_URL` (the TES server) and `TES_STORAGE` (a remote data store the TES server can read/write, e.g. `s3://my-bucket`); `TES_TOKEN` is an optional bearer token for authentication.
+- **`reana`** — submits the workflow to a [REANA](https://reanahub.io) server. Requires `REANA_URL` and `REANA_TOKEN` environment variables.
+
+`local`, `docker`, and `tes` always wait for the run to finish before returning (there is no REANA-style server-side state to reconnect to once the CLI exits). `reana` also waits by default; pass `--detach` to submit and return immediately instead, then check on it later with [`execute reana status`](#execute-reana).
+
+### Credentials and `.env`
+
+`REANA_URL`/`REANA_TOKEN` and `TES_URL`/`TES_STORAGE`/`TES_TOKEN` are read from the process environment. `s4n` also loads a `.env` file from the current directory if one is present (via [`dotenvy`](https://docs.rs/dotenvy)), so these can be set once in a `.env` file instead of exporting them in every shell session.
+
+## `execute reana`
+This command queries or fetches results for workflow runs already submitted to a [REANA](https://reanahub.io) server (via `s4n execute run --engine reana`). It needs the same `REANA_URL`/`REANA_TOKEN` environment variables as `execute run --engine reana`.
+
+```txt frame="terminal" title="Usage"
+Queries or fetches results of runs already submitted to REANA
+
+Usage: s4n execute reana [OPTIONS] <COMMAND>
 
 Commands:
-  start     Schedules Execution on REANA
   status    Get the status of Execution on REANA
-  download  Downloads finished Workflow from REANA
+  download  Downloads workflow outputs from REANA
   rocrate   Downloads finished Workflow Run RO-Crate from REANA
-  logout    Delete reana information from credential storage (a.k.a logout)
   help      Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
 ```
 
+### `execute reana status`
+```txt frame="terminal" title="Usage"
+Get the status of Execution on REANA
+
+Usage: s4n execute reana status [OPTIONS] [WORKFLOW_NAME]
+
+Arguments:
+  [WORKFLOW_NAME]  Workflow name to check (if omitted, checks all)
+
+Options:
+  -h, --help  Print help
+```
+
+### `execute reana download`
+```txt frame="terminal" title="Usage"
+Downloads workflow outputs from REANA
+
+Usage: s4n execute reana download [OPTIONS] <WORKFLOW_NAME>
+
+Arguments:
+  <WORKFLOW_NAME>  Workflow name to download results for
+
+Options:
+  -a, --all                      Download all files of the workflow
+  -d, --output_dir <OUTPUT_DIR>  Optional output directory to save downloaded files
+  -h, --help                     Print help
+```
+
+### `execute reana rocrate`
+```txt frame="terminal" title="Usage"
+Downloads finished Workflow Run RO-Crate from REANA
+
+Usage: s4n execute reana rocrate [OPTIONS] <WORKFLOW_NAME>
+
+Arguments:
+  <WORKFLOW_NAME>  Workflow name to create a Provenance Run Crate for
+
+Options:
+  -d, --rocrate_dir <OUTPUT_DIR>  Optional directory to save RO-Crate to, default ./rocrate
+                                  [default: ./rocrate]
+  -h, --help                     Print help
+```
+
 ## `execute make-template`
 `s4n execute make-template` is able to create a dummy CWL job file (e.g. inputs.yaml) that can be used as a template for an upoming execution of CWL.
 
-    ```txt frame="terminal" title="Usage"
-    Creates job file template for execution (e.g. inputs.yaml)
-    
-    Usage: s4n execute make-template <CWL>
-    
-    Arguments:
-      <CWL>  CWL File to create input template for
-    
-    Options:
-      -h, --help  Print help
-    ```
+```txt frame="terminal" title="Usage"
+Creates job file template for execution (e.g. inputs.yaml)
+
+Usage: s4n execute make-template [OPTIONS] <CWL>
+
+Arguments:
+  <CWL>  CWL File to create input template for
+
+Options:
+  -h, --help  Print help
+```

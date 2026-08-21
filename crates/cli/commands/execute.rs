@@ -2,17 +2,18 @@ use chrono::Utc;
 use clap::{Args, Subcommand};
 use miette::IntoDiagnostic;
 use sciwin::{
-    authoring::tool::parser::guess_type,
     cwl::{
         OneOrMany,
         documents::CWLDocument,
-        engine::{ContainerEngine, InputObject, LocalBackend, load_input_file_from_file},
+        engine::{ContainerEngine, InputObject, TaskBackend, load_input_file_from_file},
         files::{Directory, File, FileOrDirectory},
         inputs::{DefaultValue, InputSchema, InputType},
-        storage::{StorageBackend, StoragePath},
         types::CWLType,
     },
-    execution::{ReanaRunner, RunStatus, TaskRunner, WorkflowRunner},
+    execution::{
+        ReanaRunner, RunId, RunStatus, TaskRunner, WorkflowRunner, docker_backend, local_backend,
+        tes_backend,
+    },
     project,
     provenance::{Written, reana_runner as rocrate_export, task_runner as local_rocrate_export},
     reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
@@ -30,35 +31,20 @@ use url::Url;
 
 pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> miette::Result<()> {
     match subcommand {
-        ExecuteCommands::Local(args) => execute_local(args).await,
-        ExecuteCommands::Remote(remote_args) => match &remote_args.command {
-            RemoteSubcommands::Start {
-                file,
-                input_file,
-                rocrate,
-                watch,
-                logout,
-            } => execute_remote_start(file, input_file, *rocrate, *watch, *logout).await,
-            RemoteSubcommands::Status { workflow_name } => {
-                execute_remote_status(workflow_name.as_deref()).await
+        ExecuteCommands::Run(args) => execute_run(args).await,
+        ExecuteCommands::Reana(reana_args) => match &reana_args.command {
+            ReanaSubcommands::Status { workflow_name } => {
+                execute_reana_status(workflow_name.as_deref()).await
             }
-            RemoteSubcommands::Download {
+            ReanaSubcommands::Download {
                 workflow_name,
                 all,
                 output_dir,
-            } => execute_remote_download(workflow_name, *all, output_dir.as_deref()).await,
-            RemoteSubcommands::Rocrate {
+            } => execute_reana_download(workflow_name, *all, output_dir.as_deref()).await,
+            ReanaSubcommands::Rocrate {
                 workflow_name,
                 output_dir,
-            } => execute_remote_rocrate(workflow_name, output_dir.as_deref()).await,
-            RemoteSubcommands::Logout => {
-                // crates/cli has no credential storage yet -- `reana_runner()` below reads
-                // REANA_URL/REANA_TOKEN from the environment as a stopgap until a real
-                // keyring-backed TokenProvider exists, so there's nothing to log out of.
-                miette::bail!(
-                    "Logout is not implemented yet: credentials are currently read from REANA_URL/REANA_TOKEN env vars, nothing is stored"
-                )
-            }
+            } => execute_reana_rocrate(workflow_name, output_dir.as_deref()).await,
         },
         ExecuteCommands::MakeTemplate(args) => make_template(&args.cwl),
     }
@@ -66,10 +52,13 @@ pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> miette::Re
 
 #[derive(Debug, Subcommand)]
 pub enum ExecuteCommands {
-    #[command(about = "Runs CWL files locally", visible_alias = "l")]
-    Local(LocalExecuteArgs),
-    #[command(about = "Runs CWL files remotely using reana", visible_alias = "r")]
-    Remote(RemoteExecuteArgs),
+    #[command(
+        about = "Runs a CWL file with the selected execution engine",
+        visible_alias = "r"
+    )]
+    Run(RunArgs),
+    #[command(about = "Queries or fetches results of runs already submitted to REANA")]
+    Reana(ReanaArgs),
     #[command(about = "Creates job file template for execution (e.g. inputs.yaml)")]
     MakeTemplate(MakeTemplateArgs),
 }
@@ -80,18 +69,33 @@ pub struct MakeTemplateArgs {
     pub cwl: PathBuf,
 }
 
-#[derive(Args, Debug, Default)]
-pub struct LocalExecuteArgs {
+#[derive(Args, Debug)]
+pub struct RunArgs {
+    #[arg(
+        long = "engine",
+        value_enum,
+        default_value_t = ExecutionEngine::Local,
+        help = "local (commonwl's runner, only containerizes DockerRequirement steps -- see \
+                --runtime), docker (every step containerized via Docker directly), tes (submit \
+                to a GA4GH TES server, needs TES_URL/TES_STORAGE env vars), reana (submit to \
+                REANA, needs REANA_URL/REANA_TOKEN -- waits for completion unless --detach is \
+                given)"
+    )]
+    pub engine: ExecutionEngine,
+    #[arg(
+        long = "runtime",
+        value_enum,
+        default_value_t = ContainerRuntime::Docker,
+        help = "Container runtime for DockerRequirement steps. Only meaningful for --engine \
+                local; --engine docker always uses Docker directly"
+    )]
+    pub runtime: ContainerRuntime,
     #[arg(long = "outdir", help = "A path to output resulting files to")]
     pub out_dir: Option<PathBuf>,
-    #[arg(long = "podman", help = "Use podman instead of docker")]
-    pub podman: bool,
-    #[arg(long = "singularity", help = "Use singularity instead of docker")]
-    pub singularity: bool,
-    #[arg(long = "apptainer", help = "Use apptainer instead of docker")]
-    pub apptainer: bool,
     #[arg(help = "CWL File to execute")]
     pub file: PathBuf,
+    #[arg(help = "Input YAML/JSON job file")]
+    pub input_file: Option<PathBuf>,
     #[arg(
         long = "rocrate",
         num_args = 0..=1,
@@ -99,7 +103,9 @@ pub struct LocalExecuteArgs {
         value_enum,
         help = "Create a Provenance Run Crate after execution. Bare --rocrate (or --rocrate files) \
                 keeps the original CWL files, directly re-executable; --rocrate packed writes one \
-                packed JSON file instead"
+                packed JSON file instead. Cannot be combined with --detach. For --engine reana \
+                the export is always packed regardless of the layout requested here (REANA only \
+                ever returns one packed specification)"
     )]
     pub rocrate: Option<RocrateLayout>,
     #[arg(
@@ -109,11 +115,46 @@ pub struct LocalExecuteArgs {
     )]
     pub rocrate_dir: PathBuf,
     #[arg(
-        trailing_var_arg = true,
-        help = "Other arguments provided to cwl file",
-        allow_hyphen_values = true
+        long = "detach",
+        help = "Submit and return immediately without waiting for the run to finish. Only valid \
+                with --engine reana (local/docker/tes keep no state to reconnect to after this \
+                process exits); check progress later with `s4n execute reana status`. Cannot be \
+                combined with --rocrate"
     )]
-    pub args: Vec<String>,
+    pub detach: bool,
+}
+
+/// Mirrors `commonwl::engine::ContainerEngine` as a local, clap-`ValueEnum`-able type -- the
+/// orphan rule blocks deriving `ValueEnum` on the foreign type directly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, clap::ValueEnum)]
+pub enum ContainerRuntime {
+    #[default]
+    Docker,
+    Podman,
+    Singularity,
+    Apptainer,
+}
+
+impl From<ContainerRuntime> for ContainerEngine {
+    fn from(value: ContainerRuntime) -> Self {
+        match value {
+            ContainerRuntime::Docker => ContainerEngine::Docker,
+            ContainerRuntime::Podman => ContainerEngine::Podman,
+            ContainerRuntime::Singularity => ContainerEngine::Singularity,
+            ContainerRuntime::Apptainer => ContainerEngine::Apptainer,
+        }
+    }
+}
+
+/// Named `ExecutionEngine`, not `Engine`, to avoid confusion with the unrelated
+/// `sciwin::provenance::inputs::Engine` (provenance metadata, not a dispatch selector).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, clap::ValueEnum)]
+pub enum ExecutionEngine {
+    #[default]
+    Local,
+    Docker,
+    Tes,
+    Reana,
 }
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -124,33 +165,14 @@ pub enum RocrateLayout {
     Files,
 }
 
-#[derive(Debug, Args)]
-pub struct RemoteExecuteArgs {
+#[derive(Args, Debug)]
+pub struct ReanaArgs {
     #[command(subcommand)]
-    pub command: RemoteSubcommands,
+    pub command: ReanaSubcommands,
 }
 
 #[derive(Debug, Subcommand)]
-pub enum RemoteSubcommands {
-    #[command(about = "Schedules Execution on REANA")]
-    Start {
-        #[arg(help = "CWL File to execute")]
-        file: PathBuf,
-        #[arg(help = "Input YAML file")]
-        input_file: Option<PathBuf>,
-        #[arg(long = "rocrate", help = "Create Provenance Run Crate")]
-        rocrate: bool,
-        #[arg(
-            long = "logout",
-            help = "Delete reana information from credential storage (a.k.a logout)"
-        )]
-        logout: bool,
-        #[arg(
-            long = "watch",
-            help = "Wait for workflow execution to finish and download result"
-        )]
-        watch: bool,
-    },
+pub enum ReanaSubcommands {
     #[command(about = "Get the status of Execution on REANA")]
     Status {
         #[arg(help = "Workflow name to check (if omitted, checks all)")]
@@ -181,101 +203,55 @@ pub enum RemoteSubcommands {
         )]
         output_dir: Option<String>,
     },
-    #[command(about = "Delete reana information from credential storage (a.k.a logout)")]
-    Logout,
 }
 
-#[allow(clippy::disallowed_macros)]
-pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
-    let container_engine = if args.podman {
-        ContainerEngine::Podman
-    } else if args.singularity {
-        ContainerEngine::Singularity
-    } else if args.apptainer {
-        ContainerEngine::Apptainer
-    } else {
-        ContainerEngine::Docker
-    };
-    debug!("using container engine: {container_engine:?}");
-
-    let storage = Arc::new(StorageBackend::new());
-    let backend = Arc::new(LocalBackend::new(
-        container_engine,
-        storage,
-        StoragePath::from_local(&env::temp_dir()),
-    ));
-    let runner = TaskRunner::new(backend);
+pub async fn execute_run(args: &RunArgs) -> miette::Result<()> {
+    if args.detach && args.engine != ExecutionEngine::Reana {
+        miette::bail!(
+            "--detach is only supported with --engine reana (local/docker/tes have no persisted run state to reconnect to)"
+        );
+    }
+    if args.detach && args.rocrate.is_some() {
+        miette::bail!(
+            "--detach cannot be combined with --rocrate (crate export needs the finished run's outputs)"
+        );
+    }
 
     let base_path =
         dunce::canonicalize(args.file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
-    let inputs = if args.args.is_empty() {
-        debug!("no trailing arguments given, running with an empty input object");
-        InputObject::default()
-    } else if args.args.len() == 1 && fs::exists(args.args[0].clone()).into_diagnostic()? {
-        debug!(
-            "single argument is an existing file, loading it as an input YAML: {}",
-            args.args[0]
-        );
-        load_input_file_from_file(args.args[0].clone(), base_path)?
-    } else {
-        debug!("parsing trailing arguments as --key value pairs");
-        let raw = args
-            .args
-            .as_chunks::<2>().0.iter()
-            .filter_map(|pair| {
-                if let Some(key) = pair[0].strip_prefix("--") {
-                    let raw_value = &pair[1];
-                    let value = match guess_type(raw_value, Path::new(".")).ok()? {
-                        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
-                            File::builder().location(raw_value.to_string()).build(),
-                        )),
-                        CWLType::Directory => {
-                            DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
-                                Directory::builder().location(raw_value.to_string()).build(),
-                            ))
-                        }
-                        _ => DefaultValue::Any(
-                            serde_saphyr::from_str(raw_value).expect("Could not read input"),
-                        ),
-                    };
-                    Some((key.to_string(), value))
-                } else {
-                    None
-                }
-            })
-            .collect::<HashMap<_, _>>();
-        InputObject {
-            inputs: raw,
-            ..Default::default()
-        }
+    let inputs = match &args.input_file {
+        Some(input_file) => load_input_file_from_file(input_file.clone(), base_path)?,
+        None => InputObject::default(),
     };
 
-    // Not `run_workflow` (submit + stream logs + wait + print outputs, all in one): `--rocrate`
-    // needs the run id afterward, which that convenience wrapper doesn't hand back. TaskRunner's
-    // `logs()` is `NotSupported` anyway (subprocess output already goes to the terminal via
-    // tracing as it runs), so nothing is lost by not using it here.
-    debug!("submitting local run for {}", args.file.display());
+    if args.engine == ExecutionEngine::Reana {
+        execute_run_reana(args, inputs).await
+    } else {
+        execute_run_task_backend(args, inputs).await
+    }
+}
+
+/// `--engine local|docker|tes`: always blocks (submit + wait) -- `TaskRunner` keeps in-process
+/// state only, there is no other way for one CLI invocation to report a result.
+async fn execute_run_task_backend(args: &RunArgs, inputs: InputObject) -> miette::Result<()> {
+    let backend: Arc<dyn TaskBackend> = match args.engine {
+        ExecutionEngine::Local => local_backend(args.runtime.into()),
+        ExecutionEngine::Docker => docker_backend().await?,
+        ExecutionEngine::Tes => tes_backend().await?,
+        ExecutionEngine::Reana => unreachable!("handled by execute_run_reana"),
+    };
+    let runner = TaskRunner::new(backend);
+
+    debug!(
+        "submitting {:?} run for {}",
+        args.engine,
+        args.file.display()
+    );
     let run_id = runner
         .submit(&args.file, inputs, args.out_dir.as_deref())
         .await?;
     debug!("run '{run_id}' submitted, waiting for completion");
-    let status = runner.wait_for_completion(&run_id).await?;
-
-    #[allow(clippy::disallowed_macros)]
-    match status {
-        RunStatus::Finished => {
-            if let Some(outputs) = runner.outputs(&run_id, args.out_dir.as_deref()).await? {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&outputs).into_diagnostic()?
-                );
-            }
-        }
-        _ => match runner.failure_detail(&run_id).await? {
-            Some(detail) => miette::bail!("workflow ended with status {status:?}: {detail}"),
-            None => miette::bail!("workflow ended with status {status:?}"),
-        },
-    }
+    wait_and_report(&runner, &run_id, args.out_dir.as_deref()).await?;
 
     if let Some(layout_arg) = args.rocrate {
         let layout = match layout_arg {
@@ -305,18 +281,77 @@ pub async fn execute_local(args: &LocalExecuteArgs) -> miette::Result<()> {
     Ok(())
 }
 
-/// Builds a `ReanaRunner` from `REANA_URL`/`REANA_TOKEN` env vars.
+/// `--engine reana`: waits for completion by default, same as every other engine; `--detach`
+/// submits and returns immediately instead -- the only engine that can, since REANA persists run
+/// state server-side, so a later `s4n execute reana status`/`download`/`rocrate` can still reach
+/// it after this process exits.
+async fn execute_run_reana(args: &RunArgs, inputs: InputObject) -> miette::Result<()> {
+    let runner = reana_runner()?;
+
+    debug!("submitting remote run for {}", args.file.display());
+    // `execution::reana_compat::compatibility_adjustments` isn't wired in here, yet
+    let run_id = runner.submit(&args.file, inputs, None).await?;
+    info!("submitted workflow run '{run_id}'");
+
+    if args.detach {
+        info!(
+            "--detach given; not waiting. Check progress with `s4n execute reana status {run_id}`"
+        );
+        return Ok(());
+    }
+
+    wait_and_report(&runner, &run_id, None).await?;
+
+    if let Some(layout_arg) = args.rocrate {
+        if matches!(layout_arg, RocrateLayout::Files) {
+            warn!(
+                "--rocrate=files was requested, but a REANA export is always packed (REANA only \
+                 ever hands back one packed specification); exporting packed instead"
+            );
+        }
+        export_rocrate(&run_id, runner.get_client(), &args.rocrate_dir).await?;
+    }
+
+    Ok(())
+}
+
+/// Waits for `id` to reach a terminal status, prints its outputs as pretty JSON on success, bails
+/// with `failure_detail()` otherwise. Shared by every engine, since all of them wait by default
+/// now.
+///
+/// Behavior note: a failed REANA run used to just log and return `Ok(())` here (only when
+/// `--watch` was given); this now bails like local/docker/tes always have, for every engine.
+#[allow(clippy::disallowed_macros)]
+async fn wait_and_report(
+    runner: &(dyn WorkflowRunner + Sync),
+    run_id: &RunId,
+    out_dir: Option<&Path>,
+) -> miette::Result<()> {
+    let status = runner.wait_for_completion(run_id).await?;
+    match status {
+        RunStatus::Finished => {
+            if let Some(outputs) = runner.outputs(run_id, out_dir).await? {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&outputs).into_diagnostic()?
+                );
+            }
+            Ok(())
+        }
+        _ => match runner.failure_detail(run_id).await? {
+            Some(detail) => miette::bail!("workflow ended with status {status:?}: {detail}"),
+            None => miette::bail!("workflow ended with status {status:?}"),
+        },
+    }
+}
+
+/// Builds a `ReanaRunner` from `REANA_URL`/`REANA_TOKEN` env vars (settable directly, or via a
+/// `.env` file -- see `dotenvy::dotenv()` in `main.rs`).
 fn reana_runner() -> miette::Result<ReanaRunner> {
-    let url = env::var("REANA_URL").map_err(|_| {
-        miette::miette!(
-            "REANA_URL is not set (no credential storage is wired up yet, see reana_runner() in execute.rs)"
-        )
-    })?;
-    let token = env::var("REANA_TOKEN").map_err(|_| {
-        miette::miette!(
-            "REANA_TOKEN is not set (no credential storage is wired up yet, see reana_runner() in execute.rs)"
-        )
-    })?;
+    let url = env::var("REANA_URL")
+        .map_err(|_| miette::miette!("REANA_URL is not set (see `s4n execute run --help`)"))?;
+    let token = env::var("REANA_TOKEN")
+        .map_err(|_| miette::miette!("REANA_TOKEN is not set (see `s4n execute run --help`)"))?;
 
     let server_url = Url::parse(&url).into_diagnostic()?;
     debug!("connecting to REANA at {server_url}");
@@ -325,69 +360,7 @@ fn reana_runner() -> miette::Result<ReanaRunner> {
     Ok(ReanaRunner::new(client))
 }
 
-#[allow(clippy::disallowed_macros)]
-async fn execute_remote_start(
-    file: &Path,
-    input_file: &Option<PathBuf>,
-    rocrate: bool,
-    watch: bool,
-    logout: bool,
-) -> miette::Result<()> {
-    let runner = reana_runner()?;
-
-    let inputs = match input_file {
-        Some(input_file) => {
-            let base_path =
-                dunce::canonicalize(file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
-            load_input_file_from_file(input_file.clone(), base_path)?
-        }
-        None => InputObject::default(),
-    };
-
-    debug!("submitting remote run for {}", file.display());
-    // `execution::reana_compat::compatibility_adjustments` isn't wired in here, yet
-    let run_id = runner.submit(file, inputs, None).await?;
-    info!("submitted workflow run '{run_id}'");
-
-    if watch {
-        let status = runner.wait_for_completion(&run_id).await?;
-        info!("workflow '{run_id}' finished with status {status:?}");
-
-        match status {
-            RunStatus::Finished => {
-                if let Some(outputs) = runner.outputs(&run_id, None).await? {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&outputs).into_diagnostic()?
-                    );
-                }
-            }
-            RunStatus::Failed => {
-                runner.find_failures(&run_id).await?;
-            }
-            _ => {}
-        }
-
-        if rocrate {
-            if status == RunStatus::Finished {
-                export_rocrate(&run_id, runner.get_client(), Path::new("./rocrate")).await?;
-            } else {
-                warn!(
-                    "--rocrate requested, but the run did not finish (status {status:?}); no crate was created"
-                );
-            }
-        }
-    }
-
-    if logout {
-        // See the `Logout` subcommand: no credential storage wired up yet.
-        warn!("--logout requested, but nothing is stored to log out of yet");
-    }
-
-    Ok(())
-}
-
-async fn execute_remote_status(workflow_name: Option<&str>) -> miette::Result<()> {
+async fn execute_reana_status(workflow_name: Option<&str>) -> miette::Result<()> {
     let runner = reana_runner()?;
 
     if let Some(name) = workflow_name {
@@ -417,7 +390,7 @@ async fn execute_remote_status(workflow_name: Option<&str>) -> miette::Result<()
     Ok(())
 }
 
-async fn execute_remote_rocrate(
+async fn execute_reana_rocrate(
     workflow_name: &str,
     output_dir: Option<&str>,
 ) -> miette::Result<()> {
@@ -470,7 +443,7 @@ fn report_rocrate_export(written: &Written, validation: &Validation, missing_sou
     }
 }
 
-async fn execute_remote_download(
+async fn execute_reana_download(
     workflow_name: &str,
     all: bool,
     output_dir: Option<&str>,

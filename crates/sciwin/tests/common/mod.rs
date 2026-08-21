@@ -30,8 +30,8 @@ pub fn copy_dir(src: impl AsRef<Path>, dst: impl AsRef<Path>) {
     }
 }
 
-/// A `TaskRunner` backed by the local engine, same setup the CLI's `execute local` uses.
-pub fn local_runner() -> TaskRunner<LocalBackend> {
+/// A `TaskRunner` backed by the local engine, same setup the CLI's `execute run` uses.
+pub fn local_runner() -> TaskRunner {
     let storage = Arc::new(StorageBackend::new());
     let backend = Arc::new(LocalBackend::new(
         ContainerEngine::default(),

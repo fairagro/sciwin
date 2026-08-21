@@ -32,6 +32,8 @@ use tokio::{sync::watch, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{Level, info};
 
+mod backend;
+pub use backend::{docker_backend, local_backend, tes_backend};
 mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;

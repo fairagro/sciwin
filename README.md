@@ -90,7 +90,7 @@ This repository is a Cargo workspace with three crates:
 The `sciwin` crate itself builds on three sibling FAIRagro libraries, each maintained in its own repository and published as its own crate:
 | Crate | Repository | Purpose |
 |--|--|--|
-| [`commonwl`](https://github.com/fairagro/commonwl) | `commonwl` | Parses CWL documents and provides the execution engine (local, Docker and TES backends) used by `s4n execute local` |
+| [`commonwl`](https://github.com/fairagro/commonwl) | `commonwl` | Parses CWL documents and provides the execution engine (local, Docker and TES backends) used by `s4n execute` |
 | [`rocrate`](https://github.com/fairagro/ro-crate-lib) | `ro-crate-lib` | Reads, writes, builds and validates [RO-Crates](https://www.researchobject.org/ro-crate/), including Workflow RO-Crates and Workflow Run Crates |
 | [`reana`](https://github.com/fairagro/reana-cwl-client) | `reana-cwl-client` | Client for [REANA](https://reanahub.io/), used as an alternative execution backend to local runs |
 
@@ -222,10 +222,11 @@ s4n connect <NAME> --from [FILE]/[SLOT] --to [FILE/SLOT]
 For example: `s4n connect demo --from @inputs/speakers --to calculation/speakers` - The Step `calculation` will be added pointing to `workflows/calculation/calculation.cwl`, which will use the newly created input `speakers` as input for its `speakers` input.
 
 ### Execution of CWL Files
-SciWIn-Client comes with its custom CWL Runner (which does not support all `cwltool` can do, yet!) to run Workflows and CommandLineTools. The command `s4n execute local` can also be triggered using `s4n ex l`.
+SciWIn-Client comes with its custom CWL Runner (which does not support all `cwltool` can do, yet!) to run Workflows and CommandLineTools. `s4n execute` defaults to its `run` subcommand, so it can be omitted (`s4n execute` can also be triggered using `s4n ex`):
 ```bash
-s4n execute local <CWLFILE> [ARGUMENTS]
+s4n execute workflows/main/main.cwl inputs.yml
 ```
+By default this runs on the `local` engine. `--engine` also accepts `docker` (every step containerized via Docker directly), `tes` (submit to a GA4GH TES server), and `reana` (submit to a [REANA](https://reanahub.io) server, e.g. `s4n execute --engine reana workflows/main/main.cwl inputs.yml`) — see the [`execute` reference](https://fairagro.github.io/sciwin/reference/execute/) for the full flag set and required environment variables per backend.
 
 ## 🪂 Contributors
 <a href="https://github.com/fairagro/sciwin/graphs/contributors">
