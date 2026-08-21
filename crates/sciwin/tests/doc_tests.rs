@@ -322,6 +322,7 @@ pub async fn test_piping() {
 
 #[tokio::test]
 #[serial]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#pulling-containers
 pub async fn test_pulling_containers() {
     let (current, dir) = setup();
@@ -379,6 +380,7 @@ pub async fn test_pulling_containers() {
 
 #[tokio::test]
 #[serial]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
 ///see https://fairagro.github.io/sciwin/examples/tool-creation/#building-custom-containers
 pub async fn test_building_custom_containers() {
     let (current, dir) = setup();
