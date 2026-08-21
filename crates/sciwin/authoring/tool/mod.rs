@@ -22,7 +22,10 @@ use crate::{
 use bon::Builder;
 use commonwl::{documents::CommandLineTool, engine::ContainerEngine};
 pub use requirements::ContainerInfo;
-use std::path::{Path, PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Default, Builder)]
 pub struct ToolCreationOptions {
@@ -51,6 +54,9 @@ pub struct ToolCreationOptions {
     /// Delete whatever the trial run produced once its outputs are recorded.
     #[builder(default)]
     pub cleanup: bool,
+    /// Delete whatever the trial run produced once its outputs are recorded.
+    #[builder(default)]
+    pub force: bool,
     /// Stage and commit the tool and anything the trial run produced.
     #[builder(default)]
     pub commit: bool,
@@ -110,6 +116,12 @@ pub async fn create_tool(
         Path::new(paths::WORKFLOWS_FOLDER).join(paths::derive_tool_name(base_command, name))
     });
     let path = paths::get_qualified_filename(base_command, name, output_dir);
+    if path.exists() && !options.force {
+        return Err(AuthoringError::IO(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            format!("CWL File already exists at {path:?}"),
+        )));
+    }
     let yaml = save::finalize_tool(&mut cwl, &path)?;
 
     if options.save {

@@ -87,8 +87,13 @@ pub struct CreateArgs {
     pub mount: Option<Vec<PathBuf>>,
     #[arg(long = "env", help = "Loads an .env File")]
     pub env: Option<PathBuf>,
-    #[arg(short = 'f', long = "force", help = "Overwrites existing workflow")]
+    #[arg(short = 'f', long = "force", help = "Overwrites existing CWL File")]
     pub force: bool,
+    #[arg(
+        long = "auto-container",
+        help = "Automatically adds a Docker Requirement based on dependencies (Python and R supported)"
+    )]
+    pub auto_container: bool,
     #[arg(
         trailing_var_arg = true,
         help = "Command line call e.g. python script.py [ARGUMENTS]"
@@ -119,7 +124,8 @@ impl From<&CreateArgs> for ToolCreationOptions {
             name: args.name.clone(),
             output_dir: None,
             save: !args.is_raw,
-            auto_container: false, //need to wire into CLI
+            force: args.force,
+            auto_container: args.auto_container,
         }
     }
 }
@@ -165,7 +171,10 @@ pub async fn create_tool(args: &CreateArgs) -> miette::Result<()> {
     }
 
     let cwd = env::current_dir().into_diagnostic()?;
-    debug!("running `{}` in {cwd:?} to observe its outputs", args.command.join(" "));
+    debug!(
+        "running `{}` in {cwd:?} to observe its outputs",
+        args.command.join(" ")
+    );
     let CreatedTool {
         document,
         path,
@@ -179,7 +188,10 @@ pub async fn create_tool(args: &CreateArgs) -> miette::Result<()> {
         .filter_map(|o| o.output_binding.as_ref()?.glob.clone().map(|g| g.as_many()))
         .flatten()
         .collect();
-    debug!("{} output(s) detected from glob bindings", string_outputs.len());
+    debug!(
+        "{} output(s) detected from glob bindings",
+        string_outputs.len()
+    );
 
     print_list(&string_outputs);
 
