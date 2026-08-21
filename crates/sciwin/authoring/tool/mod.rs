@@ -180,7 +180,7 @@ async fn create_tool_base(
     }
 
     if options.run_container.is_some() {
-        requirements::add_tool_requirements(&mut cwl, options, project_root)?;
+        requirements::add_tool_requirements(&mut cwl, options, project_root).await?;
     }
 
     if !options.no_run {
@@ -192,7 +192,7 @@ async fn create_tool_base(
     }
 
     if !options.run_container.is_some() {
-        requirements::add_tool_requirements(&mut cwl, options, project_root)?;
+        requirements::add_tool_requirements(&mut cwl, options, project_root).await?;
     }
 
     // Clear defaults if requested
