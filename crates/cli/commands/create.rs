@@ -12,8 +12,8 @@ use tracing::{debug, info, warn};
 pub async fn handle_create_command(args: &CreateArgs) -> miette::Result<()> {
     if args.command.is_empty() && args.name.is_some() {
         debug!("no command given, only a name -- creating a workflow shell, not a tool");
-        info!(
-            "ℹ️  Workflow creation is optional. Creation will be triggered by adding the first connection, too!"
+        warn!(
+            "⚠️  Explicit workflow creation via `create --name` is deprecated and will be removed in a future release. A workflow is created automatically the first time you run `connect`."
         );
         create_workflow(args)
     } else {
@@ -65,8 +65,7 @@ pub struct CreateArgs {
     #[arg(
         short = 'i',
         long = "inputs",
-        help = "Force values to be considered as an input.",
-        value_delimiter = ' '
+        help = "Force a value to be considered as an input. Repeat to add more, e.g. -i file1.txt -i file2.txt"
     )]
     pub inputs: Option<Vec<String>>,
     #[arg(
@@ -77,15 +76,13 @@ pub struct CreateArgs {
     #[arg(
         short = 'o',
         long = "outputs",
-        help = "Force values to be considered as an output.",
-        value_delimiter = ' '
+        help = "Force a value to be considered as an output. Repeat to add more, e.g. -o file1.txt -o file2.txt"
     )]
     pub outputs: Option<Vec<String>>,
     #[arg(
         short = 'm',
         long = "mount",
-        help = "Mounts a directory into the working directory",
-        value_delimiter = ' '
+        help = "Mounts a directory into the working directory. Repeat to mount more than one"
     )]
     pub mount: Option<Vec<PathBuf>>,
     #[arg(long = "env", help = "Loads an .env File")]

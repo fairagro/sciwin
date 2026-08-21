@@ -10,7 +10,7 @@ pub mod resolver;
 
 pub async fn resolve_python_container(working_dir: &Path) -> AuthoringResult<Option<Image>> {
     let working_dir = dunce::canonicalize(working_dir)?;
-    if !working_dir.exists() && !working_dir.is_dir() {
+    if !working_dir.exists() || !working_dir.is_dir() {
         return Err(AuthoringError::IO(io::Error::new(
             io::ErrorKind::NotFound,
             "Invalid Working Directory",
@@ -41,7 +41,7 @@ pub async fn resolve_python_container(working_dir: &Path) -> AuthoringResult<Opt
 
 pub async fn resolve_r_container(working_dir: &Path) -> AuthoringResult<Option<Image>> {
     let working_dir = dunce::canonicalize(working_dir)?;
-    if !working_dir.exists() && !working_dir.is_dir() {
+    if !working_dir.exists() || !working_dir.is_dir() {
         return Err(AuthoringError::IO(io::Error::new(
             io::ErrorKind::NotFound,
             "Invalid Working Directory",
