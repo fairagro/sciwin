@@ -46,7 +46,7 @@ jobs:
         run: |
           mv target/release/s4n s4n
           echo '#!/bin/bash
-          s4n execute local "$@"' > s4n_wrapper.sh
+          s4n execute "$@"' > s4n_wrapper.sh
           chmod +x s4n
           chmod +x s4n_wrapper.sh
       - name: Run Tests
