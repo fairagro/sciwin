@@ -179,32 +179,8 @@ async fn create_tool_base(
         )?;
     }
 
-    requirements::add_tool_requirements(&mut cwl, options, project_root)?;
-
-    if options.auto_container
-        && !cwl.has_requirement::<DockerRequirement>()
-        && let Some(base_command) = &cwl.base_command
-    {
-        let bcmany = base_command.as_many();
-        if bcmany[0].starts_with("python") {
-            let result = resolve_python_container(project_root).await;
-            match result {
-                Ok(Some(c)) => cwl.append_requirement_mut(ToolRequirements::DockerRequirement(
-                    c.to_requirement(),
-                )),
-                Err(e) => warn!("{e}"),
-                _ => {}
-            }
-        } else if bcmany[0] == "R" || bcmany[0] == "RScript" {
-            let result = resolve_r_container(project_root).await;
-            match result {
-                Ok(Some(c)) => cwl.append_requirement_mut(ToolRequirements::DockerRequirement(
-                    c.to_requirement(),
-                )),
-                Err(e) => warn!("{e}"),
-                _ => {}
-            }
-        }
+    if options.run_container.is_some() {
+        requirements::add_tool_requirements(&mut cwl, options, project_root)?;
     }
 
     if !options.no_run {
@@ -213,6 +189,10 @@ async fn create_tool_base(
         if options.outputs.is_empty() {
             cwl.outputs = parser::outputs::get_outputs(&files).await?;
         }
+    }
+
+    if !options.run_container.is_some() {
+        requirements::add_tool_requirements(&mut cwl, options, project_root)?;
     }
 
     // Clear defaults if requested

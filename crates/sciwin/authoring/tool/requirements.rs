@@ -26,13 +26,39 @@ pub struct ContainerInfo {
     pub tag: Option<String>,
 }
 
-pub(super) fn add_tool_requirements(
+pub(super) async fn add_tool_requirements(
     cwl: &mut CommandLineTool,
     options: &ToolCreationOptions,
     project_root: &Path,
 ) -> AuthoringResult<()> {
     // Handle container requirements
     append_container_requirement_mut(cwl, options.container.as_ref());
+
+    if options.auto_container
+        && !cwl.has_requirement::<DockerRequirement>()
+        && let Some(base_command) = &cwl.base_command
+    {
+        let bcmany = base_command.as_many();
+        if bcmany[0].starts_with("python") {
+            let result = resolve_python_container(project_root).await;
+            match result {
+                Ok(Some(c)) => cwl.append_requirement_mut(ToolRequirements::DockerRequirement(
+                    c.to_requirement(),
+                )),
+                Err(e) => warn!("{e}"),
+                _ => {}
+            }
+        } else if bcmany[0] == "R" || bcmany[0] == "RScript" {
+            let result = resolve_r_container(project_root).await;
+            match result {
+                Ok(Some(c)) => cwl.append_requirement_mut(ToolRequirements::DockerRequirement(
+                    c.to_requirement(),
+                )),
+                Err(e) => warn!("{e}"),
+                _ => {}
+            }
+        }
+    }
 
     if options.enable_network {
         cwl.use_network_mut();
