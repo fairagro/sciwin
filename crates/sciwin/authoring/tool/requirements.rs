@@ -1,13 +1,17 @@
 //! Attaching container, network, environment and mount requirements to a tool.
 
 use super::ToolCreationOptions;
-use crate::{authoring::AuthoringResult, paths::TrustedPathExt};
+use crate::{
+    authoring::AuthoringResult,
+    container::{resolve_python_container, resolve_r_container},
+    paths::TrustedPathExt,
+};
 use anyhow::Context as _;
 use bon::Builder;
 use commonwl::{
     documents::CommandLineTool,
     files::{Directory, FileOrDirectory},
-    requirements::ToolRequirements,
+    requirements::{DockerRequirement, ToolRequirements},
 };
 use std::{
     collections::HashMap,
@@ -15,6 +19,7 @@ use std::{
     io::{BufRead, BufReader},
     path::Path,
 };
+use tracing::warn;
 
 /// Container to run the tool in: either an image reference to pull, or a path to a
 /// `Dockerfile` to build, in which case `tag` names the resulting image.

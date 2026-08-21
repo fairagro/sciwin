@@ -15,20 +15,13 @@ mod probe;
 mod requirements;
 mod save;
 
-pub use requirements::ContainerInfo;
-use tracing::warn;
-
 use crate::{
     authoring::{AuthoringError, AuthoringResult, paths},
-    container::{resolve_python_container, resolve_r_container},
     repository::{self, Repository},
 };
 use bon::Builder;
-use commonwl::{
-    documents::CommandLineTool,
-    engine::ContainerEngine,
-    requirements::{DockerRequirement, ToolRequirements},
-};
+use commonwl::{documents::CommandLineTool, engine::ContainerEngine};
+pub use requirements::ContainerInfo;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Builder)]
