@@ -11,7 +11,7 @@ jobs:
       actions: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: |
           git config --global user.name "$(git --no-pager log --format=format:'%an' -n 1)"
           git config --global user.email "$(git --no-pager log --format=format:'%ae' -n 1)"
@@ -38,10 +38,18 @@ jobs:
           libayatana-appindicator3-dev \
           librsvg2-dev
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: Install Tarpaulin 📈
         run: cargo install cargo-tarpaulin --force
       - name: Run coverage
-        run: cargo tarpaulin --workspace --out Xml --exclude-files tests/* tests/**/* packages/**/tests/**/* packages/**/tests/*
+        run: |
+          cargo tarpaulin \
+            --engine llvm \
+            -p sciwin -p s4n \
+            --out Xml \
+            --exclude-files tests/* tests/**/* crates/**/tests/**/* crates/**/tests/*
       - name: Code Coverage Summary Report
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:

@@ -1,0 +1,45 @@
+name: 📦 Publish Crate
+
+# Publishes only the `sciwin` library crate to crates.io. `s4n` (crates/cli) and
+# `sciwin_studio` (crates/gui, publish = false) are released as binaries via release.yml
+# (cargo-dist), not published to crates.io.
+on:
+  push:
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish sciwin
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - name: Cache Cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo
+            target
+          key: ${{ runner.os }}-cargo-publish-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-publish-
+      - name: Verify tag matches crate version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CRATE_VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "sciwin") | .version')"
+          if [ "$TAG_VERSION" != "$CRATE_VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME (version $TAG_VERSION) does not match crates/sciwin/Cargo.toml version $CRATE_VERSION"
+            exit 1
+          fi
+      - name: Publish sciwin to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish -p sciwin --locked

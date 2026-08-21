@@ -6,7 +6,7 @@ class: CommandLineTool
 requirements:
 - class: InitialWorkDirRequirement
   listing:
-  - entryname: workflows/calculation/calculation.py
+  - entryname: calculation.py
     entry:
       $include: calculation.py
 - class: DockerRequirement
@@ -36,4 +36,4 @@ outputs:
 
 baseCommand:
 - python
-- workflows/calculation/calculation.py
+- calculation.py

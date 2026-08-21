@@ -1,0 +1,376 @@
+use crate::authoring::AuthoringResult;
+use commonwl::{
+    OneOrMany,
+    documents::{Argument, CommandLineTool},
+    inputs::{
+        CommandInputArraySchema, CommandInputParameter, CommandInputParameterType,
+        CommandInputSchema, CommandInputType, DefaultValue,
+    },
+    requirements::{InlineJavascriptRequirement, ToolRequirements},
+    types::CWLType,
+};
+use std::collections::{HashMap, HashSet};
+
+/// Applies some postprocessing to the cwl `CommandLineTool`
+pub(crate) fn post_process_cwl(tool: &mut CommandLineTool) -> AuthoringResult<()> {
+    detect_array_inputs(tool)?;
+    post_process_variables(tool);
+    post_process_ids(tool);
+    post_process_edam_formats(tool);
+    Ok(())
+}
+
+const EDAM_NAMESPACE: &str = "http://edamontology.org/";
+const EDAM_SCHEMA: &str = "https://edamontology.org/EDAM.owl";
+
+/// Rewrites `http://edamontology.org/...` format IRIs on file inputs/outputs into `edam:...`
+/// CURIEs, and attaches the matching `$namespaces`/`$schemas` entries when it does.
+fn post_process_edam_formats(tool: &mut CommandLineTool) {
+    let mut used_edam = false;
+
+    for format in tool.inputs.iter_mut().filter_map(|i| i.format.as_mut()) {
+        for value in format.iter_mut() {
+            used_edam |= curify_edam_format(value);
+        }
+    }
+    for format in tool.outputs.iter_mut().filter_map(|o| o.format.as_mut()) {
+        for value in format.iter_mut() {
+            used_edam |= curify_edam_format(value);
+        }
+    }
+
+    if used_edam {
+        attach_edam_namespace(tool);
+    }
+}
+
+/// Rewrites `value` in place into an `edam:` CURIE if it is an EDAM format IRI, returning
+/// whether it was rewritten.
+fn curify_edam_format(value: &mut String) -> bool {
+    let Some(suffix) = value.strip_prefix(EDAM_NAMESPACE) else {
+        return false;
+    };
+    *value = format!("edam:{suffix}");
+    true
+}
+
+/// Merges the `edam` prefix into `$namespaces` and the EDAM schema into `$schemas`, without
+/// clobbering entries that may already be there.
+fn attach_edam_namespace(tool: &mut CommandLineTool) {
+    let namespaces = tool
+        .extension_fields
+        .entry("$namespaces".to_string())
+        .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+    if let serde_json::Value::Object(map) = namespaces {
+        map.entry("edam".to_string())
+            .or_insert_with(|| serde_json::Value::String(EDAM_NAMESPACE.to_string()));
+    }
+
+    let schemas = tool
+        .extension_fields
+        .entry("$schemas".to_string())
+        .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+    if let serde_json::Value::Array(list) = schemas {
+        let schema = serde_json::Value::String(EDAM_SCHEMA.to_string());
+        if !list.contains(&schema) {
+            list.push(schema);
+        }
+    }
+}
+
+/// Transforms duplicate key and type entries into an array type input
+fn detect_array_inputs(tool: &mut CommandLineTool) -> AuthoringResult<()> {
+    // maps an input id to its index in `inputs`, so a repeat id is merged in O(1)
+    // instead of a linear re-scan -- and merged regardless of whether its type
+    // matches the first occurrence, so two inputs never end up sharing one id.
+    let mut index_by_id: HashMap<Option<String>, usize> = HashMap::new();
+    let mut inputs: Vec<CommandInputParameter> = Vec::new();
+
+    for input in std::mem::take(&mut tool.inputs) {
+        let Some(&index) = index_by_id.get(&input.id) else {
+            index_by_id.insert(input.id.clone(), inputs.len());
+            inputs.push(input);
+            continue;
+        };
+        let existing = &mut inputs[index];
+
+        // Convert to array type if not already
+        if !matches!(&existing.r#type, CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CommandInputSchema(schema))) if matches!(&**schema, CommandInputSchema::Array(_)) )
+            && let CommandInputParameterType::CommandInputType(in_ty) = existing.r#type.clone()
+        {
+            existing.r#type =
+                CommandInputSchema::Array(CommandInputArraySchema::builder().items(in_ty).build())
+                    .into();
+
+            if let Some(default) = &existing.default {
+                existing.default = Some(DefaultValue::Any(serde_json::to_value(vec![
+                    default.clone(),
+                ])?));
+            }
+        }
+
+        // Append additional default value if present
+        if let Some(DefaultValue::Any(serde_json::Value::Array(defaults))) = &mut existing.default
+            && let Some(default) = input.default
+        {
+            defaults.push(serde_json::to_value(default.clone())?);
+        }
+    }
+    tool.inputs = inputs;
+    Ok(())
+}
+
+/// Handles translation to CWL Variables like $(inputs.myInput.path) or $(runtime.outdir)
+fn post_process_variables(tool: &mut CommandLineTool) {
+    fn process_input(input: &CommandInputParameter) -> String {
+        if input.r#type == CWLType::File.into() || input.r#type == CWLType::Directory.into() {
+            format!("$(inputs.{}.path)", input.id.as_ref().unwrap())
+        } else {
+            format!("$(inputs.{})", input.id.as_ref().unwrap())
+        }
+    }
+
+    let mut processed_once = false;
+    let inputs = tool.inputs.clone();
+    for input in &inputs {
+        if let Some(default) = &input.default {
+            for output in &mut tool.outputs {
+                if let Some(binding) = &mut output.output_binding
+                    && binding.glob == Some(OneOrMany::One(default.to_string()))
+                {
+                    binding.glob = Some(OneOrMany::One(process_input(input)));
+                    processed_once = true;
+                }
+            }
+            if let Some(stdout) = &tool.stdout
+                && *stdout == default.to_string()
+            {
+                tool.stdout = Some(process_input(input));
+                processed_once = true;
+            }
+            if let Some(stderr) = &tool.stderr
+                && *stderr == default.to_string()
+            {
+                tool.stderr = Some(process_input(input));
+                processed_once = true;
+            }
+
+            if let Some(arguments) = &mut tool.arguments {
+                for argument in arguments.iter_mut() {
+                    match argument {
+                        Argument::String(s) => {
+                            if *s == default.to_string() {
+                                *s = process_input(input);
+                                processed_once = true;
+                            }
+                        }
+                        Argument::Binding(binding) => {
+                            if let Some(from) = &mut binding.value_from
+                                && *from == default.to_string()
+                            {
+                                *from = process_input(input);
+                                processed_once = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for output in &mut tool.outputs {
+        if let Some(binding) = &mut output.output_binding
+            && matches!(binding.glob, Some(OneOrMany::One(ref s)) if s == ".")
+        {
+            output.id = Some("output_directory".to_string());
+            binding.glob = Some(OneOrMany::One("$(runtime.outdir)".to_string()));
+        }
+    }
+
+    if processed_once {
+        tool.append_requirement_mut(ToolRequirements::InlineJavascriptRequirement(
+            InlineJavascriptRequirement::default(),
+        ));
+    }
+}
+
+/// Post-processes output IDs to ensure they do not conflict with input IDs
+fn post_process_ids(tool: &mut CommandLineTool) {
+    let input_ids = tool
+        .inputs
+        .iter()
+        .map(|i| i.id.clone())
+        .collect::<HashSet<_>>();
+    for output in &mut tool.outputs {
+        if input_ids.contains(&output.id) {
+            output.id = Some(format!("o_{}", output.id.as_ref().unwrap()));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use commonwl::{
+        files::{File, FileOrDirectory},
+        inputs::CommandInputParameter,
+        outputs::{CommandOutputBinding, CommandOutputParameter},
+    };
+    use serde_json::Value;
+
+    #[test]
+    pub fn test_post_process_inputs() {
+        let mut tool = CommandLineTool::builder()
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id("arr")
+                    .r#type(CWLType::String)
+                    .default(DefaultValue::Any(Value::String("first".to_string())))
+                    .build(),
+                CommandInputParameter::builder()
+                    .id("arr")
+                    .r#type(CWLType::String)
+                    .default(DefaultValue::Any(Value::String("second".to_string())))
+                    .build(),
+                CommandInputParameter::builder()
+                    .id("arr")
+                    .r#type(CWLType::String)
+                    .default(DefaultValue::Any(Value::String("third".to_string())))
+                    .build(),
+                CommandInputParameter::builder()
+                    .id("int")
+                    .r#type(CWLType::Int)
+                    .default(DefaultValue::Any(Value::String("fourth".to_string())))
+                    .build(),
+            ])
+            .build();
+
+        assert_eq!(tool.inputs.len(), 4);
+        detect_array_inputs(&mut tool).unwrap();
+        assert_eq!(tool.inputs.len(), 2);
+
+        let of_interest = tool.inputs.first().unwrap();
+        assert_eq!(
+            of_interest.r#type,
+            CommandInputParameterType::CommandInputType(OneOrMany::One(
+                CommandInputType::CommandInputSchema(Box::new(CommandInputSchema::Array(
+                    CommandInputArraySchema::builder()
+                        .items(OneOrMany::One(CommandInputType::CWLType(CWLType::String)))
+                        .build()
+                )))
+            ))
+        );
+        assert_eq!(
+            of_interest.default,
+            Some(DefaultValue::Any(
+                serde_json::to_value(vec![
+                    DefaultValue::Any(Value::String("first".to_string())),
+                    DefaultValue::Any(Value::String("second".to_string())),
+                    DefaultValue::Any(Value::String("third".to_string()))
+                ])
+                .unwrap()
+            ))
+        );
+
+        let other = &tool.inputs[1];
+        assert_eq!(other.r#type, CWLType::Int.into());
+    }
+
+    #[test]
+    pub fn test_post_process_variables_adds_requirement_when_none_exist() {
+        let mut tool = CommandLineTool::builder()
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id("infile")
+                    .r#type(CWLType::File)
+                    .default(DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                        File::builder().location("foo.txt").build(),
+                    )))
+                    .build(),
+            ])
+            .outputs(vec![
+                CommandOutputParameter::builder()
+                    .id("out")
+                    .r#type(CWLType::File)
+                    .output_binding(CommandOutputBinding {
+                        glob: Some(OneOrMany::One("foo.txt".to_string())),
+                        ..Default::default()
+                    })
+                    .build(),
+            ])
+            .build();
+
+        assert!(tool.requirements.is_none());
+        post_process_variables(&mut tool);
+
+        assert!(tool.has_requirement::<InlineJavascriptRequirement>());
+        assert_eq!(
+            tool.outputs[0].output_binding.as_ref().unwrap().glob,
+            Some(OneOrMany::One("$(inputs.infile.path)".to_string()))
+        );
+    }
+
+    #[test]
+    pub fn test_post_process_edam_formats_rewrites_curies_and_attaches_namespace() {
+        let mut tool = CommandLineTool::builder()
+            .inputs(vec![
+                CommandInputParameter::builder()
+                    .id("infile")
+                    .r#type(CWLType::File)
+                    .format(OneOrMany::One(
+                        "http://edamontology.org/format_2330".to_string(),
+                    ))
+                    .build(),
+            ])
+            .outputs(vec![
+                CommandOutputParameter::builder()
+                    .id("out")
+                    .r#type(CWLType::File)
+                    .format(OneOrMany::One(
+                        "http://edamontology.org/format_3989".to_string(),
+                    ))
+                    .build(),
+            ])
+            .build();
+
+        post_process_edam_formats(&mut tool);
+
+        assert_eq!(
+            tool.inputs[0].format,
+            Some(OneOrMany::One("edam:format_2330".to_string()))
+        );
+        assert_eq!(
+            tool.outputs[0].format,
+            Some(OneOrMany::One("edam:format_3989".to_string()))
+        );
+        assert_eq!(
+            tool.extension_fields.get("$namespaces"),
+            Some(&serde_json::json!({"edam": "http://edamontology.org/"}))
+        );
+        assert_eq!(
+            tool.extension_fields.get("$schemas"),
+            Some(&serde_json::json!(["https://edamontology.org/EDAM.owl"]))
+        );
+    }
+
+    #[test]
+    pub fn test_post_process_edam_formats_leaves_non_edam_formats_untouched() {
+        let mut tool = CommandLineTool::builder()
+            .outputs(vec![
+                CommandOutputParameter::builder()
+                    .id("out")
+                    .r#type(CWLType::File)
+                    .format(OneOrMany::One("application/x-sh".to_string()))
+                    .build(),
+            ])
+            .build();
+
+        post_process_edam_formats(&mut tool);
+
+        assert_eq!(
+            tool.outputs[0].format,
+            Some(OneOrMany::One("application/x-sh".to_string()))
+        );
+        assert!(tool.extension_fields.is_empty());
+    }
+}

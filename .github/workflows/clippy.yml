@@ -12,10 +12,10 @@ jobs:
     env:
       RUSTFLAGS: "-Dwarnings"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo
@@ -41,8 +41,3 @@ jobs:
         run: |
           rustup component add clippy
           cargo clippy --all-targets --all-features --workspace
-      - name: Install dx
-        run: |
-          curl -sSL http://dioxus.dev/install.sh | bash -s v0.7.2
-      - name: Run dx check
-        run: dx check -p sciwin

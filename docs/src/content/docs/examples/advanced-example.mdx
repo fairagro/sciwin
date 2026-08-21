@@ -186,7 +186,7 @@ s4n create --name shp2geojson --no-run -o districts.geojson -c osgeo/gdal:ubuntu
 ```
 This correct creation of the tool can be tested using 
 ```bash
-s4n execute local workflows/shp2geojson/shp2geojson.cwl 
+s4n execute workflows/shp2geojson/shp2geojson.cwl
 ```
 
 The outputted file now needs to be committed to move on
@@ -248,5 +248,5 @@ feature: F3
 
 Execution of the Workflow is done by
 ```bash
-s4n execute local workflows/demo/demo.cwl inputs.yml
+s4n execute workflows/demo/demo.cwl inputs.yml
 ```

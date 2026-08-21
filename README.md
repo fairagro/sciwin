@@ -36,6 +36,7 @@ or the FAIRagro Blogpost:
 ## 📖 Table of Contents<!-- omit from toc -->
 - [🚀 About](#-about)
 - [🏗️ How to Build and Test](#️-how-to-build-and-test)
+  - [Crate architecture \& sibling repositories](#crate-architecture--sibling-repositories)
 - [💚 SciWin Studio](#-sciwin-studio)
 - [🎯 Installation](#-installation)
 - [📚 How to Use](#-how-to-use)
@@ -79,6 +80,28 @@ To run tests (unit and integration)
 ```bash
 cargo nextest --workspace           # Run all tests
 ```
+
+### Crate architecture & sibling repositories
+This repository is a Cargo workspace with three crates:
+- **`crates/sciwin`** (lib `sciwin`) — the shared core logic for authoring, executing and annotating workflows, used by both the CLI and the GUI.
+- **`crates/cli`** (bin `s4n`) — the SciWIn-Client command-line interface, a thin wrapper around `sciwin`.
+- **`crates/gui`** (bin `sciwin_studio`) — the SciWIn-Studio desktop GUI, built with [Dioxus](https://dioxuslabs.com/), also built on top of `sciwin`.
+
+The `sciwin` crate itself builds on three sibling FAIRagro libraries, each maintained in its own repository and published as its own crate:
+| Crate | Repository | Purpose |
+|--|--|--|
+| [`commonwl`](https://github.com/fairagro/commonwl) | `commonwl` | Parses CWL documents and provides the execution engine (local, Docker and TES backends) used by `s4n execute` |
+| [`rocrate`](https://github.com/fairagro/ro-crate-lib) | `ro-crate-lib` | Reads, writes, builds and validates [RO-Crates](https://www.researchobject.org/ro-crate/), including Workflow RO-Crates and Workflow Run Crates |
+| [`reana`](https://github.com/fairagro/reana-cwl-client) | `reana-cwl-client` | Client for [REANA](https://reanahub.io/), used as an alternative execution backend to local runs |
+
+By default these are pulled from crates.io like any other dependency, so a plain `cargo build`/`cargo run` works without checking out the other repositories. When developing a change that spans repositories (e.g. a `commonwl` API change consumed by `sciwin`), clone `commonwl`, `reana-cwl-client` and `ro-crate-lib` next to this repository and add a `[patch.crates-io]` section (in a workspace-level `.cargo/config.toml` one directory above all four checkouts, or directly in this repo's `Cargo.toml`) pointing each crate at its local path, e.g.:
+```toml
+[patch.crates-io]
+commonwl = { path = "../commonwl/crates/commonwl" }
+reana = { path = "../reana-cwl-client/crates/reana" }
+rocrate = { path = "../ro-crate-lib" }
+```
+Building from a directory where such a patch is in scope will then use the local sources instead of the published versions, and all affected repositories should be updated together.
 
 ## 💚 SciWIn-Studio
 **SciWIn-Studio** is a graphical user interface (GUI) application currently in testing that complements SciWIn-Client. It provides an intuitive visual environment for researchers who prefer graphical tools over command-line interactions.
@@ -199,10 +222,11 @@ s4n connect <NAME> --from [FILE]/[SLOT] --to [FILE/SLOT]
 For example: `s4n connect demo --from @inputs/speakers --to calculation/speakers` - The Step `calculation` will be added pointing to `workflows/calculation/calculation.cwl`, which will use the newly created input `speakers` as input for its `speakers` input.
 
 ### Execution of CWL Files
-SciWIn-Client comes with its custom CWL Runner (which does not support all `cwltool` can do, yet!) to run Workflows and CommandLineTools. The command `s4n execute local` can also be triggered using `s4n ex l`.
+SciWIn-Client comes with its custom CWL Runner (which does not support all `cwltool` can do, yet!) to run Workflows and CommandLineTools. `s4n execute` defaults to its `run` subcommand, so it can be omitted (`s4n execute` can also be triggered using `s4n ex`):
 ```bash
-s4n execute local <CWLFILE> [ARGUMENTS]
+s4n execute workflows/main/main.cwl inputs.yml
 ```
+By default this runs on the `local` engine. `--engine` also accepts `docker` (every step containerized via Docker directly), `tes` (submit to a GA4GH TES server), and `reana` (submit to a [REANA](https://reanahub.io) server, e.g. `s4n execute --engine reana workflows/main/main.cwl inputs.yml`) — see the [`execute` reference](https://fairagro.github.io/sciwin/reference/execute/) for the full flag set and required environment variables per backend.
 
 ## 🪂 Contributors
 <a href="https://github.com/fairagro/sciwin/graphs/contributors">
