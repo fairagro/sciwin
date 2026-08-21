@@ -11,7 +11,7 @@ use commonwl::{
     },
     types::CWLType,
 };
-use sciwin::authoring::AuthoringError;
+use sciwin::authoring::{AuthoringError, tool::auto_container_engine};
 use sciwin::authoring::tool::{ContainerInfo, ToolCreationOptions, create_tool};
 use sciwin::repository::{self, Repository};
 use std::{
@@ -148,7 +148,10 @@ pub async fn tool_create_test_inputs_outputs() {
     assert_eq!(created.document.inputs.len(), 1);
     assert_eq!(created.document.outputs.len(), 1);
 
-    let Some(iwdr) = created.document.get_requirement::<InitialWorkDirRequirement>() else {
+    let Some(iwdr) = created
+        .document
+        .get_requirement::<InitialWorkDirRequirement>()
+    else {
         panic!("Tool does not contain an InitialWorkDirRequirement");
     };
     let WorkDirItems::ListingItems(listing) = &iwdr.listing else {
@@ -386,8 +389,7 @@ pub async fn tool_create_test_dockerfile() {
     let Some(dr) = created.document.get_requirement::<DockerRequirement>() else {
         panic!("Tool does not contain a DockerRequirement");
     };
-    let (Some(docker_file), Some(docker_image_id)) = (&dr.docker_file, &dr.docker_image_id)
-    else {
+    let (Some(docker_file), Some(docker_image_id)) = (&dr.docker_file, &dr.docker_image_id) else {
         panic!("DockerRequirement does not contain dockerFile and dockerImageId");
     };
     assert_eq!(
@@ -473,7 +475,10 @@ pub async fn test_tool_output_is_dir() {
         created.document.outputs[0].id,
         Some("my_directory".to_string())
     );
-    assert_eq!(created.document.outputs[0].r#type, CWLType::Directory.into());
+    assert_eq!(
+        created.document.outputs[0].r#type,
+        CWLType::Directory.into()
+    );
 }
 
 #[tokio::test]
@@ -521,7 +526,10 @@ pub async fn test_shell_script() {
     assert_eq!(created.document.outputs.len(), 0);
     assert_eq!(created.document.requirements.as_ref().unwrap().len(), 1);
 
-    let Some(iwdr) = created.document.get_requirement::<InitialWorkDirRequirement>() else {
+    let Some(iwdr) = created
+        .document
+        .get_requirement::<InitialWorkDirRequirement>()
+    else {
         panic!("Tool does not contain an InitialWorkDirRequirement");
     };
 
@@ -682,7 +690,10 @@ pub async fn tool_create_mount() {
         .build();
     let created = create_tool(root, &options).await.unwrap();
 
-    let Some(iwdr) = created.document.get_requirement::<InitialWorkDirRequirement>() else {
+    let Some(iwdr) = created
+        .document
+        .get_requirement::<InitialWorkDirRequirement>()
+    else {
         panic!("Tool does not contain an InitialWorkDirRequirement");
     };
 
@@ -690,6 +701,47 @@ pub async fn tool_create_mount() {
         panic!("InitialWorkDirRequirement does not contain listing items");
     };
     assert_eq!(listing.len(), 1);
+}
+
+#[tokio::test]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
+pub async fn tool_create_auto_docker() {
+    let dir = workspace(&[
+        "../../testdata/hello_world/workflows/calculation/calculation.py",
+        "../../testdata/hello_world/data/population.csv",
+        "../../testdata/hello_world/data/speakers_revised.csv",
+        "../../testdata/hello_world/requirements.txt",
+    ]);
+    let root = dir.path();
+    let options = ToolCreationOptions::builder()
+        .command(vec![
+            "python3".to_string(),
+            "calculation.py".to_string(),
+            "--speakers".to_string(),
+            "speakers_revised.csv".to_string(),
+            "--population".to_string(),
+            "population.csv".to_string(),
+        ])
+        .auto_container(true)
+        .run_container(auto_container_engine().unwrap())
+        .save(true)
+        .commit(true)
+        .build();
+    let created = create_tool(root, &options).await.unwrap();
+
+    assert_eq!(created.document.requirements.as_ref().unwrap().len(), 2);
+
+    let Some(dr) = created.document.get_requirement::<DockerRequirement>() else {
+        panic!("Tool does not contain a DockerRequirement");
+    };
+    let Some(docker_pull) = &dr.docker_pull else {
+        panic!("DockerRequirement does not contain dockerPull");
+    };
+    assert!(docker_pull.contains("sciwin/python-datascience")); //probably
+
+    //no uncommitted left?
+    let repo = Repository::open(root).unwrap();
+    assert!(repository::get_modified_files(&repo).unwrap().is_empty());
 }
 
 #[tokio::test]

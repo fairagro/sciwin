@@ -1,4 +1,5 @@
 use bon::Builder;
+use commonwl::requirements::DockerRequirement;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     collections::{HashMap, HashSet},
@@ -75,7 +76,7 @@ impl Display for PackageType {
 }
 
 pub async fn resolve(
-    packages: &[&Package],
+    packages: &[Package],
     package_type: &PackageType,
 ) -> AuthoringResult<Vec<String>> {
     let base_url =
@@ -92,7 +93,7 @@ pub async fn resolve(
 /// Returns the build hashes shared by every requested package's matching
 /// versions, i.e. only builds where all packages' requirements are met.
 fn resolve_packages_from_list(
-    packages: &[&Package],
+    packages: &[Package],
     list: &ResolverPackageListResponse,
 ) -> AuthoringResult<Vec<String>> {
     let mut common: Option<HashSet<String>> = None;
@@ -136,6 +137,13 @@ pub struct Image {
     pub entrypoint: Option<Vec<String>>,
     pub size: u64,
     pub registry: String,
+}
+
+impl Image {
+    pub fn to_requirement(self) -> DockerRequirement{
+        let pull_str = format!("{}/{}@{}", self.registry, self.repository, self.digest);
+        DockerRequirement::builder().docker_pull(pull_str).build()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -186,7 +194,7 @@ struct ImageResponse {
     images: ImageList,
 }
 
-pub async fn resolve_images_from_digests(digests: &[&str]) -> AuthoringResult<ImageList> {
+pub async fn resolve_images_from_digests<T: ToString>(digests: &[T]) -> AuthoringResult<ImageList> {
     let base_url =
         Url::parse(REGISTRY_BASE_URL).map_err(|e| AuthoringError::from(anyhow::Error::from(e)))?;
     let endpoint = base_url.join("images.json")?;
@@ -195,15 +203,16 @@ pub async fn resolve_images_from_digests(digests: &[&str]) -> AuthoringResult<Im
     images_by_digests(&image_list.images, digests)
 }
 
-fn images_by_digests(images: &ImageList, digests: &[&str]) -> AuthoringResult<ImageList> {
-    let by_digest: HashMap<&str, &Image> =
-        images.0.iter().map(|i| (i.digest.as_str(), i)).collect();
+fn images_by_digests<T: ToString>(images: &ImageList, digests: &[T]) -> AuthoringResult<ImageList> {
+    let by_digest: HashMap<String, &Image> =
+        images.0.iter().map(|i| (i.digest.clone(), i)).collect();
     Ok(digests
         .iter()
         .filter_map(|d| {
-            let image = by_digest.get(d).copied().cloned();
+            let digest = d.to_string();
+            let image = by_digest.get(&digest).copied().cloned();
             if image.is_none() {
-                warn!("registry has no image for digest {d}, skipping");
+                warn!("registry has no image for digest {digest}, skipping");
             }
             image
         })
@@ -218,7 +227,7 @@ mod tests {
     #[tokio::test]
     async fn test_resolve_simple() {
         let pandas = Package::builder().name("pandas").build();
-        let packages = vec![&pandas];
+        let packages = vec![pandas];
         let matches = resolve(&packages, &PackageType::Python).await.unwrap();
         assert!(!matches.is_empty());
     }
@@ -240,7 +249,7 @@ mod tests {
         let list = serde_json::from_str(list_raw).unwrap();
 
         let pandas = Package::builder().name("pandas").build();
-        let packages = vec![&pandas];
+        let packages = vec![pandas];
         let matches = resolve_packages_from_list(&packages, &list).unwrap();
 
         let list_raw = include_str!("../../../testdata/resolver_images.json");
@@ -263,7 +272,7 @@ mod tests {
         let list = serde_json::from_str(list_raw).unwrap();
 
         let pandas = Package::builder().name("pandas").build();
-        let packages = vec![&pandas];
+        let packages = vec![pandas];
         let matches = resolve_packages_from_list(&packages, &list).unwrap();
 
         assert_eq!(matches.len(), 20);
@@ -278,7 +287,7 @@ mod tests {
             .name("pandas")
             .maybe_version(Requirement::new("=3.0.5"))
             .build();
-        let packages = vec![&pandas];
+        let packages = vec![pandas];
         let matches = resolve_packages_from_list(&packages, &list).unwrap();
 
         assert_eq!(matches.len(), 1);
@@ -293,7 +302,7 @@ mod tests {
             .name("pandas")
             .maybe_version(Requirement::new(">=3.0.4"))
             .build();
-        let packages = vec![&pandas];
+        let packages = vec![pandas];
         let matches = resolve_packages_from_list(&packages, &list).unwrap();
 
         assert_eq!(matches.len(), 3);
@@ -316,7 +325,7 @@ mod tests {
             .name("scienceplots")
             .maybe_version(Requirement::new(">=2"))
             .build();
-        let packages = vec![&pandas, &matplotlib, &scienceplots];
+        let packages = vec![pandas, matplotlib, scienceplots];
         let matches = resolve_packages_from_list(&packages, &list).unwrap();
         assert_eq!(
             matches,

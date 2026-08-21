@@ -122,6 +122,7 @@ impl From<&CreateArgs> for ToolCreationOptions {
             name: args.name.clone(),
             output_dir: None,
             save: !args.is_raw,
+            auto_container: false, //need to wire into CLI
         }
     }
 }

@@ -3,7 +3,7 @@
 //! A command line says nothing about its outputs, so the only reliable way to fill in a
 //! tool's `outputs` is to run it and diff the working tree.
 
-use super::{ToolCreationOptions, requirements};
+use super::{ToolCreationOptions};
 use crate::{
     authoring::AuthoringResult,
     paths::TrustedPathExt,
@@ -50,10 +50,6 @@ pub(super) async fn run_and_collect_files(
         storage,
         StoragePath::from_local(&env::temp_dir()),
     ));
-
-    if options.run_container.is_some() {
-        requirements::add_tool_requirements(cwl, options, project_root)?;
-    }
 
     // the probe runs a copy: the catch-all output and the JS requirement it needs exist only
     // to observe the run, and must not end up in the saved tool

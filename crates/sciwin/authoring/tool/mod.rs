@@ -16,13 +16,19 @@ mod requirements;
 mod save;
 
 pub use requirements::ContainerInfo;
+use tracing::warn;
 
 use crate::{
     authoring::{AuthoringError, AuthoringResult, paths},
+    container::{resolve_python_container, resolve_r_container},
     repository::{self, Repository},
 };
 use bon::Builder;
-use commonwl::{documents::CommandLineTool, engine::ContainerEngine};
+use commonwl::{
+    documents::CommandLineTool,
+    engine::ContainerEngine,
+    requirements::{DockerRequirement, ToolRequirements},
+};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Builder)]
@@ -68,6 +74,9 @@ pub struct ToolCreationOptions {
     pub env: Option<PathBuf>,
     /// Container engine to run the trial run under. `None` runs it directly.
     pub run_container: Option<ContainerEngine>,
+    ///autocontainer
+    #[builder(default)]
+    pub auto_container: bool,
 }
 
 /// A tool built by [`create_tool`].
@@ -91,12 +100,11 @@ pub async fn create_tool(
 ) -> AuthoringResult<CreatedTool> {
     let mut cwl = create_tool_base(project_root, options).await?;
 
-    if options.run_container.is_none() {
-        requirements::add_tool_requirements(&mut cwl, options, project_root)?;
-    } else if let Some(container) = &options.container
+    if options.run_container.is_some()
+        && let Some(container) = &options.container
         && requirements::is_sif_image(&container.image)
     {
-        //if run_container is some requirements are already set in create_tool_base()
+        //requirements are already set in create_tool_base()
         //just the docker requirements needs to be altered in case of sif file
         requirements::rewrite_sif_container_mut(&mut cwl, container);
     }
@@ -169,6 +177,34 @@ async fn create_tool_base(
                 .collect::<Vec<_>>(),
             project_root,
         )?;
+    }
+
+    requirements::add_tool_requirements(&mut cwl, options, project_root)?;
+
+    if options.auto_container
+        && !cwl.has_requirement::<DockerRequirement>()
+        && let Some(base_command) = &cwl.base_command
+    {
+        let bcmany = base_command.as_many();
+        if bcmany[0].starts_with("python") {
+            let result = resolve_python_container(project_root).await;
+            match result {
+                Ok(Some(c)) => cwl.append_requirement_mut(ToolRequirements::DockerRequirement(
+                    c.to_requirement(),
+                )),
+                Err(e) => warn!("{e}"),
+                _ => {}
+            }
+        } else if bcmany[0] == "R" || bcmany[0] == "RScript" {
+            let result = resolve_r_container(project_root).await;
+            match result {
+                Ok(Some(c)) => cwl.append_requirement_mut(ToolRequirements::DockerRequirement(
+                    c.to_requirement(),
+                )),
+                Err(e) => warn!("{e}"),
+                _ => {}
+            }
+        }
     }
 
     if !options.no_run {

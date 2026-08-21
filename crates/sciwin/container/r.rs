@@ -17,7 +17,11 @@ pub async fn requirements_from_description(path: &Path) -> AuthoringResult<Optio
 }
 
 pub fn requirements_from_r(contents: &str) -> AuthoringResult<Option<Vec<Package>>> {
-    let desc = RDescription::from_str(contents).map_err(AuthoringError::RDescription)?;
+    // R DESCRIPTION files may use CRLF line endings (e.g. authored on Windows,
+    // or checked out on Windows CI with autocrlf); the deb822-style parser
+    // treats `\r` as part of the field value, so normalize before parsing.
+    let contents = contents.replace("\r\n", "\n");
+    let desc = RDescription::from_str(&contents).map_err(AuthoringError::RDescription)?;
 
     let Some(requirements) = desc.imports else {
         return Ok(None);
