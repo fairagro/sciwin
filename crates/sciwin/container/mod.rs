@@ -1,8 +1,8 @@
 use crate::{
-    authoring::AuthoringResult,
+    authoring::{AuthoringError, AuthoringResult},
     container::resolver::{Image, resolve, resolve_images_from_digests},
 };
-use std::path::Path;
+use std::{io, path::Path};
 
 pub mod python;
 pub mod r;
@@ -10,6 +10,13 @@ pub mod resolver;
 
 pub async fn resolve_python_container(working_dir: &Path) -> AuthoringResult<Option<Image>> {
     let working_dir = dunce::canonicalize(working_dir)?;
+    if !working_dir.exists() && !working_dir.is_dir() {
+        return Err(AuthoringError::IO(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Invalid Working Directory",
+        )));
+    }
+
     let dependencies = if working_dir.join("requirements.txt").exists() {
         python::requirements_from_requirements_txt(
             &working_dir.join("requirements.txt"),
@@ -34,6 +41,13 @@ pub async fn resolve_python_container(working_dir: &Path) -> AuthoringResult<Opt
 
 pub async fn resolve_r_container(working_dir: &Path) -> AuthoringResult<Option<Image>> {
     let working_dir = dunce::canonicalize(working_dir)?;
+    if !working_dir.exists() && !working_dir.is_dir() {
+        return Err(AuthoringError::IO(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Invalid Working Directory",
+        )));
+    }
+
     let dependencies = if working_dir.join("DESCRIPTION").exists() {
         r::requirements_from_description(&working_dir.join("DESCRIPTION")).await?
     } else {
