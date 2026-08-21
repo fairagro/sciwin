@@ -12,7 +12,7 @@ Execution of CWL Files locally or on remote servers
 Usage: s4n execute <COMMAND>
 
 Commands:
-  run            Runs a CWL file with the selected execution engine [alias: r]
+  run            Runs a CWL file with the selected execution engine [alias: r] [default]
   reana          Queries or fetches results of runs already submitted to REANA
   make-template  Creates job file template for execution (e.g. inputs.yaml)
   help           Print this message or the help of the given subcommand(s)
@@ -21,8 +21,15 @@ Options:
   -h, --help  Print help
 ```
 
+:::note
+    `run` is the default subcommand, so it can be omitted: `s4n execute my-tool.cwl` is shorthand for
+    `s4n execute run my-tool.cwl`. This only kicks in when the next word isn't a known `execute`
+    subcommand (`run`/`r`/`reana`/`make-template`/`help`) or `-h`/`--help`, so `s4n execute reana status`
+    still dispatches to `reana`, not `run`.
+:::
+
 ## `execute run`
-This command executes a given CWL file with the engine selected via `--engine`.
+This command executes a given CWL file with the engine selected via `--engine`. The `run` subcommand name is optional and can be omitted -- see the note above.
 
 ```txt frame="terminal" title="Usage"
 Runs a CWL file with the selected execution engine
