@@ -54,7 +54,8 @@ pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> miette::Re
 pub enum ExecuteCommands {
     #[command(
         about = "Runs a CWL file with the selected execution engine",
-        visible_alias = "r"
+        alias = "r",
+        hide = true
     )]
     Run(RunArgs),
     #[command(about = "Queries or fetches results of runs already submitted to REANA")]

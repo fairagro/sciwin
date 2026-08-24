@@ -66,7 +66,10 @@ pub enum Commands {
     Uninstall(PackageArgs),
     #[command(
         about = "Execution of CWL Files locally or on remote servers",
-        visible_alias = "ex"
+        visible_alias = "ex",
+        override_usage = "s4n execute [OPTIONS] <FILE> [INPUT_FILE]\n       s4n execute <COMMAND>",
+        after_help = "Runs FILE with the selected execution engine by default (same as `s4n execute \
+                      run FILE`); see `s4n execute run --help` for engine/rocrate/detach options."
     )]
     Execute {
         #[command(subcommand)]
