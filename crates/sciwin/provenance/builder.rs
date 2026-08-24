@@ -57,6 +57,9 @@ pub fn build_crate(inputs: &CrateInputs) -> ProvenanceResult<RoCrate> {
     for entity in file_entities(layout, &graph, &inputs.payload) {
         rocrate_builder = rocrate_builder.part(entity);
     }
+    for name in &inputs.extra_parts {
+        rocrate_builder = rocrate_builder.part(Entity::new(name.clone(), "File"));
+    }
 
     let connections = connection_triples(layout, &graph);
 

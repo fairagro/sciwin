@@ -216,7 +216,7 @@ pub async fn export(
         sources.extend(resolve_output_sources(&outputs, &base_dir));
     }
 
-    let (crate_layout, packed_workflow) = match layout {
+    let (crate_layout, packed_workflow, extra_parts) = match layout {
         CrateLayout::Packed => {
             let stem = spec
                 .path
@@ -224,12 +224,15 @@ pub async fn export(
                 .and_then(|s| s.to_str())
                 .unwrap_or("workflow");
             let file_name = format!("{stem}.packed.cwl");
-            sources.extend(resolve_include_sources(&packed, &doc_paths, None));
+            let includes = resolve_include_sources(&packed, &doc_paths, None);
+            let extra_parts: Vec<String> = includes.keys().cloned().collect();
+            sources.extend(includes);
             (
                 WorkflowLayout::Packed {
                     file_name: file_name.clone(),
                 },
                 Some(file_name),
+                extra_parts,
             )
         }
         CrateLayout::Files => {
@@ -239,12 +242,10 @@ pub async fn export(
                     .iter()
                     .map(|(doc_id, path)| (file_names[doc_id].clone(), path.clone())),
             );
-            sources.extend(resolve_include_sources(
-                &packed,
-                &doc_paths,
-                Some(&file_names),
-            ));
-            (WorkflowLayout::Files { file_names }, None)
+            let includes = resolve_include_sources(&packed, &doc_paths, Some(&file_names));
+            let extra_parts: Vec<String> = includes.keys().cloned().collect();
+            sources.extend(includes);
+            (WorkflowLayout::Files { file_names }, None, extra_parts)
         }
     };
 
@@ -254,6 +255,7 @@ pub async fn export(
         .metadata(metadata)
         .run(run)
         .date_published(date_published)
+        .extra_parts(extra_parts)
         .build();
 
     let (crate_, validation) = build_validated(&inputs)?;
