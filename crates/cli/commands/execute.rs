@@ -236,11 +236,17 @@ pub async fn execute_run(args: &RunArgs) -> miette::Result<()> {
                 dunce::canonicalize(cwl_dir).into_diagnostic()?,
             )
         }
-        None => (
-            args.file.clone(),
-            dunce::canonicalize(args.file.parent().unwrap_or(Path::new(".")))
-                .into_diagnostic()?,
-        ),
+        None => {
+            let parent = args
+                .file
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            (
+                args.file.clone(),
+                dunce::canonicalize(parent).into_diagnostic()?,
+            )
+        }
     };
     if resolved.is_some() {
         info!(
@@ -283,7 +289,11 @@ async fn execute_run_task_backend(
     };
     let runner = TaskRunner::new(backend);
 
-    debug!("submitting {:?} run for {}", args.engine, cwl_path.display());
+    debug!(
+        "submitting {:?} run for {}",
+        args.engine,
+        cwl_path.display()
+    );
     let run_id = runner
         .submit(cwl_path, inputs, args.out_dir.as_deref())
         .await?;
