@@ -20,7 +20,7 @@ authors = [
 sciwin = { path = "crates/sciwin" }
 reana = { version = "0.6" }
 commonwl = { version = "0.13", features = ["engine", "tes"] }
-rocrate = "0.1"
+rocrate = "0.2"
 crankshaft = "0.10.0"
 git2 = { version = "0.21.0", features = ["vendored-openssl"] }
 

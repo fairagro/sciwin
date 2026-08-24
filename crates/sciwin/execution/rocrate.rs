@@ -1,5 +1,15 @@
-use rocrate::{RoCrate, profile::Profile, views::View};
+use commonwl::{
+    engine::InputObject,
+    files::{Directory, File, FileOrDirectory},
+    inputs::DefaultValue,
+};
+use rocrate::{
+    RoCrate,
+    profile::Profile,
+    views::{View, Workflow},
+};
 use std::{
+    collections::HashMap,
     ffi::OsStr,
     path::{Path, PathBuf},
 };
@@ -22,6 +32,8 @@ pub struct ResolvedRun {
     pub cwl_path: PathBuf,
     /// Directory input files (job file entries, `InitialWorkDir` sources, ...) resolve against.
     pub base_dir: PathBuf,
+    /// Input values the crate's own `FormalParameter`s supply
+    pub default_inputs: InputObject,
     /// Holds a zip's extraction directory alive for as long as the resolved run is -- execution
     /// reads crate files off disk long after this function returns, not just during it.
     _tempdir: Option<TempDir>,
@@ -110,11 +122,42 @@ pub fn resolve_target(dir_or_zip: &Path) -> RunnerResult<ResolvedRun> {
         )));
     }
 
+    let default_inputs = crate_default_inputs(&wroc, &base_dir);
+
     Ok(ResolvedRun {
         cwl_path,
         base_dir,
+        default_inputs,
         _tempdir: tempdir,
     })
+}
+
+/// Input values derived from the workflow's own `FormalParameter`s work_examples
+fn crate_default_inputs(workflow: &Workflow<'_>, base_dir: &Path) -> InputObject {
+    let mut inputs = HashMap::new();
+    for param in workflow.inputs() {
+        let (Some(name), Some(example)) = (param.name(), param.work_example()) else {
+            continue;
+        };
+        let path = base_dir.join(&example.id);
+        let location = path.to_string_lossy().into_owned();
+        let value = if example.has_type("File") && path.is_file() {
+            DefaultValue::FileOrDirectory(FileOrDirectory::File(
+                File::builder().location(location).build(),
+            ))
+        } else if example.has_type("Dataset") && path.is_dir() {
+            DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
+                Directory::builder().location(location).build(),
+            ))
+        } else {
+            continue;
+        };
+        inputs.insert(name.to_string(), value);
+    }
+    InputObject {
+        inputs,
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
@@ -172,5 +215,75 @@ mod tests {
 
         let err = resolve_target(dir.path()).unwrap_err();
         assert!(err.to_string().contains("CWL"), "{err}");
+    }
+
+    #[test]
+    fn test_resolve_target_default_inputs_from_work_examples() {
+        use rocrate::build::Entity;
+
+        let crate_ = RoCrate::builder()
+            .date_published("2026-01-01")
+            .name("Run Crate with recorded example inputs")
+            .conforms_to(Profile::WorkflowRoCrate("1.0".into()))
+            .conforms_to(Profile::WorkflowRun("0.5".into()))
+            .main_workflow(
+                Entity::new(
+                    "main.cwl",
+                    &["File", "SoftwareSourceCode", "ComputationalWorkflow"],
+                )
+                .set("name", "Example workflow")
+                .reference("programmingLanguage", "#cwl")
+                .references("input", ["#data", "#phantom", "#scalar"]),
+            )
+            .entity(
+                Entity::new("#cwl", "ComputerLanguage")
+                    .set("name", "Common Workflow Language")
+                    .set("alternateName", "CWL"),
+            )
+            // A File `workExample` the crate actually ships -- becomes a File default.
+            .entity(
+                Entity::new("#data", "FormalParameter")
+                    .set("name", "data")
+                    .reference("workExample", "data.csv"),
+            )
+            .part(Entity::new("data.csv", "File"))
+            // A File `workExample` that's declared but not actually on disk -- skipped, not
+            // turned into a default pointing at nothing.
+            .entity(
+                Entity::new("#phantom", "FormalParameter")
+                    .set("name", "phantom")
+                    .reference("workExample", "phantom.csv"),
+            )
+            .entity(Entity::new("phantom.csv", "File"))
+            // A `PropertyValue` `workExample` (a recorded scalar, not a file) -- out of scope
+            // for this, skipped rather than misread as a path.
+            .entity(
+                Entity::new("#scalar", "FormalParameter")
+                    .set("name", "scalar")
+                    .reference("workExample", "#scalar-value"),
+            )
+            .entity(Entity::new("#scalar-value", "PropertyValue").set("value", "42"))
+            .build();
+
+        let dir = tempfile::tempdir().unwrap();
+        crate_.write_directory(dir.path()).unwrap();
+        std::fs::write(dir.path().join("main.cwl"), "cwlVersion: v1.2").unwrap();
+        std::fs::write(dir.path().join("data.csv"), "a,b\n1,2\n").unwrap();
+
+        let resolved = resolve_target(dir.path()).expect("should resolve");
+
+        let data = resolved
+            .default_inputs
+            .inputs
+            .get("data")
+            .expect("data default");
+        match data {
+            DefaultValue::FileOrDirectory(FileOrDirectory::File(file)) => {
+                assert!(file.location.as_deref().unwrap().ends_with("data.csv"));
+            }
+            other => panic!("expected a File default, got {other:?}"),
+        }
+        assert!(!resolved.default_inputs.inputs.contains_key("phantom"));
+        assert!(!resolved.default_inputs.inputs.contains_key("scalar"));
     }
 }

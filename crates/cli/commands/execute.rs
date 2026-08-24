@@ -225,7 +225,17 @@ pub async fn execute_run(args: &RunArgs) -> miette::Result<()> {
         .then(|| rocrate_input::resolve_target(&args.file))
         .transpose()?;
     let (cwl_path, base_path) = match &resolved {
-        Some(resolved) => (resolved.cwl_path.clone(), resolved.base_dir.clone()),
+        // The CWL engine resolves a job file's relative `location:`s against the CWL
+        // document's own directory -- which, for a crate, can be a subdirectory of
+        // `base_dir` (e.g. `workflows/demo/demo.cwl`), not `base_dir` itself. Rebasing
+        // against the wrong directory here silently produces the wrong relative path.
+        Some(resolved) => {
+            let cwl_dir = resolved.cwl_path.parent().unwrap_or(&resolved.base_dir);
+            (
+                resolved.cwl_path.clone(),
+                dunce::canonicalize(cwl_dir).into_diagnostic()?,
+            )
+        }
         None => (
             args.file.clone(),
             dunce::canonicalize(args.file.parent().unwrap_or(Path::new(".")))
@@ -240,10 +250,16 @@ pub async fn execute_run(args: &RunArgs) -> miette::Result<()> {
         );
     }
 
-    let inputs = match &args.input_file {
-        Some(input_file) => load_input_file_from_file(input_file.clone(), base_path)?,
-        None => InputObject::default(),
-    };
+    let mut inputs = resolved
+        .as_ref()
+        .map(|resolved| resolved.default_inputs.clone())
+        .unwrap_or_default();
+    if let Some(input_file) = &args.input_file {
+        let overrides = load_input_file_from_file(input_file.clone(), base_path)?;
+        inputs.inputs.extend(overrides.inputs);
+        inputs.requirements = overrides.requirements;
+        inputs.hints = overrides.hints;
+    }
 
     if args.engine == ExecutionEngine::Reana {
         execute_run_reana(args, &cwl_path, inputs).await
