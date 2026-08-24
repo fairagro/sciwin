@@ -526,4 +526,37 @@ mod tests {
         env::set_current_dir(cwd).unwrap();
         temp_dir.close().unwrap();
     }
+
+    #[test]
+    #[serial]
+    fn test_find_config_walks_up_outside_a_repo() {
+        let temp_dir = tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join(WORKFLOW_TOML),
+            "[workflow]\nname = \"found-me\"\nversion = \"0.0.1\"\n",
+        )
+        .unwrap();
+        let nested = temp_dir.path().join("workflows/main");
+        fs::create_dir_all(&nested).unwrap();
+
+        let config = find_config(&nested).expect("should find workflow.toml above nested");
+        assert_eq!(config.workflow.name, "found-me");
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_config_does_not_cross_a_repo_boundary() {
+        let temp_dir = tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join(WORKFLOW_TOML),
+            "[workflow]\nname = \"outside-the-repo\"\nversion = \"0.0.1\"\n",
+        )
+        .unwrap();
+        let repo_root = temp_dir.path().join("repo");
+        let nested = repo_root.join("workflows/main");
+        fs::create_dir_all(&nested).unwrap();
+        Repository::init(&repo_root).unwrap();
+
+        assert!(find_config(&nested).is_none());
+    }
 }
