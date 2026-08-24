@@ -7,7 +7,7 @@ use commonwl::{
     files::{File, FileOrDirectory},
     inputs::DefaultValue,
 };
-use sciwin::execution::{RunStatus, WorkflowRunner};
+use sciwin::execution::{RunStatus, WorkflowRunner, rocrate};
 use serde_json::Value;
 use std::{collections::HashMap, fs, path::PathBuf};
 use tempfile::tempdir;
@@ -328,6 +328,33 @@ async fn test_execution_commonwl() {
         .await;
 
     assert!(result.is_ok());
+}
+
+#[tokio::test]
+#[cfg_attr(target_os = "macos", ignore)] //docker used, MACOS CI Issues
+async fn test_execute_rocrate_zip() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let zip_path = root.join("../../testdata/test_workflow.zip");
+    let job_path = root.join("../../testdata/job-rocrate.yml");
+
+    let resolved =
+        rocrate::resolve_target(&zip_path).expect("should resolve the Workflow RO-Crate");
+
+    // Mirrors `execute_run`'s own merge: crate defaults first, the job file layered on top.
+    let base_path = resolved.cwl_path.parent().unwrap();
+    let overrides = load_input_file_from_file(job_path, base_path).unwrap();
+    let mut inputs = resolved.default_inputs.clone();
+    inputs.inputs.extend(overrides.inputs);
+    inputs.requirements = overrides.requirements;
+    inputs.hints = overrides.hints;
+
+    let runner = local_runner();
+    let tmpdir = tempdir().unwrap();
+    let result = runner
+        .run_workflow(&resolved.cwl_path, inputs, Some(tmpdir.path()))
+        .await;
+
+    assert!(result.is_ok(), "{:?}", result.err());
 }
 
 /// Moved from `execution::task_runner`'s unit tests alongside `test_execution_commonwl`.
