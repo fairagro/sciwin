@@ -121,14 +121,15 @@ pub fn read_config(dir: &Path) -> ProjectResult<Config> {
 }
 
 /// [`read_config`], but searching `start` and each of its ancestors in turn. Bounded to `start`'s
-/// own git repository when it's in one
+/// own git repository when it's in one.
 #[must_use]
 pub fn find_config(start: &Path) -> Option<Config> {
     let boundary = Repository::discover(start)
         .ok()
-        .and_then(|repo| repo.workdir().map(Path::to_path_buf));
+        .and_then(|repo| repo.workdir().map(Path::to_path_buf))
+        .and_then(|path| canonicalize(&path).ok());
 
-    let mut dir = Some(start.to_path_buf());
+    let mut dir = Some(canonicalize(start).unwrap_or_else(|_| start.to_path_buf()));
     while let Some(d) = dir {
         if let Ok(config) = read_config(&d) {
             return Some(config);
