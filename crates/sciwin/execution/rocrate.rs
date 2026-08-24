@@ -173,17 +173,15 @@ mod tests {
 
         let resolved = resolve_target(&zip_path).expect("should resolve a Workflow RO-Crate zip");
 
-        assert!(resolved.cwl_path.ends_with("workflows/demo/demo.cwl"));
+        assert!(resolved.cwl_path.ends_with("main/main.cwl"));
         assert!(resolved.cwl_path.is_file());
         assert!(resolved._tempdir.is_some());
-        // sibling crate files, unpacked alongside the resolved workflow
-        assert!(resolved.base_dir.join("code/plot_map.py").is_file());
-        assert!(
-            resolved
-                .base_dir
-                .join("data/braunschweig/stadtbezirke.shp")
-                .is_file()
-        );
+        // sibling crate parts, unpacked alongside the resolved workflow
+        assert!(resolved.base_dir.join("calculation/calculation.cwl").is_file());
+        assert!(resolved.base_dir.join("calculation/calculation.py").is_file());
+        assert!(resolved.base_dir.join("plot/plot.cwl").is_file());
+        assert!(resolved.base_dir.join("plot/plot.py").is_file());
+        assert!(resolved.base_dir.join("population.csv").is_file());
     }
 
     #[test]
