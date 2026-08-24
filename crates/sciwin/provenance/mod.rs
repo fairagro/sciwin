@@ -119,7 +119,11 @@ pub fn write_crate(
 
     let mut copied = Vec::new();
     for (name, source) in sources {
-        std::fs::copy(source, directory.join(name))?;
+        let target = directory.join(name);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::copy(source, target)?;
         copied.push(name.clone());
     }
 

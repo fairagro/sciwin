@@ -335,7 +335,7 @@ async fn test_execution_commonwl() {
 async fn test_execute_rocrate_zip() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let zip_path = root.join("../../testdata/test_workflow.zip");
-    let job_path = root.join("../../testdata/job-rocrate.yml");
+    let job_path = root.join("../../testdata/hello_world/inputs.yml");
 
     let resolved =
         rocrate::resolve_target(&zip_path).expect("should resolve the Workflow RO-Crate");
