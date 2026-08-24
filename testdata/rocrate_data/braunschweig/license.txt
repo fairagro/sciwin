@@ -1,0 +1,19 @@
+Typ: Vektordaten, Shape (SHP) und Scalable Vector Graphic (SVG)
+Koordinatensystem: ETRS89 / UTM zone 32 (EPSG: 25832)
+Gebietsabdeckung: Stadtgebiet
+Attribute: Stadtbezirksnamen, Stadtbezirksnummern
+Stand: März 2021
+Aktualisierung: bei Bedarf
+Datenqualität: Lagegenauigkeit/Generalisierung für die Darstellung auf dem Stadtplan 1:20.000 bzw. auf der Stadtkarte 1:5.000
+Datenquelle: Stadt Braunschweig
+Kontakt/Ansprechpartner: Herr Fritzewski, Tel. (0531) 4702824
+E-Mail: opengeodata@braunschweig.de
+Informationen: www.braunschweig.de/opengeodata
+
+Lizenz:
+Datenlizenz Deutschland - Namensnennung - Version 2.0
+www.govdata.de/dl-de/by-2-0
+
+Die Namensnennung der Stadt Braunschweig als Rechteinhaberin hat in folgender Weise zu erfolgen:
+„Datenquelle: Stadt Braunschweig - Open GeoData, <Jahr des Datenbezugs>, Lizenz: dl-de/by-2-0"
+Veränderungen, Bearbeitungen, neue Gestaltungen oder Abwandlungen sind im Quellenvermerk mit dem Hinweis zu versehen, dass die Daten geändert wurden.

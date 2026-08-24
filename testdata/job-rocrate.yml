@@ -1,0 +1,6 @@
+ags: "03101000"
+election: Bundestagswahl 2025
+shapes:
+  class: Directory
+  location: rocrate_data/braunschweig
+feature: F3
