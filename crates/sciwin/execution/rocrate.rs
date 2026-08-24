@@ -27,6 +27,13 @@ pub struct ResolvedRun {
     _tempdir: Option<TempDir>,
 }
 
+/// Whether `path` should go through [`resolve_target`] rather than be executed directly as a
+/// plain CWL file -- a directory, or something with a `.zip` extension.
+#[must_use]
+pub fn looks_like_crate(path: &Path) -> bool {
+    path.is_dir() || path.extension() == Some(OsStr::new("zip"))
+}
+
 /// Accepts a Workflow RO-Crate, or a Run Crate built on top of one, as a directory or a `.zip`
 /// archive, and resolves it to a plain CWL path plus the directory it lives in
 pub fn resolve_target(dir_or_zip: &Path) -> RunnerResult<ResolvedRun> {
