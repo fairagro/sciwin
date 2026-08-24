@@ -12,7 +12,7 @@ use sciwin::{
     },
     execution::{
         ReanaRunner, RunId, RunStatus, TaskRunner, WorkflowRunner, docker_backend, local_backend,
-        tes_backend,
+        rocrate as rocrate_input, tes_backend,
     },
     project,
     provenance::{Written, reana_runner as rocrate_export, task_runner as local_rocrate_export},
@@ -93,7 +93,10 @@ pub struct RunArgs {
     pub runtime: ContainerRuntime,
     #[arg(long = "outdir", help = "A path to output resulting files to")]
     pub out_dir: Option<PathBuf>,
-    #[arg(help = "CWL File to execute")]
+    #[arg(
+        help = "CWL file to execute, or a Workflow/Run RO-Crate to execute (a directory or .zip \
+                archive holding a ro-crate-metadata.json whose mainEntity is CWL)"
+    )]
     pub file: PathBuf,
     #[arg(help = "Input YAML/JSON job file")]
     pub input_file: Option<PathBuf>,
@@ -218,23 +221,66 @@ pub async fn execute_run(args: &RunArgs) -> miette::Result<()> {
         );
     }
 
-    let base_path =
-        dunce::canonicalize(args.file.parent().unwrap_or(Path::new("."))).into_diagnostic()?;
-    let inputs = match &args.input_file {
-        Some(input_file) => load_input_file_from_file(input_file.clone(), base_path)?,
-        None => InputObject::default(),
+    let resolved = rocrate_input::looks_like_crate(&args.file)
+        .then(|| rocrate_input::resolve_target(&args.file))
+        .transpose()?;
+    let (cwl_path, base_path) = match &resolved {
+        // The CWL engine resolves a job file's relative `location:`s against the CWL
+        // document's own directory -- which, for a crate, can be a subdirectory of
+        // `base_dir` (e.g. `workflows/demo/demo.cwl`), not `base_dir` itself. Rebasing
+        // against the wrong directory here silently produces the wrong relative path.
+        Some(resolved) => {
+            let cwl_dir = resolved.cwl_path.parent().unwrap_or(&resolved.base_dir);
+            (
+                resolved.cwl_path.clone(),
+                dunce::canonicalize(cwl_dir).into_diagnostic()?,
+            )
+        }
+        None => {
+            let parent = args
+                .file
+                .parent()
+                .filter(|p| !p.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            (
+                args.file.clone(),
+                dunce::canonicalize(parent).into_diagnostic()?,
+            )
+        }
     };
+    if resolved.is_some() {
+        info!(
+            "resolved RO-Crate {} to workflow {}",
+            args.file.display(),
+            cwl_path.display()
+        );
+    }
+
+    let mut inputs = resolved
+        .as_ref()
+        .map(|resolved| resolved.default_inputs.clone())
+        .unwrap_or_default();
+    if let Some(input_file) = &args.input_file {
+        let overrides = load_input_file_from_file(input_file.clone(), base_path)?;
+        inputs.inputs.extend(overrides.inputs);
+        inputs.requirements = overrides.requirements;
+        inputs.hints = overrides.hints;
+    }
 
     if args.engine == ExecutionEngine::Reana {
-        execute_run_reana(args, inputs).await
+        execute_run_reana(args, &cwl_path, inputs).await
     } else {
-        execute_run_task_backend(args, inputs).await
+        execute_run_task_backend(args, &cwl_path, inputs).await
     }
 }
 
 /// `--engine local|docker|tes`: always blocks (submit + wait) -- `TaskRunner` keeps in-process
 /// state only, there is no other way for one CLI invocation to report a result.
-async fn execute_run_task_backend(args: &RunArgs, inputs: InputObject) -> miette::Result<()> {
+async fn execute_run_task_backend(
+    args: &RunArgs,
+    cwl_path: &Path,
+    inputs: InputObject,
+) -> miette::Result<()> {
     let backend: Arc<dyn TaskBackend> = match args.engine {
         ExecutionEngine::Local => local_backend(args.runtime.into()),
         ExecutionEngine::Docker => docker_backend().await?,
@@ -246,10 +292,10 @@ async fn execute_run_task_backend(args: &RunArgs, inputs: InputObject) -> miette
     debug!(
         "submitting {:?} run for {}",
         args.engine,
-        args.file.display()
+        cwl_path.display()
     );
     let run_id = runner
-        .submit(&args.file, inputs, args.out_dir.as_deref())
+        .submit(cwl_path, inputs, args.out_dir.as_deref())
         .await?;
     debug!("run '{run_id}' submitted, waiting for completion");
     wait_and_report(&runner, &run_id, args.out_dir.as_deref()).await?;
@@ -260,7 +306,7 @@ async fn execute_run_task_backend(args: &RunArgs, inputs: InputObject) -> miette
             RocrateLayout::Files => local_rocrate_export::CrateLayout::Files,
         };
         let cwd = env::current_dir().into_diagnostic()?;
-        let metadata = project::read_config(&cwd)?.workflow;
+        let metadata = project::find_config(&cwd).unwrap_or_default().workflow;
         debug!(
             "exporting Provenance Run Crate ({layout:?}) to {:?}",
             args.rocrate_dir
@@ -286,12 +332,16 @@ async fn execute_run_task_backend(args: &RunArgs, inputs: InputObject) -> miette
 /// submits and returns immediately instead -- the only engine that can, since REANA persists run
 /// state server-side, so a later `s4n execute reana status`/`download`/`rocrate` can still reach
 /// it after this process exits.
-async fn execute_run_reana(args: &RunArgs, inputs: InputObject) -> miette::Result<()> {
+async fn execute_run_reana(
+    args: &RunArgs,
+    cwl_path: &Path,
+    inputs: InputObject,
+) -> miette::Result<()> {
     let runner = reana_runner()?;
 
-    debug!("submitting remote run for {}", args.file.display());
+    debug!("submitting remote run for {}", cwl_path.display());
     // `execution::reana_compat::compatibility_adjustments` isn't wired in here, yet
-    let run_id = runner.submit(&args.file, inputs, None).await?;
+    let run_id = runner.submit(cwl_path, inputs, None).await?;
     info!("submitted workflow run '{run_id}'");
 
     if args.detach {
@@ -408,7 +458,7 @@ async fn export_rocrate(
     output_dir: &Path,
 ) -> miette::Result<()> {
     let cwd = env::current_dir().into_diagnostic()?;
-    let metadata = project::read_config(&cwd)?.workflow;
+    let metadata = project::find_config(&cwd).unwrap_or_default().workflow;
     debug!("exporting Provenance Run Crate for '{workflow_name}' to {output_dir:?}");
 
     let (written, validation) =

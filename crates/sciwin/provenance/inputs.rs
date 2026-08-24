@@ -31,6 +31,12 @@ pub struct CrateInputs {
     pub date_published: chrono::DateTime<Utc>,
     #[builder(default)]
     pub payload: Vec<PayloadFile>,
+    /// Crate-relative names of files that belong in the crate but aren't tied to any workflow
+    /// port e.g. a tool's `$include`d sidecar script (`InitialWorkDirRequirement`), say. Each gets
+    /// a plain `File` part with no other metadata; `payload`'s size/checksum enrichment only
+    /// matches port-derived files, not these.
+    #[builder(default)]
+    pub extra_parts: Vec<String>,
 }
 
 /// How the packed workflow is represented as crate payload.

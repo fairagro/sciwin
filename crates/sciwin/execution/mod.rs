@@ -39,18 +39,22 @@ pub use task_runner::TaskRunner;
 mod reana_runner;
 pub use reana_runner::{JobFailure, ReanaRunner, find_failures};
 pub mod reana_compat;
+pub mod rocrate;
 
 pub type RunnerResult<T> = Result<T, RunnerError>;
 
 #[derive(Error, Diagnostic, Debug)]
 pub enum RunnerError {
+    // Boxed: `reana::error::ClientError` alone is 112 bytes, which would otherwise make every
+    // `RunnerResult<T>` at least that large regardless of which variant actually occurred.
     #[diagnostic(transparent)]
     #[error(transparent)]
-    REANA(#[from] reana::error::ClientError),
+    REANA(Box<reana::error::ClientError>),
 
+    // Boxed for the same reason -- `commonwl::engine::RunnerError` is also 112 bytes.
     #[diagnostic(transparent)]
     #[error(transparent)]
-    Engine(#[from] commonwl::engine::RunnerError),
+    Engine(Box<commonwl::engine::RunnerError>),
 
     #[diagnostic(code = "sciwin::error::RunnerError::JobNotFound")]
     #[error("Could not find requested job")]
@@ -83,9 +87,26 @@ pub enum RunnerError {
     #[error("docker {command} failed: {stderr}")]
     DockerCommandFailed { command: String, stderr: String },
 
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    RoCrateIO(#[from] ::rocrate::io::Error),
+
     #[diagnostic(code = "anyhow::Error")]
     #[error(transparent)]
     Unknown(#[from] anyhow::Error),
+}
+
+// Hand-written, since `#[from]` can't target a `Box<T>` and convert from a bare `T` at the same time
+impl From<reana::error::ClientError> for RunnerError {
+    fn from(error: reana::error::ClientError) -> Self {
+        RunnerError::REANA(Box::new(error))
+    }
+}
+
+impl From<commonwl::engine::RunnerError> for RunnerError {
+    fn from(error: commonwl::engine::RunnerError) -> Self {
+        RunnerError::Engine(Box::new(error))
+    }
 }
 
 pub type RunId = String;

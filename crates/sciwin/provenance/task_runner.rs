@@ -216,7 +216,7 @@ pub async fn export(
         sources.extend(resolve_output_sources(&outputs, &base_dir));
     }
 
-    let (crate_layout, packed_workflow) = match layout {
+    let (crate_layout, packed_workflow, extra_parts) = match layout {
         CrateLayout::Packed => {
             let stem = spec
                 .path
@@ -224,24 +224,28 @@ pub async fn export(
                 .and_then(|s| s.to_str())
                 .unwrap_or("workflow");
             let file_name = format!("{stem}.packed.cwl");
+            let includes = resolve_include_sources(&packed, &doc_paths, None);
+            let extra_parts: Vec<String> = includes.keys().cloned().collect();
+            sources.extend(includes);
             (
                 WorkflowLayout::Packed {
                     file_name: file_name.clone(),
                 },
                 Some(file_name),
+                extra_parts,
             )
         }
         CrateLayout::Files => {
-            let file_names: HashMap<String, String> = doc_paths
-                .iter()
-                .map(|(doc_id, path)| (doc_id.clone(), file_name_of(path)))
-                .collect();
+            let file_names = crate_relative_names(&doc_paths);
             sources.extend(
                 doc_paths
-                    .into_values()
-                    .map(|path| (file_name_of(&path), path)),
+                    .iter()
+                    .map(|(doc_id, path)| (file_names[doc_id].clone(), path.clone())),
             );
-            (WorkflowLayout::Files { file_names }, None)
+            let includes = resolve_include_sources(&packed, &doc_paths, Some(&file_names));
+            let extra_parts: Vec<String> = includes.keys().cloned().collect();
+            sources.extend(includes);
+            (WorkflowLayout::Files { file_names }, None, extra_parts)
         }
     };
 
@@ -251,6 +255,7 @@ pub async fn export(
         .metadata(metadata)
         .run(run)
         .date_published(date_published)
+        .extra_parts(extra_parts)
         .build();
 
     let (crate_, validation) = build_validated(&inputs)?;
@@ -270,6 +275,110 @@ fn file_name_of(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+fn crate_relative_names(doc_paths: &HashMap<String, PathBuf>) -> HashMap<String, String> {
+    // `pack_document` builds a tool's path via a plain `base_dir.join("../calculation/x.cwl")`,
+    // leaving the literal `..` component in place
+    let canonical: HashMap<&String, PathBuf> = doc_paths
+        .iter()
+        .map(|(doc_id, path)| {
+            (
+                doc_id,
+                dunce::canonicalize(path).unwrap_or_else(|_| path.clone()),
+            )
+        })
+        .collect();
+    let root = common_ancestor(canonical.values());
+    canonical
+        .into_iter()
+        .map(|(doc_id, path)| {
+            let relative = path.strip_prefix(&root).unwrap_or(&path);
+            (doc_id.clone(), to_slash_string(relative))
+        })
+        .collect()
+}
+
+/// The deepest directory every path in `paths` has in common.
+fn common_ancestor<'a>(paths: impl Iterator<Item = &'a PathBuf>) -> PathBuf {
+    let mut ancestor: Option<Vec<std::ffi::OsString>> = None;
+    for path in paths {
+        let dir = path.parent().unwrap_or(Path::new("."));
+        let components: Vec<_> = dir
+            .components()
+            .map(|c| c.as_os_str().to_os_string())
+            .collect();
+        ancestor = Some(match ancestor {
+            None => components,
+            Some(prefix) => {
+                let shared = prefix
+                    .iter()
+                    .zip(components.iter())
+                    .take_while(|(a, b)| a == b)
+                    .count();
+                prefix.into_iter().take(shared).collect()
+            }
+        });
+    }
+    ancestor.unwrap_or_default().into_iter().collect()
+}
+
+/// A relative path as a crate id: `/`-joined regardless of host path separator, since RO-Crate
+/// ids are URIs, not filesystem paths.
+fn to_slash_string(path: &Path) -> String {
+    path.components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn resolve_include_sources(
+    packed: &PackedCWL,
+    doc_paths: &HashMap<String, PathBuf>,
+    file_names: Option<&HashMap<String, String>>,
+) -> HashMap<String, PathBuf> {
+    use commonwl::requirements::{
+        InitialWorkDirRequirement, ListingItems, StringOrInclude, WorkDirItems,
+    };
+
+    let mut sources = HashMap::new();
+    for doc in &packed.graph {
+        let Some(doc_id) = doc.get_id() else { continue };
+        let Some(real_path) = doc_paths.get(doc_id) else {
+            continue;
+        };
+        let real_dir = real_path.parent().unwrap_or(Path::new("."));
+        let crate_dir = file_names
+            .and_then(|names| names.get(doc_id))
+            .map(|name| {
+                Path::new(name)
+                    .parent()
+                    .unwrap_or(Path::new(""))
+                    .to_path_buf()
+            })
+            .unwrap_or_default();
+
+        let Some(iwdr) = doc.get_requirement::<InitialWorkDirRequirement>() else {
+            continue;
+        };
+        let WorkDirItems::ListingItems(items) = &iwdr.listing else {
+            continue;
+        };
+        for item in items {
+            let ListingItems::Dirent(dirent) = item else {
+                continue;
+            };
+            let StringOrInclude::Include(include) = &dirent.entry else {
+                continue;
+            };
+            let source = real_dir.join(&include.include);
+            if source.exists() {
+                let crate_name = to_slash_string(&crate_dir.join(&include.include));
+                sources.insert(crate_name, source);
+            }
+        }
+    }
+    sources
 }
 
 /// Every input default across the whole packed graph (the workflow's own, and each tool's) that
@@ -302,7 +411,9 @@ fn resolve_output_sources(
 ) -> HashMap<String, PathBuf> {
     let mut sources = HashMap::new();
     for value in outputs.values() {
-        let Some(file) = value.as_file() else { continue };
+        let Some(file) = value.as_file() else {
+            continue;
+        };
         let Some(path) = resolve_file_path(base_dir, file) else {
             continue;
         };
@@ -423,16 +534,47 @@ mod tests {
         assert!(plot_path.ends_with("plot/plot.cwl"));
         assert!(plot_path.exists());
 
-        // What `export`'s `CrateLayout::Files` branch derives from this map.
-        let file_names: HashMap<String, String> = doc_paths
-            .iter()
-            .map(|(doc_id, path)| (doc_id.clone(), file_name_of(path)))
-            .collect();
-        assert_eq!(file_names.get("#main").unwrap(), "main.cwl");
+        let file_names = crate_relative_names(&doc_paths);
+        assert_eq!(file_names.get("#main").unwrap(), "main/main.cwl");
         assert_eq!(
             file_names.get("../calculation/calculation.cwl").unwrap(),
-            "calculation.cwl"
+            "calculation/calculation.cwl"
         );
+        assert_eq!(file_names.get("../plot/plot.cwl").unwrap(), "plot/plot.cwl");
+    }
+
+    #[test]
+    fn test_crate_relative_names_collapses_single_document_to_bare_filename() {
+        let entry = PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../testdata/echo.cwl"
+        ));
+        let doc_paths = HashMap::from([("#main".to_string(), entry)]);
+
+        let file_names = crate_relative_names(&doc_paths);
+
+        assert_eq!(file_names.get("#main").unwrap(), "echo.cwl");
+    }
+
+    #[test]
+    fn test_resolve_include_sources_finds_tool_scripts() {
+        let entry = hello_world_main();
+        let contents = std::fs::read_to_string(&entry).unwrap();
+        let document = commonwl::from_str(&contents).unwrap();
+        let (packed, doc_paths) = pack_document(document, &entry).unwrap();
+        let file_names = crate_relative_names(&doc_paths);
+
+        let sources = resolve_include_sources(&packed, &doc_paths, Some(&file_names));
+
+        // Each tool's own embedded script lands alongside its (now-nested) CWL file, not at the
+        // crate root -- matching where `$include: calculation.py` will look for it once staged.
+        assert!(sources.contains_key("calculation/calculation.py"));
+        assert!(sources.contains_key("plot/plot.py"));
+        assert!(sources["calculation/calculation.py"].exists());
+
+        let packed_sources = resolve_include_sources(&packed, &doc_paths, None);
+        assert!(packed_sources.contains_key("calculation.py"));
+        assert!(packed_sources.contains_key("plot.py"));
     }
 
     #[test]

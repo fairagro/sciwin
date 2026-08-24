@@ -57,6 +57,9 @@ pub fn build_crate(inputs: &CrateInputs) -> ProvenanceResult<RoCrate> {
     for entity in file_entities(layout, &graph, &inputs.payload) {
         rocrate_builder = rocrate_builder.part(entity);
     }
+    for name in &inputs.extra_parts {
+        rocrate_builder = rocrate_builder.part(Entity::new(name.clone(), "File"));
+    }
 
     let connections = connection_triples(layout, &graph);
 
@@ -173,6 +176,10 @@ fn formal_parameter_entities(layout: &WorkflowLayout, graph: &WorkflowGraph) -> 
             .set("name", last_segment(&port.id));
         if let Some(ty) = port.additional_type {
             entity = entity.set("additionalType", ty.to_string());
+        }
+
+        if let Some(file_name) = &port.file_name {
+            entity = entity.reference("workExample", file_name.clone());
         }
         entities.push(entity);
     }

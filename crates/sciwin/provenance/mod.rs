@@ -42,9 +42,10 @@ pub enum ProvenanceError {
     #[diagnostic(transparent)]
     CrateIo(#[from] rocrate::io::Error),
 
+    // Boxed: `reana::error::ClientError` alone is 112 bytes.
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Reana(#[from] reana::error::ClientError),
+    Reana(Box<reana::error::ClientError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -54,9 +55,10 @@ pub enum ProvenanceError {
     #[diagnostic(transparent)]
     Runner(#[from] crate::execution::RunnerError),
 
+    // Boxed: `commonwl::Error` alone is 112 bytes.
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Commonwl(#[from] commonwl::Error),
+    Commonwl(Box<commonwl::Error>),
 
     #[error(transparent)]
     #[diagnostic(code = "std::io::Error")]
@@ -65,6 +67,19 @@ pub enum ProvenanceError {
     #[error(transparent)]
     #[diagnostic(code = "serde_json::Error")]
     JSON(#[from] serde_json::Error),
+}
+
+// Hand-written, since `#[from]` can't target a `Box<T>` and convert from a bare `T` at the same time
+impl From<reana::error::ClientError> for ProvenanceError {
+    fn from(error: reana::error::ClientError) -> Self {
+        ProvenanceError::Reana(Box::new(error))
+    }
+}
+
+impl From<commonwl::Error> for ProvenanceError {
+    fn from(error: commonwl::Error) -> Self {
+        ProvenanceError::Commonwl(Box::new(error))
+    }
 }
 
 /// What [`write_crate`] actually did, for a caller (the CLI) to report or act on.
@@ -104,7 +119,11 @@ pub fn write_crate(
 
     let mut copied = Vec::new();
     for (name, source) in sources {
-        std::fs::copy(source, directory.join(name))?;
+        let target = directory.join(name);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::copy(source, target)?;
         copied.push(name.clone());
     }
 

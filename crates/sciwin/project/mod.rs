@@ -120,6 +120,28 @@ pub fn read_config(dir: &Path) -> ProjectResult<Config> {
     Ok(toml::from_str(&contents)?)
 }
 
+/// [`read_config`], but searching `start` and each of its ancestors in turn. Bounded to `start`'s
+/// own git repository when it's in one.
+#[must_use]
+pub fn find_config(start: &Path) -> Option<Config> {
+    let boundary = Repository::discover(start)
+        .ok()
+        .and_then(|repo| repo.workdir().map(Path::to_path_buf))
+        .and_then(|path| canonicalize(&path).ok());
+
+    let mut dir = Some(canonicalize(start).unwrap_or_else(|_| start.to_path_buf()));
+    while let Some(d) = dir {
+        if let Ok(config) = read_config(&d) {
+            return Some(config);
+        }
+        if boundary.as_deref() == Some(d.as_path()) {
+            break;
+        }
+        dir = d.parent().map(Path::to_path_buf);
+    }
+    None
+}
+
 fn is_git_repo(path: &Path) -> bool {
     // Determine the base directory from the provided path or use the current directory
     Repository::open(path).is_ok()
@@ -504,5 +526,64 @@ mod tests {
 
         env::set_current_dir(cwd).unwrap();
         temp_dir.close().unwrap();
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_config_walks_up_outside_a_repo() {
+        let temp_dir = tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join(WORKFLOW_TOML),
+            "[workflow]\nname = \"found-me\"\nversion = \"0.0.1\"\n",
+        )
+        .unwrap();
+        let nested = temp_dir.path().join("workflows/main");
+        fs::create_dir_all(&nested).unwrap();
+
+        let config = find_config(&nested).expect("should find workflow.toml above nested");
+        assert_eq!(config.workflow.name, "found-me");
+    }
+
+    #[test]
+    #[serial]
+    fn test_find_config_does_not_cross_a_repo_boundary() {
+        let temp_dir = tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join(WORKFLOW_TOML),
+            "[workflow]\nname = \"outside-the-repo\"\nversion = \"0.0.1\"\n",
+        )
+        .unwrap();
+        let repo_root = temp_dir.path().join("repo");
+        let nested = repo_root.join("workflows/main");
+        fs::create_dir_all(&nested).unwrap();
+        Repository::init(&repo_root).unwrap();
+
+        assert!(find_config(&nested).is_none());
+    }
+
+    #[test]
+    #[serial]
+    #[cfg(unix)]
+    fn test_find_config_boundary_survives_a_symlinked_start_path() {
+        // Mimics macOS, where `/tmp` (a common `start`) is itself a symlink (`/tmp` ->
+        // `/private/tmp`) -- `git2`'s `workdir()` returns the resolved form, so comparing it
+        // against an un-resolved walk path would never match.
+        let temp_dir = tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join(WORKFLOW_TOML),
+            "[workflow]\nname = \"outside-the-repo\"\nversion = \"0.0.1\"\n",
+        )
+        .unwrap();
+        let real_root = temp_dir.path().join("real_root");
+        let repo_root = real_root.join("repo");
+        let nested = repo_root.join("workflows/main");
+        fs::create_dir_all(&nested).unwrap();
+        Repository::init(&repo_root).unwrap();
+
+        let symlinked_root = temp_dir.path().join("symlinked_root");
+        std::os::unix::fs::symlink(&real_root, &symlinked_root).unwrap();
+        let nested_via_symlink = symlinked_root.join("repo/workflows/main");
+
+        assert!(find_config(&nested_via_symlink).is_none());
     }
 }
