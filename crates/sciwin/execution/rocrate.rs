@@ -8,10 +8,14 @@ use tracing::{debug, info};
 
 use crate::execution::{RunnerError, RunnerResult};
 
-const RUN_PROFILES: [fn(String) -> Profile; 3] =
-    [Profile::ProcessRun, Profile::WorkflowRun, Profile::ProvenanceRun];
+const RUN_PROFILES: [fn(String) -> Profile; 3] = [
+    Profile::ProcessRun,
+    Profile::WorkflowRun,
+    Profile::ProvenanceRun,
+];
 
 /// Where [`resolve_target`] found a runnable workflow, and what it takes to keep running it.
+#[derive(Debug)]
 pub struct ResolvedRun {
     /// Path to the crate's main workflow entity, ready to hand to
     /// [`super::WorkflowRunner::submit`].
@@ -65,8 +69,28 @@ pub fn resolve_target(dir_or_zip: &Path) -> RunnerResult<ResolvedRun> {
     };
     debug!("RO-Crate successfully identified as Workflow RO-Crate");
 
-    if let Some(lang) = wroc.language() {
-        info!("workflow language: {:?}", lang.name());
+    match wroc.language() {
+        Some(lang)
+            if lang
+                .alternate_name()
+                .is_some_and(|name| name.eq_ignore_ascii_case("cwl")) =>
+        {
+            info!("workflow language confirmed as CWL");
+        }
+        Some(lang) => {
+            return Err(RunnerError::Unknown(anyhow::anyhow!(
+                "workflow's programmingLanguage is `{}`, not CWL. only CWL execution is \
+                 supported",
+                lang.name()
+                    .or_else(|| lang.alternate_name())
+                    .unwrap_or("unknown")
+            )));
+        }
+        None => {
+            return Err(RunnerError::Unknown(anyhow::anyhow!(
+                "RO-Crate's workflow declares no programmingLanguage, cannot confirm it is CWL"
+            )));
+        }
     }
 
     let cwl_path = base_dir.join(wroc.id());
@@ -110,5 +134,36 @@ mod tests {
                 .join("data/braunschweig/stadtbezirke.shp")
                 .is_file()
         );
+    }
+
+    #[test]
+    fn test_resolve_target_rejects_non_cwl_language() {
+        use rocrate::build::Entity;
+
+        let crate_ = RoCrate::builder()
+            .date_published("2026-01-01")
+            .name("Non-CWL workflow")
+            .conforms_to(Profile::WorkflowRoCrate("1.0".into()))
+            .main_workflow(
+                Entity::new(
+                    "main.nf",
+                    &["File", "SoftwareSourceCode", "ComputationalWorkflow"],
+                )
+                .set("name", "Example workflow")
+                .reference("programmingLanguage", "#nextflow"),
+            )
+            .entity(
+                Entity::new("#nextflow", "ComputerLanguage")
+                    .set("name", "Nextflow")
+                    .set("alternateName", "NFL"),
+            )
+            .build();
+
+        let dir = tempfile::tempdir().unwrap();
+        crate_.write_directory(dir.path()).unwrap();
+        std::fs::write(dir.path().join("main.nf"), "// not cwl").unwrap();
+
+        let err = resolve_target(dir.path()).unwrap_err();
+        assert!(err.to_string().contains("CWL"), "{err}");
     }
 }
