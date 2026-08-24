@@ -65,7 +65,7 @@ clap = { version = "4.5.53", features = ["derive", "wrap_help"] }
 clap_complete = "4.5.61"
 
 # requirements parser
-uv-requirements-txt = "0.0.71"
+uv-requirements-txt = "0.0.72"
 uv-pypi-types = "0.0.72"
 r-description = "0.4.1"
 
