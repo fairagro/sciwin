@@ -560,4 +560,30 @@ mod tests {
 
         assert!(find_config(&nested).is_none());
     }
+
+    #[test]
+    #[serial]
+    #[cfg(unix)]
+    fn test_find_config_boundary_survives_a_symlinked_start_path() {
+        // Mimics macOS, where `/tmp` (a common `start`) is itself a symlink (`/tmp` ->
+        // `/private/tmp`) -- `git2`'s `workdir()` returns the resolved form, so comparing it
+        // against an un-resolved walk path would never match.
+        let temp_dir = tempdir().unwrap();
+        fs::write(
+            temp_dir.path().join(WORKFLOW_TOML),
+            "[workflow]\nname = \"outside-the-repo\"\nversion = \"0.0.1\"\n",
+        )
+        .unwrap();
+        let real_root = temp_dir.path().join("real_root");
+        let repo_root = real_root.join("repo");
+        let nested = repo_root.join("workflows/main");
+        fs::create_dir_all(&nested).unwrap();
+        Repository::init(&repo_root).unwrap();
+
+        let symlinked_root = temp_dir.path().join("symlinked_root");
+        std::os::unix::fs::symlink(&real_root, &symlinked_root).unwrap();
+        let nested_via_symlink = symlinked_root.join("repo/workflows/main");
+
+        assert!(find_config(&nested_via_symlink).is_none());
+    }
 }
