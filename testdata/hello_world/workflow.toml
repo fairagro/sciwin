@@ -1,0 +1,12 @@
+[workflow]
+name = "hello_world"
+description = "An example workflow made by SciWIn"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/fairagro/sciwin"
+keywords = ["test"]
+
+[[workflow.authors]]
+name = "Jens Krumsieck"
+orcid = "0000-0001-6242-5846"
+email = "jens.krumsieck@thuenen.de"

@@ -177,6 +177,10 @@ fn formal_parameter_entities(layout: &WorkflowLayout, graph: &WorkflowGraph) -> 
         if let Some(ty) = port.additional_type {
             entity = entity.set("additionalType", ty.to_string());
         }
+
+        if let Some(file_name) = &port.file_name {
+            entity = entity.reference("workExample", file_name.clone());
+        }
         entities.push(entity);
     }
     entities
