@@ -39,6 +39,7 @@ pub use task_runner::TaskRunner;
 mod reana_runner;
 pub use reana_runner::{JobFailure, ReanaRunner, find_failures};
 pub mod reana_compat;
+pub mod rocrate;
 
 pub type RunnerResult<T> = Result<T, RunnerError>;
 
@@ -82,6 +83,10 @@ pub enum RunnerError {
     #[diagnostic(code = "sciwin::error::RunnerError::DockerCommandFailed")]
     #[error("docker {command} failed: {stderr}")]
     DockerCommandFailed { command: String, stderr: String },
+
+    #[diagnostic(transparent)]
+    #[error(transparent)]
+    RoCrateIO(#[from] ::rocrate::io::Error),
 
     #[diagnostic(code = "anyhow::Error")]
     #[error(transparent)]
