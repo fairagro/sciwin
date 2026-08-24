@@ -296,7 +296,7 @@ async fn execute_run_task_backend(
             RocrateLayout::Files => local_rocrate_export::CrateLayout::Files,
         };
         let cwd = env::current_dir().into_diagnostic()?;
-        let metadata = project::read_config(&cwd)?.workflow;
+        let metadata = project::find_config(&cwd).unwrap_or_default().workflow;
         debug!(
             "exporting Provenance Run Crate ({layout:?}) to {:?}",
             args.rocrate_dir
@@ -448,7 +448,7 @@ async fn export_rocrate(
     output_dir: &Path,
 ) -> miette::Result<()> {
     let cwd = env::current_dir().into_diagnostic()?;
-    let metadata = project::read_config(&cwd)?.workflow;
+    let metadata = project::find_config(&cwd).unwrap_or_default().workflow;
     debug!("exporting Provenance Run Crate for '{workflow_name}' to {output_dir:?}");
 
     let (written, validation) =

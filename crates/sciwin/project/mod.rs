@@ -120,6 +120,27 @@ pub fn read_config(dir: &Path) -> ProjectResult<Config> {
     Ok(toml::from_str(&contents)?)
 }
 
+/// [`read_config`], but searching `start` and each of its ancestors in turn. Bounded to `start`'s
+/// own git repository when it's in one
+#[must_use]
+pub fn find_config(start: &Path) -> Option<Config> {
+    let boundary = Repository::discover(start)
+        .ok()
+        .and_then(|repo| repo.workdir().map(Path::to_path_buf));
+
+    let mut dir = Some(start.to_path_buf());
+    while let Some(d) = dir {
+        if let Ok(config) = read_config(&d) {
+            return Some(config);
+        }
+        if boundary.as_deref() == Some(d.as_path()) {
+            break;
+        }
+        dir = d.parent().map(Path::to_path_buf);
+    }
+    None
+}
+
 fn is_git_repo(path: &Path) -> bool {
     // Determine the base directory from the provided path or use the current directory
     Repository::open(path).is_ok()
