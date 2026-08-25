@@ -1,6 +1,7 @@
 [package]
 name = "sciwin"
 description = "Headless core library for SciWIn: authoring and running CWL workflows"
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 repository.workspace = true
