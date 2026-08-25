@@ -39,7 +39,7 @@ or the FAIRagro Blogpost:
 - [🚀 About](#-about)
 - [🏗️ How to Build and Test](#️-how-to-build-and-test)
   - [Crate architecture \& sibling repositories](#crate-architecture--sibling-repositories)
-- [💚 SciWin Studio](#-sciwin-studio)
+- [💚 SciWin Studio](https://github.com/fairagro/sciwin_studio)
 - [🎯 Installation](#-installation)
 - [📚 How to Use](#-how-to-use)
   - [Project initialization](#project-initialization)
@@ -104,50 +104,6 @@ reana = { path = "../reana-cwl-client/crates/reana" }
 rocrate = { path = "../ro-crate-lib" }
 ```
 Building from a directory where such a patch is in scope will then use the local sources instead of the published versions, and all affected repositories should be updated together.
-
-## 💚 SciWIn-Studio
-**SciWIn-Studio** is a graphical user interface (GUI) application currently in testing that complements SciWIn-Client. It provides an intuitive visual environment for researchers who prefer graphical tools over command-line interactions.
-### Features
-- Visual workflow design and management
-- Drag-and-drop interface for connecting workflow steps
-- Real-time workflow visualization
-- Accessible workflow creation without terminal expertise
-
-<img src=".github/studio.png" alt="Screenshot of SciWIn Studio" width=750>
-
-### Running SciWIn-Studio
-Builds of SciWIn-Studio can be found in the [Actions-Tab](https://github.com/fairagro/sciwin/actions/workflows/bundle.yml) until it is released properly.
-To run SciWIn-Studio in **Development mode**, you need to [install the Dioxus CLI `dx`](https://dioxuslabs.com/learn/0.7/getting_started/):
-```bash
-# Install requirements
-sudo apt-get update 
-sudo apt-get install -y \
-    libgtk-3-dev \
-    libglib2.0-dev \
-    libwebkit2gtk-4.1-dev \
-    build-essential \
-    curl \
-    wget \
-    file \
-    libxdo-dev \
-    libssl-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev
-
-# Install Dioxus CLI
-curl -sSL https://dioxus.dev/install.sh | bash
-
-# or (slower)
-cargo install dioxus-cli
-
-# Navigate to the project directory
-cd sciwin
-
-# Launch SciWIn-Studio in debug mode
-dx serve -p sciwin
-```
-> [!NOTE]
-> SciWIn-Studio is currently in testing phase. Features and functionality may change as development progresses.
 
 ## 💻 SciWIn-Client
 **SciWIn-Client** is a command-line tool designed to simplify the creation, recording, annotation, and execution of computational workflows. 
