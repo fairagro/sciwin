@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/sciwin", "crates/gui", "crates/cli"]
+members = ["crates/sciwin", "crates/cli"]
 resolver = "3"
 
 [workspace.package]
@@ -28,7 +28,6 @@ git2 = { version = "0.21.0", features = ["vendored-openssl"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.149"
 serde-saphyr = "1.1.0"
-serde_yaml = "0.9.34-deprecated"
 toml = "1.1.4"
 toml_edit = { version = "0.25.13", features = ["serde"] }
 configparser = "3.1.0"
@@ -86,12 +85,6 @@ smart-default = "0.7.1"
 bon = "3.9.3"
 chrono = "0.4.45"
 dotenvy = "0.15.7"
-fancy-regex = "0.19.0"
-keyring = { version = "3.6.3", features = [
-    "apple-native",
-    "linux-native",
-    "windows-native",
-] }
 shlex = "2.0.1"
 rand = "0.10.2"
 tracing = "0.1.44"
