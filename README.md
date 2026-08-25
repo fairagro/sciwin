@@ -87,7 +87,6 @@ cargo nextest --workspace           # Run all tests
 This repository is a Cargo workspace with three crates:
 - **`crates/sciwin`** (lib `sciwin`) — the shared core logic for authoring, executing and annotating workflows, used by both the CLI and the GUI.
 - **`crates/cli`** (bin `s4n`) — the SciWIn-Client command-line interface, a thin wrapper around `sciwin`.
-- **`crates/gui`** (bin `sciwin_studio`) — the SciWIn-Studio desktop GUI, built with [Dioxus](https://dioxuslabs.com/), also built on top of `sciwin`.
 
 The `sciwin` crate itself builds on three sibling FAIRagro libraries, each maintained in its own repository and published as its own crate:
 | Crate | Repository | Purpose |
