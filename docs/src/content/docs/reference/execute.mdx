@@ -47,7 +47,7 @@ Options:
       --engine <ENGINE>
           local (commonwl's runner, only containerizes DockerRequirement steps -- see --runtime),
           docker (every step containerized via Docker directly), tes (submit to a GA4GH TES server,
-          needs TES_URL/TES_STORAGE env vars), reana (submit to REANA, needs REANA_URL/REANA_TOKEN
+          needs TES_URL/TES_STORAGE env vars), reana (submit to REANA, needs REANA_SERVER_URL/REANA_ACCESS_TOKEN
           -- waits for completion unless --detach is given)
           
           [default: local]
@@ -94,16 +94,16 @@ Options:
 - **`local`** (default) — runs the workflow with commonwl's own engine, in-process. Only steps that declare a `DockerRequirement` are containerized, using the runtime selected by `--runtime` (default `docker`; `podman`, `singularity`, and `apptainer` are also supported).
 - **`docker`** — runs every step containerized via Docker directly (through the Docker daemon), regardless of whether a step declares a `DockerRequirement`. `--runtime` is not consulted for this engine.
 - **`tes`** — submits the workflow to a [GA4GH TES](https://github.com/ga4gh/task-execution-schemas) server. Requires the environment variables `TES_URL` (the TES server) and `TES_STORAGE` (a remote data store the TES server can read/write, e.g. `s3://my-bucket`); `TES_TOKEN` is an optional bearer token for authentication.
-- **`reana`** — submits the workflow to a [REANA](https://reanahub.io) server. Requires `REANA_URL` and `REANA_TOKEN` environment variables.
+- **`reana`** — submits the workflow to a [REANA](https://reanahub.io) server. Requires `REANA_SERVER_URL` and `REANA_ACCESS_TOKEN` environment variables.
 
 `local`, `docker`, and `tes` always wait for the run to finish before returning (there is no REANA-style server-side state to reconnect to once the CLI exits). `reana` also waits by default; pass `--detach` to submit and return immediately instead, then check on it later with [`execute reana status`](#execute-reana).
 
 ### Credentials and `.env`
 
-`REANA_URL`/`REANA_TOKEN` and `TES_URL`/`TES_STORAGE`/`TES_TOKEN` are read from the process environment. `s4n` also loads a `.env` file from the current directory if one is present (via [`dotenvy`](https://docs.rs/dotenvy)), so these can be set once in a `.env` file instead of exporting them in every shell session.
+`REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` and `TES_URL`/`TES_STORAGE`/`TES_TOKEN` are read from the process environment. `s4n` also loads a `.env` file from the current directory if one is present (via [`dotenvy`](https://docs.rs/dotenvy)), so these can be set once in a `.env` file instead of exporting them in every shell session.
 
 ## `execute reana`
-This command queries or fetches results for workflow runs already submitted to a [REANA](https://reanahub.io) server (via `s4n execute run --engine reana`). It needs the same `REANA_URL`/`REANA_TOKEN` environment variables as `execute run --engine reana`.
+This command queries or fetches results for workflow runs already submitted to a [REANA](https://reanahub.io) server (via `s4n execute run --engine reana`). It needs the same `REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` environment variables as `execute run --engine reana`.
 
 ```txt frame="terminal" title="Usage"
 Queries or fetches results of runs already submitted to REANA

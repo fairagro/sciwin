@@ -4,7 +4,7 @@
 - `run` (engine `local` by default) is now `execute`'s default subcommand, so `s4n execute <FILE> [INPUT_FILE]` works directly without typing `run`
 - `s4n execute reana status|download|rocrate` replace the old `execute remote` subcommands for querying/fetching runs already submitted to REANA
 - `s4n execute run --detach` submits a REANA run and returns immediately instead of waiting; every other engine always waits, since only REANA keeps server-side run state to reconnect to afterward
-- REANA/TES credentials (`REANA_URL`/`REANA_TOKEN`/`TES_URL`/`TES_STORAGE`/`TES_TOKEN`) can now be set in a `.env` file, loaded automatically
+- REANA/TES credentials (`REANA_SERVER_URL`/`REANA_ACCESS_TOKEN`/`TES_URL`/`TES_STORAGE`/`TES_TOKEN`) can now be set in a `.env` file, loaded automatically
 - Can export RO Crates from local backend
 - Updated the underlying CWL libraries to our [`commonwl`](https://github.com/fairagro/commonwl) library #236
 - Removed `annotate` command due to lack of usage
@@ -26,7 +26,7 @@
 > | `s4n execute remote status [NAME]` | `s4n execute reana status [NAME]` |
 > | `s4n execute remote download <NAME>` | `s4n execute reana download <NAME>` |
 > | `s4n execute remote rocrate <NAME>` | `s4n execute reana rocrate <NAME>` |
-> | `s4n execute remote logout` / `--logout` | removed -- credentials are just `REANA_URL`/`REANA_TOKEN` env vars (optionally via `.env`), nothing is persisted to log out of |
+> | `s4n execute remote logout` / `--logout` | removed -- credentials are just `REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` env vars (optionally via `.env`), nothing is persisted to log out of |
 >
 > The `--key value ...` trailing-argument input override syntax is also removed; only a single YAML/JSON job file positional is supported now.
 

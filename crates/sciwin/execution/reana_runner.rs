@@ -313,8 +313,8 @@ mod tests {
             .with(tracing_subscriber::fmt::layer())
             .init();
 
-        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_TOKEN").unwrap()));
-        let server_url = Url::parse(&env::var("REANA_URL").unwrap()).unwrap();
+        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_ACCESS_TOKEN").unwrap()));
+        let server_url = Url::parse(&env::var("REANA_SERVER_URL").unwrap()).unwrap();
         let client = ReanaClient::new(server_url.join("api").unwrap(), token);
         let runner = ReanaRunner::new(client);
 
@@ -354,8 +354,8 @@ mod tests {
             .with(tracing_subscriber::fmt::layer())
             .init();
 
-        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_TOKEN").unwrap()));
-        let server_url = Url::parse(&env::var("REANA_URL").unwrap()).unwrap();
+        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_ACCESS_TOKEN").unwrap()));
+        let server_url = Url::parse(&env::var("REANA_SERVER_URL").unwrap()).unwrap();
         let client = ReanaClient::new(server_url.join("api").unwrap(), token);
         let runner = ReanaRunner::new(client);
 
@@ -398,8 +398,8 @@ mod tests {
     async fn test_find_failures_reana() {
         dotenvy::dotenv().ok();
 
-        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_TOKEN").unwrap()));
-        let server_url = Url::parse(&env::var("REANA_URL").unwrap()).unwrap();
+        let token = Arc::new(ReanaAccessToken::new(env::var("REANA_ACCESS_TOKEN").unwrap()));
+        let server_url = Url::parse(&env::var("REANA_SERVER_URL").unwrap()).unwrap();
         let client = ReanaClient::new(server_url.join("api").unwrap(), token);
         let runner = ReanaRunner::new(client);
 

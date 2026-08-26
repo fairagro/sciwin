@@ -241,9 +241,9 @@ mod tests {
         dotenvy::dotenv().unwrap();
 
         let token = Arc::new(reana::auth::ReanaAccessToken::new(
-            std::env::var("REANA_TOKEN").unwrap(),
+            std::env::var("REANA_ACCESS_TOKEN").unwrap(),
         ));
-        let server_url = url::Url::parse(&std::env::var("REANA_URL").unwrap()).unwrap();
+        let server_url = url::Url::parse(&std::env::var("REANA_SERVER_URL").unwrap()).unwrap();
         let client = ReanaClient::new(server_url.join("api").unwrap(), token);
         let runner = crate::execution::ReanaRunner::new(client);
 

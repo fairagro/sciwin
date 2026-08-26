@@ -122,7 +122,7 @@ fn print_execute_help(short: bool) {
 }
 
 async fn run() -> miette::Result<()> {
-    // Only --engine reana/tes need REANA_URL/REANA_TOKEN or TES_URL/TES_STORAGE/TES_TOKEN; every
+    // Only --engine reana/tes need REANA_SERVER_URL/REANA_ACCESS_TOKEN or TES_URL/TES_STORAGE/TES_TOKEN; every
     // other command works fine with no `.env` file at all, so a missing file is not an error.
     dotenvy::dotenv().ok();
 

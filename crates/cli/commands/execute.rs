@@ -79,7 +79,7 @@ pub struct RunArgs {
         help = "local (commonwl's runner, only containerizes DockerRequirement steps -- see \
                 --runtime), docker (every step containerized via Docker directly), tes (submit \
                 to a GA4GH TES server, needs TES_URL/TES_STORAGE env vars), reana (submit to \
-                REANA, needs REANA_URL/REANA_TOKEN -- waits for completion unless --detach is \
+                REANA, needs REANA_SERVER_URL/REANA_ACCESS_TOKEN -- waits for completion unless --detach is \
                 given)"
     )]
     pub engine: ExecutionEngine,
@@ -396,13 +396,13 @@ async fn wait_and_report(
     }
 }
 
-/// Builds a `ReanaRunner` from `REANA_URL`/`REANA_TOKEN` env vars (settable directly, or via a
+/// Builds a `ReanaRunner` from `REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` env vars (settable directly, or via a
 /// `.env` file -- see `dotenvy::dotenv()` in `main.rs`).
 fn reana_runner() -> miette::Result<ReanaRunner> {
-    let url = env::var("REANA_URL")
-        .map_err(|_| miette::miette!("REANA_URL is not set (see `s4n execute run --help`)"))?;
-    let token = env::var("REANA_TOKEN")
-        .map_err(|_| miette::miette!("REANA_TOKEN is not set (see `s4n execute run --help`)"))?;
+    let url = env::var("REANA_SERVER_URL")
+        .map_err(|_| miette::miette!("REANA_SERVER_URL is not set (see `s4n execute run --help`)"))?;
+    let token = env::var("REANA_ACCESS_TOKEN")
+        .map_err(|_| miette::miette!("REANA_ACCESS_TOKEN is not set (see `s4n execute run --help`)"))?;
 
     let server_url = Url::parse(&url).into_diagnostic()?;
     debug!("connecting to REANA at {server_url}");
