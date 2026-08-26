@@ -64,7 +64,8 @@ pub enum ProjectError {
 }
 
 /// Initializes a new project in the specified folder. If no folder is provided, it initializes in the current directory.
-/// The provided path must be relative to the current working directory.
+/// `folder` may be relative (resolved against, and confined to, the current working directory) or absolute (used as-is).
+/// Either way, no path-traversal components ('..' or '.') are allowed.
 pub fn initialize_project(folder: impl AsRef<Path>) -> ProjectResult<()> {
     let folder = verify_base_dir(folder.as_ref())?;
 
@@ -97,7 +98,7 @@ pub fn initialize_project(folder: impl AsRef<Path>) -> ProjectResult<()> {
 const WORKFLOW_TOML: &str = "workflow.toml";
 
 fn write_config(dir: &Path) -> ProjectResult<()> {
-    let dir = verify_relative_to_cwd(dir)?;
+    let dir = resolve_canonical(dir)?;
 
     // create workflow toml
     let mut cfg = Config::default();
@@ -150,7 +151,7 @@ fn is_git_repo(path: &Path) -> bool {
 const GITIGNORE_CONTENT: &str = include_str!("../resources/default.gitignore");
 
 fn init_git_repo(base_dir: &Path) -> ProjectResult<Repository> {
-    let base_dir = verify_relative_to_cwd(base_dir)?;
+    let base_dir = resolve_canonical(base_dir)?;
 
     if !base_dir.exists() {
         fs::create_dir_all(&base_dir)?;
@@ -173,7 +174,7 @@ fn init_git_repo(base_dir: &Path) -> ProjectResult<Repository> {
 }
 
 fn create_minimal_folder_structure(base_dir: &Path) -> ProjectResult<()> {
-    let base_dir = verify_relative_to_cwd(base_dir)?;
+    let base_dir = resolve_canonical(base_dir)?;
 
     // Create the base directory
     if !base_dir.exists() {
@@ -190,20 +191,22 @@ fn create_minimal_folder_structure(base_dir: &Path) -> ProjectResult<()> {
     Ok(())
 }
 
+/// Validates that `folder` contains no traversal components ('..' or '.') and no
+/// stray root/prefix components in the middle of the path. Absolute paths are
+/// allowed (their leading root/prefix component is expected, not stray); a
+/// relative path is additionally required to stay within the current directory
+/// once resolved (see `resolve_relative_to_cwd`). This is what actually defends
+/// against path-traversal: a caller-supplied path that resolves outside the
+/// directory it was meant to stay in.
 fn verify_base_dir(folder: &Path) -> ProjectResult<PathBuf> {
-    if folder.is_absolute() {
-        return Err(ProjectError::InvalidPath {
-            path: folder.to_path_buf(),
-            reason: "must be relative, got an absolute path".to_string(),
-        });
-    }
+    let is_absolute = folder.is_absolute();
 
     for component in folder.components() {
         let reason = match component {
             Component::ParentDir => Some("must not contain parent directory components ('..')"),
-            Component::Prefix(_) => Some("contains an invalid path prefix"),
             Component::CurDir => Some("must not be current directory '.'"),
-            Component::RootDir => Some("must not contain root directory components"),
+            Component::Prefix(_) if !is_absolute => Some("contains an invalid path prefix"),
+            Component::RootDir if !is_absolute => Some("must not contain root directory components"),
             _ => None,
         };
         if let Some(reason) = reason {
@@ -214,16 +217,18 @@ fn verify_base_dir(folder: &Path) -> ProjectResult<PathBuf> {
         }
     }
 
-    let cwd = canonicalize(Path::new("."))?;
-    let mut path = cwd.join(folder);
-    path = verify_relative_to_cwd(&path)?;
+    if is_absolute {
+        return resolve_canonical(folder);
+    }
 
-    Ok(path)
+    let cwd = canonicalize(Path::new("."))?;
+    let path = cwd.join(folder);
+    verify_relative_to_cwd(&path)
 }
 
-fn verify_relative_to_cwd(path: &Path) -> ProjectResult<PathBuf> {
-    let cwd = canonicalize(Path::new("."))?;
-
+/// Resolves `path` to its canonical (symlink-free) form, whether or not it
+/// exists yet, and confirms it isn't a plain file.
+fn resolve_canonical(path: &Path) -> ProjectResult<PathBuf> {
     let mut path = path.to_path_buf();
     if path.exists() {
         path = canonicalize(&path)?;
@@ -241,18 +246,25 @@ fn verify_relative_to_cwd(path: &Path) -> ProjectResult<PathBuf> {
         });
     }
 
+    if path.exists() && path.is_file() {
+        return Err(ProjectError::InvalidPath {
+            path,
+            reason: "is a file, expected a directory".to_string(),
+        });
+    }
+
+    Ok(path)
+}
+
+fn verify_relative_to_cwd(path: &Path) -> ProjectResult<PathBuf> {
+    let cwd = canonicalize(Path::new("."))?;
+    let path = resolve_canonical(path)?;
+
     // check whether it still starts with cwd
     if !path.starts_with(&cwd) {
         return Err(ProjectError::InvalidPath {
             path,
             reason: "escapes the current working directory".to_string(),
-        });
-    }
-
-    if path.exists() && path.is_file() {
-        return Err(ProjectError::InvalidPath {
-            path,
-            reason: "is a file, expected a directory".to_string(),
         });
     }
 
@@ -442,6 +454,43 @@ mod tests {
             let full_path = PathBuf::from(temp_dir.path()).join(dir);
             assert!(full_path.exists(), "Directory {dir} does not exist");
         }
+    }
+
+    #[test]
+    fn test_init_s4n_absolute_path() {
+        // a GUI caller (no meaningful cwd of its own) passes an absolute path directly
+        let temp_dir = Builder::new()
+            .prefix("init_absolute_test")
+            .tempdir()
+            .unwrap();
+        check_git_user().unwrap();
+
+        let target = temp_dir.path().join("my_project");
+        let result = initialize_project(&target);
+        eprintln!("{result:#?}");
+        assert!(result.is_ok(), "Expected absolute-path initialization to succeed");
+
+        assert!(target.join("workflow.toml").exists());
+        assert!(target.join("workflows").exists());
+        assert!(target.join(".git").exists());
+    }
+
+    #[test]
+    fn test_verify_base_dir_rejects_traversal_in_relative_path() {
+        assert!(verify_base_dir(Path::new("foo/../bar")).is_err());
+    }
+
+    #[test]
+    fn test_verify_base_dir_rejects_traversal_in_absolute_path() {
+        assert!(verify_base_dir(Path::new("/tmp/foo/../bar")).is_err());
+    }
+
+    #[test]
+    fn test_verify_base_dir_accepts_plain_absolute_path() {
+        let temp_dir = tempdir().unwrap();
+        let target = temp_dir.path().join("project");
+        let result = verify_base_dir(&target);
+        assert!(result.is_ok(), "Expected a clean absolute path to be accepted: {result:?}");
     }
 
     #[test]
