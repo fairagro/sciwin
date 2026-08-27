@@ -96,6 +96,10 @@ pub fn add_workflow_step(
 }
 
 /// Adds a connection between an input and a `CommandLineTool`. The tool will be registered as step if it is not already and an Workflow input will be added.
+/// # Errors
+/// If `from_input` already exists with a type incompatible with `to`'s slot -- a fresh input
+/// takes on the slot's type by construction, so there's nothing to check there; an existing
+/// one might already be feeding a differently-typed step.
 pub fn add_workflow_input_connection(
     workflow: &mut Workflow,
     workflow_path: impl AsRef<Path>,
@@ -110,7 +114,16 @@ pub fn add_workflow_input_connection(
         .expect("No slot");
 
     //register input
-    if !workflow.has_input(from_input) {
+    if let Some(existing) = workflow.inputs.iter().find(|i| i.id.as_deref() == Some(from_input)) {
+        if existing.r#type != to_slot.r#type {
+            return Err(AuthoringError::IncompatibleType {
+                message: format!(
+                    "input {from_input} already has type {:?}, but {}/{} expects {:?}",
+                    existing.r#type, to.name, to.slot_id, to_slot.r#type
+                ),
+            });
+        }
+    } else {
         workflow.add_workflow_input_mut(
             from_input,
             to_slot.r#type.clone(),
@@ -127,6 +140,10 @@ pub fn add_workflow_input_connection(
 }
 
 /// Adds a connection between an output and a `CommandLineTool`. The tool will be registered as step if it is not already and an Workflow output will be added.
+/// # Errors
+/// If `to_output` already exists with a type incompatible with `from`'s slot -- a fresh output
+/// takes on the slot's type by construction, so there's nothing to check there; an existing
+/// one might already be fed by a differently-typed source.
 pub fn add_workflow_output_connection(
     workflow: &mut Workflow,
     workflow_path: impl AsRef<Path>,
@@ -157,22 +174,40 @@ pub fn add_workflow_output_connection(
             .map(|i| i.r#type.clone()),
     }
     .expect("No slot");
+
+    // Checked before any mutation, refusing here must not leave a step
+    // registered with nothing wired to it, the way checking after
+    // `add_workflow_step` used to.
+    if let Some(output) = workflow.outputs.iter().find(|o| o.id.as_deref() == Some(to_output))
+        && output.r#type != from_type
+    {
+        return Err(AuthoringError::IncompatibleType {
+            message: format!(
+                "output {to_output} already has type {:?}, but {}/{} produces {:?}",
+                output.r#type, from.name, from.slot_id, from_type
+            ),
+        });
+    }
+
     add_workflow_step(workflow, workflow_path, from.name, from.filename, &from_cwl)?;
 
+    let source = format!("{}/{}", from.name, from.slot_id);
     if workflow.has_output(to_output) {
+        // Merge into the existing sources instead of overwriting them,
+        // `output_source = Some(OneOrMany::One(source))` used to drop every
+        // other source already feeding this output.
         let output = workflow
             .outputs
             .iter_mut()
             .find(|o| o.id.as_deref() == Some(to_output))
-            .expect("has_output confirmed above");
-        output.r#type = from_type;
-        output.output_source = Some(OneOrMany::One(format!("{}/{}", from.name, from.slot_id)));
+            .expect("found above");
+        let mut sources = output.output_source.take().map(OneOrMany::into_many).unwrap_or_default();
+        if !sources.contains(&source) {
+            sources.push(source);
+        }
+        output.output_source = Some(OneOrMany::Many(sources));
     } else {
-        workflow.add_workflow_output_mut(
-            to_output,
-            from_type,
-            OneOrMany::One(format!("{}/{}", from.name, from.slot_id)),
-        );
+        workflow.add_workflow_output_mut(to_output, from_type, OneOrMany::One(source));
     }
 
     Ok(())
@@ -392,18 +427,22 @@ mod tests {
     }
 
     fn write_tool(path: &Path, input: &str, output: &str) {
+        write_tool_typed(path, input, output, CWLType::String);
+    }
+
+    fn write_tool_typed(path: &Path, input: &str, output: &str, ty: CWLType) {
         let tool = CommandLineTool::builder()
             .cwl_version("v1.2")
             .inputs(vec![
                 CommandInputParameter::builder()
                     .id(input)
-                    .r#type(CWLType::String)
+                    .r#type(ty)
                     .build(),
             ])
             .outputs(vec![
                 CommandOutputParameter::builder()
                     .id(output)
-                    .r#type(CWLType::String)
+                    .r#type(ty)
                     .build(),
             ])
             .build();
@@ -498,6 +537,69 @@ mod tests {
     }
 
     #[test]
+    fn connect_workflow_input_reuses_existing_input_with_matching_type() {
+        let dir = tempdir().unwrap();
+        let tool_a = dir.path().join("a.cwl");
+        let tool_b = dir.path().join("b.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+
+        write_tool(&tool_a, "message", "out");
+        write_tool(&tool_b, "message", "out");
+
+        let mut wf = Workflow::default();
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "workflow_input",
+            WorkflowSlot::new(&tool_a, "a", "message"),
+        )
+        .unwrap();
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "workflow_input",
+            WorkflowSlot::new(&tool_b, "b", "message"),
+        )
+        .unwrap();
+
+        // one input, feeding both steps -- not duplicated, not overwritten
+        assert_eq!(wf.inputs.iter().filter(|i| i.id.as_deref() == Some("workflow_input")).count(), 1);
+        assert!(wf.has_step("a"));
+        assert!(wf.has_step("b"));
+    }
+
+    #[test]
+    fn connect_workflow_input_refuses_type_mismatch_with_existing_input() {
+        let dir = tempdir().unwrap();
+        let string_tool = dir.path().join("a.cwl");
+        let file_tool = dir.path().join("b.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+
+        write_tool(&string_tool, "message", "out");
+        write_tool_typed(&file_tool, "message", "out", CWLType::File);
+
+        let mut wf = Workflow::default();
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "workflow_input",
+            WorkflowSlot::new(&string_tool, "a", "message"),
+        )
+        .unwrap();
+
+        let result = add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "workflow_input",
+            WorkflowSlot::new(&file_tool, "b", "message"),
+        );
+
+        assert!(matches!(result, Err(AuthoringError::IncompatibleType { .. })));
+        // refused before wiring anything to the second step
+        assert!(!wf.has_step("b"));
+    }
+
+    #[test]
     fn connect_workflow_output() {
         let dir = tempdir().unwrap();
         let tool_path = dir.path().join("tool.cwl");
@@ -527,6 +629,75 @@ mod tests {
             output.output_source.as_ref().unwrap().as_many(),
             vec!["tool/result".to_string()]
         );
+    }
+
+    #[test]
+    fn connect_workflow_output_merges_sources_with_matching_type() {
+        let dir = tempdir().unwrap();
+        let tool_a = dir.path().join("a.cwl");
+        let tool_b = dir.path().join("b.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+
+        write_tool(&tool_a, "in", "result");
+        write_tool(&tool_b, "in", "result");
+
+        let mut wf = Workflow::default();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&tool_a, "a", "result"),
+            "final_result",
+        )
+        .unwrap();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&tool_b, "b", "result"),
+            "final_result",
+        )
+        .unwrap();
+
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final_result"))
+            .unwrap();
+        assert_eq!(
+            output.output_source.as_ref().unwrap().as_many(),
+            vec!["a/result".to_string(), "b/result".to_string()],
+            "the second connection must not overwrite the first"
+        );
+    }
+
+    #[test]
+    fn connect_workflow_output_refuses_type_mismatch_with_existing_output() {
+        let dir = tempdir().unwrap();
+        let string_tool = dir.path().join("a.cwl");
+        let file_tool = dir.path().join("b.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+
+        write_tool(&string_tool, "in", "result");
+        write_tool_typed(&file_tool, "in", "result", CWLType::File);
+
+        let mut wf = Workflow::default();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&string_tool, "a", "result"),
+            "final_result",
+        )
+        .unwrap();
+
+        let result = add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&file_tool, "b", "result"),
+            "final_result",
+        );
+
+        assert!(matches!(result, Err(AuthoringError::IncompatibleType { .. })));
+        // refused before wiring anything, or registering the second step
+        assert!(!wf.has_step("b"));
     }
 
     #[test]

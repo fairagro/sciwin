@@ -87,6 +87,13 @@ pub enum AuthoringError {
     #[diagnostic(code = "authoring::InvalidWorkflowStep")]
     InvalidWorkflowStep { id: String },
 
+    #[error("{message}")]
+    #[diagnostic(
+        code = "authoring::IncompatibleType",
+        help = "connect through a slot whose type matches the existing input/output, or give it a fresh name"
+    )]
+    IncompatibleType { message: String },
+
     #[error(transparent)]
     #[diagnostic(code = "commonwl::Error")]
     CWL(#[from] commonwl::Error),
