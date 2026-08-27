@@ -209,14 +209,20 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
             miette::bail!("Step {} not found!", to_parts[0]);
         }
 
-        workflow::remove_workflow_step_connection(&mut workflow, to_parts[0], to_parts[1])
-            .map_err(|e| {
-                miette!(
-                    "Could not remove connection from {} to {}:: {e}",
-                    args.from,
-                    args.to
-                )
-            })?;
+        workflow::remove_workflow_step_connection(
+            &mut workflow,
+            from_parts[0],
+            from_parts[1],
+            to_parts[0],
+            to_parts[1],
+        )
+        .map_err(|e| {
+            miette!(
+                "Could not remove connection from {} to {}:: {e}",
+                args.from,
+                args.to
+            )
+        })?;
         info!("➖ Removed connection from {} to {} in workflow!", args.from, args.to);
     }
 

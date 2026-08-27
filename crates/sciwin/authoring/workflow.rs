@@ -217,17 +217,21 @@ pub fn add_workflow_step_connection(
     Ok(())
 }
 
-/// Removes a connection between two `CommandLineTools` by removing input from `tool_y` that is also output of `tool_x`.
+/// Removes one connection between two `CommandLineTools`
 pub fn remove_workflow_step_connection(
     workflow: &mut Workflow,
+    from_name: &str,
+    from_slot_id: &str,
     to_name: &str,
     to_slot_id: &str,
 ) -> AuthoringResult<()> {
-    workflow.remove_workflow_step_input_mut(to_name, to_slot_id)?;
+    let source = format!("{from_name}/{from_slot_id}");
+    workflow.remove_workflow_step_input_source_mut(to_name, to_slot_id, &source)?;
     Ok(())
 }
 
-/// Removes an input from inputs and removes it from `CommandLineTool` input.
+/// Removes an input from inputs and removes it from `CommandLineTool` input, leaving any other
+/// sources on `to_slot_id` (a multi-source input) intact.
 pub fn remove_workflow_input_connection(
     workflow: &mut Workflow,
     from_input: &str,
@@ -245,7 +249,7 @@ pub fn remove_workflow_input_connection(
     }
     let Some(step) = workflow
         .steps
-        .iter_mut()
+        .iter()
         .find(|s| s.id.as_deref() == Some(to_name))
     else {
         return Err(AuthoringError::InvalidWorkflowStep {
@@ -262,7 +266,7 @@ pub fn remove_workflow_input_connection(
             path: format!("step {to_name}"),
         });
     }
-    step.r#in.retain(|v| v.id.as_deref() != Some(to_slot_id));
+    workflow.remove_workflow_step_input_source_mut(to_name, to_slot_id, from_input)?;
     Ok(())
 }
 
