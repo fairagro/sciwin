@@ -184,7 +184,14 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
             _ => miette::bail!("Invalid output path"),
         };
 
-        workflow::remove_workflow_output_connection(&mut workflow, output, true).map_err(|e| {
+        workflow::remove_workflow_output_connection(
+            &mut workflow,
+            from_parts[0],
+            from_parts[1],
+            output,
+            true,
+        )
+        .map_err(|e| {
             miette!(
                 "Could not remove output connection from {} to {}: {e}",
                 args.from,

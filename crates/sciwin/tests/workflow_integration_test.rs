@@ -118,7 +118,7 @@ pub fn test_workflow() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap();
         remove_workflow_input_connection(wf, "pop", "calculation", "population", true).unwrap();
         remove_workflow_step_connection(wf, "calculation", "results", "plot", "results").unwrap();
-        remove_workflow_output_connection(wf, "out", true).unwrap();
+        remove_workflow_output_connection(wf, "plot", "results", "out", true).unwrap();
     });
 
     // Reload the workflow and validate disconnections

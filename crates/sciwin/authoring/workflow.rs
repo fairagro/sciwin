@@ -114,7 +114,11 @@ pub fn add_workflow_input_connection(
         .expect("No slot");
 
     //register input
-    if let Some(existing) = workflow.inputs.iter().find(|i| i.id.as_deref() == Some(from_input)) {
+    if let Some(existing) = workflow
+        .inputs
+        .iter()
+        .find(|i| i.id.as_deref() == Some(from_input))
+    {
         if existing.r#type != to_slot.r#type {
             return Err(AuthoringError::IncompatibleType {
                 message: format!(
@@ -178,7 +182,10 @@ pub fn add_workflow_output_connection(
     // Checked before any mutation, refusing here must not leave a step
     // registered with nothing wired to it, the way checking after
     // `add_workflow_step` used to.
-    if let Some(output) = workflow.outputs.iter().find(|o| o.id.as_deref() == Some(to_output))
+    if let Some(output) = workflow
+        .outputs
+        .iter()
+        .find(|o| o.id.as_deref() == Some(to_output))
         && output.r#type != from_type
     {
         return Err(AuthoringError::IncompatibleType {
@@ -201,7 +208,11 @@ pub fn add_workflow_output_connection(
             .iter_mut()
             .find(|o| o.id.as_deref() == Some(to_output))
             .expect("found above");
-        let mut sources = output.output_source.take().map(OneOrMany::into_many).unwrap_or_default();
+        let mut sources = output
+            .output_source
+            .take()
+            .map(OneOrMany::into_many)
+            .unwrap_or_default();
         if !sources.contains(&source) {
             sources.push(source);
         }
@@ -308,6 +319,8 @@ pub fn remove_workflow_input_connection(
 /// Removes a connection between an output and a `CommandLineTool`.
 pub fn remove_workflow_output_connection(
     workflow: &mut Workflow,
+    from_name: &str,
+    from_slot_id: &str,
     to_output: &str,
     remove_output: bool,
 ) -> AuthoringResult<()> {
@@ -319,13 +332,33 @@ pub fn remove_workflow_output_connection(
         {
             workflow.outputs.remove(index);
         }
-    } else if let Some(output) = workflow
+        return Ok(());
+    }
+
+    let Some(output) = workflow
         .outputs
         .iter_mut()
         .find(|o| o.id.as_deref() == Some(to_output))
-    {
-        output.output_source = None;
-    }
+    else {
+        return Ok(());
+    };
+
+    // Removes only the named source, leaving any other sources on this
+    // output intact
+    let source = format!("{from_name}/{from_slot_id}");
+    let remaining: Vec<String> = output
+        .output_source
+        .take()
+        .map(OneOrMany::into_many)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|s| s != &source)
+        .collect();
+    output.output_source = match remaining.len() {
+        0 => None,
+        1 => Some(OneOrMany::One(remaining.into_iter().next().unwrap())),
+        _ => Some(OneOrMany::Many(remaining)),
+    };
     Ok(())
 }
 
@@ -563,7 +596,13 @@ mod tests {
         .unwrap();
 
         // one input, feeding both steps -- not duplicated, not overwritten
-        assert_eq!(wf.inputs.iter().filter(|i| i.id.as_deref() == Some("workflow_input")).count(), 1);
+        assert_eq!(
+            wf.inputs
+                .iter()
+                .filter(|i| i.id.as_deref() == Some("workflow_input"))
+                .count(),
+            1
+        );
         assert!(wf.has_step("a"));
         assert!(wf.has_step("b"));
     }
@@ -594,7 +633,10 @@ mod tests {
             WorkflowSlot::new(&file_tool, "b", "message"),
         );
 
-        assert!(matches!(result, Err(AuthoringError::IncompatibleType { .. })));
+        assert!(matches!(
+            result,
+            Err(AuthoringError::IncompatibleType { .. })
+        ));
         // refused before wiring anything to the second step
         assert!(!wf.has_step("b"));
     }
@@ -670,6 +712,47 @@ mod tests {
     }
 
     #[test]
+    fn remove_workflow_output_connection_keeps_other_sources() {
+        let dir = tempdir().unwrap();
+        let tool_a = dir.path().join("a.cwl");
+        let tool_b = dir.path().join("b.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+
+        write_tool(&tool_a, "in", "result");
+        write_tool(&tool_b, "in", "result");
+
+        let mut wf = Workflow::default();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&tool_a, "a", "result"),
+            "final_result",
+        )
+        .unwrap();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&tool_b, "b", "result"),
+            "final_result",
+        )
+        .unwrap();
+
+        remove_workflow_output_connection(&mut wf, "a", "result", "final_result", false).unwrap();
+
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final_result"))
+            .unwrap();
+        assert_eq!(
+            output.output_source.as_ref().unwrap().as_many(),
+            vec!["b/result".to_string()],
+            "removing one source must not drop the other, or the output itself"
+        );
+        assert!(wf.has_output("final_result"), "remove_output was false");
+    }
+
+    #[test]
     fn connect_workflow_output_refuses_type_mismatch_with_existing_output() {
         let dir = tempdir().unwrap();
         let string_tool = dir.path().join("a.cwl");
@@ -695,7 +778,10 @@ mod tests {
             "final_result",
         );
 
-        assert!(matches!(result, Err(AuthoringError::IncompatibleType { .. })));
+        assert!(matches!(
+            result,
+            Err(AuthoringError::IncompatibleType { .. })
+        ));
         // refused before wiring anything, or registering the second step
         assert!(!wf.has_step("b"));
     }
@@ -758,7 +844,7 @@ mod tests {
         .unwrap();
 
         remove_workflow_input_connection(&mut wf, "wf_in", "tool", "in", true).unwrap();
-        remove_workflow_output_connection(&mut wf, "wf_out", true).unwrap();
+        remove_workflow_output_connection(&mut wf, "tool", "out", "wf_out", true).unwrap();
 
         assert!(!wf.has_input("wf_in"));
         assert!(!wf.has_output("wf_out"));
