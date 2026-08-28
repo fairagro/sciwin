@@ -439,7 +439,11 @@ pub fn step_is_scattered(workflow: &Workflow, step_id: &str) -> bool {
         })
 }
 
-fn is_scattered_array_of(
+/// Whether `array_type` is an array whose item type is exactly
+/// `scalar_type` -- the shape a source (a workflow input, or another step's
+/// output already handled via [`check_slot_compatibility_scattered`]) takes
+/// when the step it feeds scatters over that slot.
+pub fn is_scattered_array_of(
     array_type: &OneOrMany<InputType>,
     scalar_type: &OneOrMany<InputType>,
 ) -> bool {
@@ -452,6 +456,7 @@ fn is_scattered_array_of(
     })
 }
 
+#[derive(Debug)]
 pub enum ScatterProducerFit {
     Exact,
     NeedsPickValueToDropNulls,
