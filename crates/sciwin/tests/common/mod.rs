@@ -56,7 +56,8 @@ pub fn load_workflow(name: &str) -> Workflow {
 }
 
 pub fn save_workflow(name: &str, workflow: Workflow) {
-    sciwin::authoring::workflow::save_workflow(&CWLDocument::Workflow(workflow), &tool_path(name)).unwrap();
+    sciwin::authoring::workflow::save_workflow(&CWLDocument::Workflow(workflow), &tool_path(name))
+        .unwrap();
 }
 
 /// Loads workflow `name`, hands it to `f` to mutate with real `sciwin::authoring::workflow`
