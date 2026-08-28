@@ -2,7 +2,6 @@
 use commonwl::{
     documents::{CWLDocument, Workflow},
     engine::{ContainerEngine, LocalBackend},
-    format::format_cwl,
     load_cwl_file,
     storage::{StorageBackend, StoragePath},
 };
@@ -57,9 +56,7 @@ pub fn load_workflow(name: &str) -> Workflow {
 }
 
 pub fn save_workflow(name: &str, workflow: Workflow) {
-    let mut yaml = serde_saphyr::to_string(&CWLDocument::Workflow(workflow)).unwrap();
-    yaml = format_cwl(&yaml).unwrap();
-    fs::write(tool_path(name), yaml).unwrap();
+    sciwin::authoring::workflow::save_workflow(&CWLDocument::Workflow(workflow), &tool_path(name)).unwrap();
 }
 
 /// Loads workflow `name`, hands it to `f` to mutate with real `sciwin::authoring::workflow`
