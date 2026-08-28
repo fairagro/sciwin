@@ -6,7 +6,9 @@ use commonwl::{
     format::format_cwl,
     inputs::{InputSchema, InputType},
     load_cwl_file,
-    outputs::{CommandOutputParameterType, CommandOutputSchema, CommandOutputType},
+    outputs::{
+        CommandOutputParameterType, CommandOutputSchema, CommandOutputType, PickValueMethod,
+    },
     types::CWLType,
 };
 use std::{
@@ -385,6 +387,96 @@ pub fn check_slot_compatibility(
     produced
         .iter()
         .all(|p| accepted.iter().any(|a| single_type_matches(p, a)))
+}
+
+/// Whether `output` can feed `input` if the step scatters over that slot.
+    input: &OneOrMany<InputType>,
+    output: &CommandOutputParameterType,
+) -> bool {
+    let CommandOutputParameterType::CommandOutputType(types) = output else {
+        return false;
+    };
+    let accepted: Vec<InputType> = input.as_many();
+    types.as_many().iter().all(|p| match p {
+        CommandOutputType::CommandOutputSchema(schema) => match schema.as_ref() {
+            CommandOutputSchema::Array(arr) => arr
+                .items
+                .as_many()
+                .iter()
+                .all(|item| accepted.iter().any(|a| single_type_matches(item, a))),
+            _ => false,
+        },
+        _ => false,
+    })
+}
+
+/// Whether every alternative of `input` is itself array-shaped, e.g. a
+/// declared `File[]` input 
+pub fn input_type_is_array(input: &OneOrMany<InputType>) -> bool {
+    input
+        .as_many()
+        .iter()
+        .all(|i| matches!(i, InputType::InputSchema(schema) if matches!(schema.as_ref(), InputSchema::Array(_))))
+}
+
+/// Marks `step_id`'s `port` input as scattered, adding it to any inputs the
+/// step already scatters over.
+/// # Errors
+/// If no step with `step_id` exists
+pub fn add_step_to_scatter_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    port: &str,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    let mut ports = step
+        .scatter
+        .take()
+        .map(OneOrMany::into_many)
+        .unwrap_or_default();
+    if !ports.iter().any(|p| p == port) {
+        ports.push(port.to_string());
+    }
+    step.scatter = Some(match ports.len() {
+        1 => OneOrMany::One(ports.into_iter().next().expect("checked len == 1")),
+        _ => OneOrMany::Many(ports),
+    });
+    Ok(())
+}
+
+/// Sets the `pickValue` resolution strategy on `step_id`'s `port` input,
+/// used when it has more than one source feeding it.
+/// # Errors
+/// If no step with `step_id`, or no input `port` on it, exists
+pub fn set_step_pick_value_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    port: &str,
+    method: PickValueMethod,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    let input = step
+        .r#in
+        .iter_mut()
+        .find(|i| i.id.as_deref() == Some(port))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowInput {
+            id: port.to_string(),
+            path: format!("step {step_id}"),
+        })?;
+    input.pick_value = Some(method);
+    Ok(())
 }
 
 fn single_type_matches(output: &CommandOutputType, input: &InputType) -> bool {
