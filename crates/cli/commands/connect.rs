@@ -5,10 +5,13 @@ use crate::{
 };
 use clap::Args;
 use miette::{IntoDiagnostic, miette};
-use sciwin::authoring::paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name};
 use sciwin::authoring::workflow::{self, WorkflowSlot};
-use sciwin::cwl::{documents::CWLDocument, format::format_cwl, load_cwl_file};
-use std::{fs, io::Write, path::Path};
+use sciwin::authoring::{
+    paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name},
+    workflow::save_workflow,
+};
+use sciwin::cwl::{documents::CWLDocument, load_cwl_file};
+use std::{fs, path::Path};
 use tracing::{debug, info};
 
 fn workflow_filename(name: &str) -> String {
@@ -19,7 +22,8 @@ fn workflow_filename(name: &str) -> String {
 
 fn resolve(cwl_filename: &str) -> miette::Result<String> {
     debug!("resolving '{cwl_filename}' to a CWL file path");
-    resolve_filename(cwl_filename).map_err(|e| miette!("Could not resolve CWL file {cwl_filename}: {e}"))
+    resolve_filename(cwl_filename)
+        .map_err(|e| miette!("Could not resolve CWL file {cwl_filename}: {e}"))
 }
 
 #[derive(Args, Debug)]
@@ -37,7 +41,10 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
     let filename = workflow_filename(&args.name);
     debug!("target workflow file: {filename}");
     if !Path::new(&filename).exists() {
-        debug!("workflow '{}' does not exist yet, creating it first", args.name);
+        debug!(
+            "workflow '{}' does not exist yet, creating it first",
+            args.name
+        );
         let args = CreateArgs {
             name: Some(args.name.clone()),
             ..Default::default()
@@ -123,16 +130,16 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
                 args.to
             )
         })?;
-        info!("🔗 Added connection from {} to {} in workflow!", args.from, args.to);
+        info!(
+            "🔗 Added connection from {} to {} in workflow!",
+            args.from, args.to
+        );
     }
 
     //save workflow
     debug!("serializing and formatting updated workflow document");
-    let mut yaml = serde_saphyr::to_string(&CWLDocument::Workflow(workflow)).into_diagnostic()?;
-    yaml = format_cwl(&yaml).map_err(|e| miette!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename).into_diagnostic()?;
-    let mut file = fs::File::create(&filename).into_diagnostic()?;
-    file.write_all(yaml.as_bytes()).into_diagnostic()?;
+    let yaml = save_workflow(&CWLDocument::Workflow(workflow), Path::new(&filename))?;
     info!("✔️  Updated Workflow {filename}!");
     print_diff(&old, &yaml);
 
@@ -159,7 +166,10 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
             _ => miette::bail!("Invalid input path"),
         };
         if to_parts.len() != 2 {
-            miette::bail!("Invalid 'to' format for input connection: {input} to:{}", args.to);
+            miette::bail!(
+                "Invalid 'to' format for input connection: {input} to:{}",
+                args.to
+            );
         }
 
         workflow::remove_workflow_input_connection(
@@ -176,7 +186,10 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
                 args.to
             )
         })?;
-        info!("➖ Removed connection from inputs.{input} to {} in workflow", args.to);
+        info!(
+            "➖ Removed connection from inputs.{input} to {} in workflow",
+            args.to
+        );
     } else if to_parts[0] == "@outputs" || to_parts.len() == 1 {
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
@@ -230,15 +243,15 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
                 args.to
             )
         })?;
-        info!("➖ Removed connection from {} to {} in workflow!", args.from, args.to);
+        info!(
+            "➖ Removed connection from {} to {} in workflow!",
+            args.from, args.to
+        );
     }
 
     debug!("serializing and formatting updated workflow document");
-    let mut yaml = serde_saphyr::to_string(&CWLDocument::Workflow(workflow)).into_diagnostic()?;
-    yaml = format_cwl(&yaml).map_err(|e| miette!("Could not format yaml: {e}"))?;
     let old = fs::read_to_string(&filename).into_diagnostic()?;
-    let mut file = fs::File::create(&filename).into_diagnostic()?;
-    file.write_all(yaml.as_bytes()).into_diagnostic()?;
+    let yaml = save_workflow(&CWLDocument::Workflow(workflow), Path::new(&filename))?;
     info!("✔️  Updated Workflow {filename}!");
     print_diff(&old, &yaml);
 

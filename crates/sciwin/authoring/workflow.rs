@@ -30,9 +30,6 @@ pub fn create_workflow(
     };
     let wf = CWLDocument::Workflow(wf);
 
-    let mut yaml = serde_saphyr::to_string(&wf)?;
-    yaml = format_cwl(&yaml).context("Could not format yaml")?;
-
     let base_dir = output_dir.unwrap_or_else(|| Path::new(paths::WORKFLOWS_FOLDER).join(name));
     let path = paths::get_qualified_filename_by_name(name, base_dir);
 
@@ -45,13 +42,24 @@ pub fn create_workflow(
         fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create directories for {}", parent.display()))?;
     }
-    fs::write(&path, &yaml).with_context(|| {
+    let yaml = save_workflow(&wf, &path).with_context(|| {
         format!(
             "❌ Could not create workflow {name} at {}",
             path.to_string_lossy(),
         )
     })?;
     Ok((path, yaml))
+}
+
+/// Saves Workflow to disk formatted
+///
+/// # Errors
+/// If serialization, formatting or IO fails
+pub fn save_workflow(workflow: &CWLDocument, path: &Path) -> AuthoringResult<String> {
+    let raw = serde_saphyr::to_string(&workflow)?;
+    let formatted = format_cwl(&raw)?;
+    std::fs::write(path, &formatted)?;
+    Ok(formatted)
 }
 
 /// One end of a workflow connection: the CWL document at `filename`, registered as a step
