@@ -15,7 +15,7 @@ pub struct SaveArgs {
     pub name: String,
 }
 
-pub fn save_workflow(args: &SaveArgs) -> miette::Result<()> {
+pub fn stage_and_commit_workflow(args: &SaveArgs) -> miette::Result<()> {
     //get workflow
     let filename = get_qualified_filename_by_name(&args.name, Path::new(WORKFLOWS_FOLDER).join(&args.name));
     debug!("staging {filename:?} for commit");

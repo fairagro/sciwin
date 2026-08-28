@@ -1485,7 +1485,7 @@ dependencies = [
 
 [[package]]
 name = "commonwl"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -1905,7 +1905,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_core"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1968,7 +1968,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_engine_storage"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1988,7 +1988,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -1998,7 +1998,7 @@ dependencies = [
 
 [[package]]
 name = "cwl_salad_derive"
-version = "0.13.1"
+version = "0.13.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3365,7 +3365,7 @@ dependencies = [
  "tokio",
  "tower-service",
  "tracing",
- "windows-registry 0.6.1",
+ "windows-registry",
 ]
 
 [[package]]
@@ -3395,7 +3395,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -4488,7 +4488,7 @@ checksum = "0afd5c28e4a399c57ee2bc3accd40c7b671fdc7b6537499f14e95b265af7d7e0"
 dependencies = [
  "oxilangtag",
  "oxiri",
- "rand 0.9.5",
+ "rand 0.8.7",
  "thiserror 2.0.20",
 ]
 
@@ -5174,6 +5174,7 @@ version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a"
 dependencies = [
+ "libc",
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
 ]
@@ -5383,7 +5384,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "rustix",
- "windows 0.62.2",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -8249,7 +8250,7 @@ dependencies = [
  "uv-fs",
  "uv-static",
  "windows 0.61.3",
- "windows-registry 0.5.3",
+ "windows-registry",
 ]
 
 [[package]]
@@ -8780,17 +8781,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-registry"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
-dependencies = [
- "windows-link 0.2.1",
- "windows-result 0.4.1",
- "windows-strings 0.5.1",
-]
-
-[[package]]
 name = "windows-result"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9297,4 +9287,4 @@ dependencies = [
 
 [[patch.unused]]
 name = "cwl-lsp"
-version = "0.13.1"
+version = "0.13.2"

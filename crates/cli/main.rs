@@ -5,7 +5,7 @@ use s4n::{
     commands::{
         check_git_config, connect_workflow_nodes, disconnect_workflow_nodes, handle_create_command,
         handle_execute_commands, handle_init_command, handle_list_command, handle_remove_command,
-        install_package, remove_package, save_workflow, visualize,
+        install_package, remove_package, stage_and_commit_workflow, visualize,
     },
     logger::init_logger,
 };
@@ -154,8 +154,7 @@ async fn run() -> miette::Result<()> {
         Commands::Connect(args) => connect_workflow_nodes(args),
         Commands::Disconnect(args) => disconnect_workflow_nodes(args),
         Commands::Visualize(args) => visualize(&args.filename, &args.renderer, args.no_defaults),
-
-        Commands::Save(name) => save_workflow(name),
+        Commands::Save(name) => stage_and_commit_workflow(name),
     }
 }
 
@@ -171,13 +170,17 @@ mod tests {
     fn injects_run_for_a_bare_file() {
         let out =
             default_to_execute_run(to_strings(&["s4n", "execute", "wf.cwl", "in.yml"]).into_iter());
-        assert_eq!(out, to_strings(&["s4n", "execute", "run", "wf.cwl", "in.yml"]));
+        assert_eq!(
+            out,
+            to_strings(&["s4n", "execute", "run", "wf.cwl", "in.yml"])
+        );
     }
 
     #[test]
     fn leaves_explicit_subcommands_alone() {
         for subcommand in ["run", "r", "reana", "make-template", "help"] {
-            let out = default_to_execute_run(to_strings(&["s4n", "execute", subcommand]).into_iter());
+            let out =
+                default_to_execute_run(to_strings(&["s4n", "execute", subcommand]).into_iter());
             assert_eq!(out, to_strings(&["s4n", "execute", subcommand]));
         }
     }
@@ -198,9 +201,13 @@ mod tests {
 
     #[test]
     fn injects_run_after_a_leading_global_flag() {
-        let out =
-            default_to_execute_run(to_strings(&["s4n", "--debug", "execute", "wf.cwl"]).into_iter());
-        assert_eq!(out, to_strings(&["s4n", "--debug", "execute", "run", "wf.cwl"]));
+        let out = default_to_execute_run(
+            to_strings(&["s4n", "--debug", "execute", "wf.cwl"]).into_iter(),
+        );
+        assert_eq!(
+            out,
+            to_strings(&["s4n", "--debug", "execute", "run", "wf.cwl"])
+        );
     }
 
     #[test]
