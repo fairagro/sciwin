@@ -129,7 +129,14 @@ pub fn add_workflow_input_connection(
         .iter()
         .find(|i| i.id.as_deref() == Some(from_input))
     {
-        if existing.r#type != to_slot.r#type {
+        // A mismatch is also fine when `to` already scatters over this slot
+        // and the existing input is an array of the slot's scalar type --
+        // scatter iterates that array element by element, so what the step
+        // actually receives per iteration is the declared scalar type.
+        let scattered_match = existing.r#type != to_slot.r#type
+            && step_scatters_over(workflow, to.name, to.slot_id)
+            && is_scattered_array_of(&existing.r#type, &to_slot.r#type);
+        if existing.r#type != to_slot.r#type && !scattered_match {
             return Err(AuthoringError::IncompatibleType {
                 message: format!(
                     "input {from_input} already has type {:?}, but {}/{} expects {:?}",
@@ -389,7 +396,7 @@ pub fn check_slot_compatibility(
         .all(|p| accepted.iter().any(|a| single_type_matches(p, a)))
 }
 
-/// Whether `output` can feed `input` if the step scatters over that slot.
+pub fn check_slot_compatibility_scattered(
     input: &OneOrMany<InputType>,
     output: &CommandOutputParameterType,
 ) -> bool {
@@ -410,8 +417,92 @@ pub fn check_slot_compatibility(
     })
 }
 
+/// Whether `step_id` scatters over `port` specifically.
+pub fn step_scatters_over(workflow: &Workflow, step_id: &str, port: &str) -> bool {
+    workflow
+        .steps
+        .iter()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .and_then(|s| s.scatter.as_ref())
+        .is_some_and(|scatter| scatter.as_many().iter().any(|p| p == port))
+}
+
+pub fn step_is_scattered(workflow: &Workflow, step_id: &str) -> bool {
+    workflow
+        .steps
+        .iter()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .is_some_and(|s| {
+            s.scatter
+                .as_ref()
+                .is_some_and(|sc| !sc.as_many().is_empty())
+        })
+}
+
+fn is_scattered_array_of(
+    array_type: &OneOrMany<InputType>,
+    scalar_type: &OneOrMany<InputType>,
+) -> bool {
+    array_type.as_many().iter().all(|t| match t {
+        InputType::InputSchema(schema) => match schema.as_ref() {
+            InputSchema::Array(arr) => arr.items == *scalar_type,
+            _ => false,
+        },
+        _ => false,
+    })
+}
+
+pub enum ScatterProducerFit {
+    Exact,
+    NeedsPickValueToDropNulls,
+    Incompatible,
+}
+
+/// Whether a scattered step's per-iteration `output` can feed an array-typed
+/// `input`.
+pub fn check_slot_compatibility_scattered_producer(
+    input: &OneOrMany<InputType>,
+    output: &CommandOutputParameterType,
+) -> ScatterProducerFit {
+    let produced = match output {
+        CommandOutputParameterType::Stdout | CommandOutputParameterType::Stderr => {
+            vec![CommandOutputType::CWLType(CWLType::File)]
+        }
+        CommandOutputParameterType::CommandOutputType(types) => types.as_many(),
+    };
+    let non_null: Vec<&CommandOutputType> = produced
+        .iter()
+        .filter(|p| !matches!(p, CommandOutputType::CWLType(CWLType::Null)))
+        .collect();
+    let accepted: Vec<InputType> = input.as_many();
+
+    let fits = |items: &[&CommandOutputType]| {
+        accepted.iter().any(|a| match a {
+            InputType::InputSchema(schema) => match schema.as_ref() {
+                InputSchema::Array(arr) => {
+                    let item_types = arr.items.as_many();
+                    items
+                        .iter()
+                        .all(|p| item_types.iter().any(|it| single_type_matches(p, it)))
+                }
+                _ => false,
+            },
+            _ => false,
+        })
+    };
+
+    let all: Vec<&CommandOutputType> = produced.iter().collect();
+    if fits(&all) {
+        ScatterProducerFit::Exact
+    } else if non_null.len() != produced.len() && fits(&non_null) {
+        ScatterProducerFit::NeedsPickValueToDropNulls
+    } else {
+        ScatterProducerFit::Incompatible
+    }
+}
+
 /// Whether every alternative of `input` is itself array-shaped, e.g. a
-/// declared `File[]` input 
+/// declared `File[]` input
 pub fn input_type_is_array(input: &OneOrMany<InputType>) -> bool {
     input
         .as_many()
