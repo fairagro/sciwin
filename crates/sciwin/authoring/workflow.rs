@@ -120,10 +120,11 @@ pub fn add_workflow_input_connection(
 ) -> AuthoringResult<()> {
     let to_cwl = load_cwl_file(to.filename, true)?;
     let to_inputs = to_cwl.get_inputs();
+    // `None` when the tool doesn't declare this slot -- a synthetic input
+    // added by `add_step_input_slot_mut`, untyped (`Any`) rather than missing.
     let to_slot = to_inputs
         .iter()
-        .find(|i| i.id.as_deref() == Some(to.slot_id))
-        .expect("No slot");
+        .find(|i| i.id.as_deref() == Some(to.slot_id));
 
     //register input
     if let Some(existing) = workflow
@@ -131,27 +132,31 @@ pub fn add_workflow_input_connection(
         .iter()
         .find(|i| i.id.as_deref() == Some(from_input))
     {
-        // A mismatch is also fine when `to` already scatters over this slot
-        // and the existing input is an array of the slot's scalar type --
-        // scatter iterates that array element by element, so what the step
-        // actually receives per iteration is the declared scalar type.
-        let scattered_match = existing.r#type != to_slot.r#type
-            && step_scatters_over(workflow, to.name, to.slot_id)
-            && is_scattered_array_of(&existing.r#type, &to_slot.r#type);
-        if existing.r#type != to_slot.r#type && !scattered_match {
-            return Err(AuthoringError::IncompatibleType {
-                message: format!(
-                    "input {from_input} already has type {:?}, but {}/{} expects {:?}",
-                    existing.r#type, to.name, to.slot_id, to_slot.r#type
-                ),
-            });
+        // Nothing to check against an untyped slot -- any existing input,
+        // whatever its type, is compatible with `Any`.
+        if let Some(to_slot) = to_slot {
+            // A mismatch is also fine when `to` already scatters over this slot
+            // and the existing input is an array of the slot's scalar type --
+            // scatter iterates that array element by element, so what the step
+            // actually receives per iteration is the declared scalar type.
+            let scattered_match = existing.r#type != to_slot.r#type
+                && step_scatters_over(workflow, to.name, to.slot_id)
+                && is_scattered_array_of(&existing.r#type, &to_slot.r#type);
+            if existing.r#type != to_slot.r#type && !scattered_match {
+                return Err(AuthoringError::IncompatibleType {
+                    message: format!(
+                        "input {from_input} already has type {:?}, but {}/{} expects {:?}",
+                        existing.r#type, to.name, to.slot_id, to_slot.r#type
+                    ),
+                });
+            }
         }
     } else {
-        workflow.add_workflow_input_mut(
-            from_input,
-            to_slot.r#type.clone(),
-            to_slot.default.clone(),
-        );
+        let (input_type, default) = match to_slot {
+            Some(slot) => (slot.r#type.clone(), slot.default.clone()),
+            None => (OneOrMany::One(InputType::CWLType(CWLType::Any)), None),
+        };
+        workflow.add_workflow_input_mut(from_input, input_type, default);
     }
 
     add_workflow_step(workflow, workflow_path, to.name, to.filename, &to_cwl)?;
@@ -1047,6 +1052,54 @@ mod tests {
         assert_eq!(
             step.r#in[0].source.as_ref().unwrap().as_many(),
             vec!["workflow_input".to_string()]
+        );
+    }
+
+    #[test]
+    fn connect_workflow_input_to_a_slot_the_tool_does_not_declare() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+        write_tool(&tool_path, "message", "out");
+
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            &workflow_path,
+            "tool",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+        add_step_input_slot_mut(&mut wf, "tool", "gate").unwrap();
+
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "gate_input",
+            WorkflowSlot::new(&tool_path, "tool", "gate"),
+        )
+        .unwrap();
+
+        let input = wf
+            .inputs
+            .iter()
+            .find(|i| i.id.as_deref() == Some("gate_input"))
+            .expect("a new workflow input must be registered");
+        assert_eq!(
+            input.r#type,
+            OneOrMany::One(InputType::CWLType(CWLType::Any)),
+            "an undeclared slot's input gets CWLType::Any, not a guessed type"
+        );
+        let step = wf.get_step("tool").unwrap();
+        let gate = step
+            .r#in
+            .iter()
+            .find(|i| i.id.as_deref() == Some("gate"))
+            .unwrap();
+        assert_eq!(
+            gate.source.as_ref().unwrap().as_many(),
+            vec!["gate_input".to_string()]
         );
     }
 
