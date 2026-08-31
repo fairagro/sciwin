@@ -2,13 +2,15 @@ use crate::authoring::{AuthoringError, AuthoringResult, paths};
 use anyhow::Context;
 use commonwl::{
     OneOrMany,
-    documents::{CWLDocument, Workflow},
+    documents::{CWLDocument, ScatterMethod, Workflow},
     format::format_cwl,
-    inputs::{InputSchema, InputType},
+    inputs::{InputSchema, InputType, WorkflowStepInput},
     load_cwl_file,
     outputs::{
-        CommandOutputParameterType, CommandOutputSchema, CommandOutputType, PickValueMethod,
+        CommandOutputParameterType, CommandOutputSchema, CommandOutputType, LinkMergeMethod,
+        PickValueMethod,
     },
+    requirements::{MultipleInputFeatureRequirement, WorkflowRequirements},
     types::CWLType,
 };
 use std::{
@@ -575,6 +577,289 @@ pub fn set_step_pick_value_mut(
     Ok(())
 }
 
+/// Clears a `pickValue` strategy on `step_id`'s `port` input.
+/// # Errors
+/// If no step with `step_id`, or no input `port` on it, exists
+pub fn clear_step_pick_value_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    port: &str,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    let input = step
+        .r#in
+        .iter_mut()
+        .find(|i| i.id.as_deref() == Some(port))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowInput {
+            id: port.to_string(),
+            path: format!("step {step_id}"),
+        })?;
+    input.pick_value = None;
+    Ok(())
+}
+
+/// Sets or clears the `valueFrom` expression on `step_id`'s `port` input.
+/// # Errors
+/// If no step with `step_id`, or no input `port` on it, exists
+pub fn set_step_input_value_from_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    port: &str,
+    value_from: Option<String>,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    let input = step
+        .r#in
+        .iter_mut()
+        .find(|i| i.id.as_deref() == Some(port))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowInput {
+            id: port.to_string(),
+            path: format!("step {step_id}"),
+        })?;
+    input.value_from = value_from;
+    Ok(())
+}
+
+/// Removes `step_id`'s `port` from its `scatter` list. Collapses `scatter`
+/// to `None` once empty, rather than round-tripping `scatter: []`.
+/// # Errors
+/// If no step with `step_id` exists
+pub fn remove_step_from_scatter_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    port: &str,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    let remaining: Vec<String> = step
+        .scatter
+        .take()
+        .map(OneOrMany::into_many)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|p| p != port)
+        .collect();
+    step.scatter = match remaining.len() {
+        0 => None,
+        1 => Some(OneOrMany::One(remaining.into_iter().next().unwrap())),
+        _ => Some(OneOrMany::Many(remaining)),
+    };
+    Ok(())
+}
+
+/// Sets or clears `step_id`'s `scatterMethod`.
+/// # Errors
+/// If no step with `step_id` exists
+pub fn set_step_scatter_method_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    method: Option<ScatterMethod>,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    step.scatter_method = method;
+    Ok(())
+}
+
+/// Sets or clears `step_id`'s `when:` guard expression.
+/// # Errors
+/// If no step with `step_id` exists
+pub fn set_step_when_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    expression: Option<String>,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    step.when = expression;
+    Ok(())
+}
+
+/// Renames a step, rewriting every `"{old_id}/port"` reference elsewhere
+/// (other steps' `source`, every `outputSource`). Caller checks for id
+/// collisions; this only checks that `old_id` exists.
+/// # Errors
+/// If no step with `old_id` exists
+pub fn rename_workflow_step_mut(
+    workflow: &mut Workflow,
+    old_id: &str,
+    new_id: &str,
+) -> AuthoringResult<()> {
+    if old_id == new_id {
+        return Ok(());
+    }
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(old_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: old_id.to_string(),
+        })?;
+    step.id = Some(new_id.to_string());
+
+    let old_prefix = format!("{old_id}/");
+    let new_prefix = format!("{new_id}/");
+    let rewrite = |s: String| {
+        if let Some(rest) = s.strip_prefix(&old_prefix) {
+            format!("{new_prefix}{rest}")
+        } else {
+            s
+        }
+    };
+
+    for step in &mut workflow.steps {
+        for wsip in &mut step.r#in {
+            wsip.source = wsip.source.take().map(|s| s.map(rewrite));
+        }
+    }
+    for output in &mut workflow.outputs {
+        output.output_source = output.output_source.take().map(|s| s.map(rewrite));
+    }
+
+    Ok(())
+}
+
+/// Adds a source-less input slot to a step, e.g. a boolean read only by its
+/// `when:` expression, not declared by the underlying tool. `WorkflowStepInput`
+/// carries no type field of its own -- CWL infers it from whatever gets wired
+/// in later -- so there's nothing to pick here beyond a name.
+/// # Errors
+/// If no step with `step_id` exists, or it already has a slot named `port`
+pub fn add_step_input_slot_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    port: &str,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    if step.r#in.iter().any(|i| i.id.as_deref() == Some(port)) {
+        return Err(AuthoringError::IncompatibleType {
+            message: format!("step {step_id} already has an input named {port}"),
+        });
+    }
+    step.r#in
+        .push(WorkflowStepInput::builder().id(port.to_owned()).build());
+    Ok(())
+}
+
+/// Sets or clears the `linkMerge` method on `step_id`'s `port` input.
+/// # Errors
+/// If no step with `step_id`, or no input `port` on it, exists
+pub fn set_step_input_link_merge_mut(
+    workflow: &mut Workflow,
+    step_id: &str,
+    port: &str,
+    method: Option<LinkMergeMethod>,
+) -> AuthoringResult<()> {
+    let step = workflow
+        .steps
+        .iter_mut()
+        .find(|s| s.id.as_deref() == Some(step_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
+            id: step_id.to_string(),
+        })?;
+    let input = step
+        .r#in
+        .iter_mut()
+        .find(|i| i.id.as_deref() == Some(port))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowInput {
+            id: port.to_string(),
+            path: format!("step {step_id}"),
+        })?;
+    input.link_merge = method;
+    Ok(())
+}
+
+/// Sets or clears `pickValue` on a workflow output.
+/// # Errors
+/// If no output with `output_id` exists
+pub fn set_output_pick_value_mut(
+    workflow: &mut Workflow,
+    output_id: &str,
+    method: Option<PickValueMethod>,
+) -> AuthoringResult<()> {
+    let output = workflow
+        .outputs
+        .iter_mut()
+        .find(|o| o.id.as_deref() == Some(output_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowOutput {
+            id: output_id.to_string(),
+            path: "workflow".to_string(),
+        })?;
+    output.pick_value = method;
+    Ok(())
+}
+
+/// Sets or clears `linkMerge` on a workflow output.
+/// # Errors
+/// If no output with `output_id` exists
+pub fn set_output_link_merge_mut(
+    workflow: &mut Workflow,
+    output_id: &str,
+    method: Option<LinkMergeMethod>,
+) -> AuthoringResult<()> {
+    let output = workflow
+        .outputs
+        .iter_mut()
+        .find(|o| o.id.as_deref() == Some(output_id))
+        .ok_or_else(|| AuthoringError::InvalidWorkflowOutput {
+            id: output_id.to_string(),
+            path: "workflow".to_string(),
+        })?;
+    output.link_merge = method;
+    Ok(())
+}
+
+/// Declares `MultipleInputFeatureRequirement` once any step input's `source`
+/// or output's `outputSource` lists more than one entry -- required by spec
+/// whenever that happens, so every mutator that can produce it calls this
+/// before saving. Never removes it once present.
+pub fn ensure_multiple_input_feature_requirement_mut(workflow: &mut Workflow) {
+    let multi = |s: &Option<OneOrMany<String>>| s.as_ref().is_some_and(|s| s.as_many().len() > 1);
+    let needed = workflow
+        .steps
+        .iter()
+        .any(|s| s.r#in.iter().any(|i| multi(&i.source)))
+        || workflow.outputs.iter().any(|o| multi(&o.output_source));
+    if needed {
+        workflow.append_requirement_mut(WorkflowRequirements::MultipleInputFeatureRequirement(
+            MultipleInputFeatureRequirement {},
+        ));
+    }
+}
+
 fn single_type_matches(output: &CommandOutputType, input: &InputType) -> bool {
     match (output, input) {
         (CommandOutputType::CWLType(o), InputType::CWLType(i)) => o == i,
@@ -1047,5 +1332,257 @@ mod tests {
 
         let step = wf.get_step("tool").unwrap();
         assert!(step.r#in.is_empty());
+    }
+
+    #[test]
+    fn rename_step_rewrites_sources_and_output_source() {
+        let dir = tempdir().unwrap();
+        let producer = dir.path().join("producer.cwl");
+        let consumer = dir.path().join("consumer.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+        write_tool(&producer, "dummy", "value");
+        write_tool(&consumer, "value", "result");
+
+        let mut wf = Workflow::default();
+        add_workflow_step_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&producer, "producer", "value"),
+            WorkflowSlot::new(&consumer, "consumer", "value"),
+        )
+        .unwrap();
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&consumer, "consumer", "result"),
+            "final",
+        )
+        .unwrap();
+
+        rename_workflow_step_mut(&mut wf, "producer", "renamed").unwrap();
+
+        assert!(wf.has_step("renamed"));
+        assert!(!wf.has_step("producer"));
+        let step = wf.get_step("consumer").unwrap();
+        assert_eq!(
+            step.r#in[0].source.as_ref().unwrap().as_one(),
+            "renamed/value"
+        );
+
+        rename_workflow_step_mut(&mut wf, "consumer", "sink").unwrap();
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final"))
+            .unwrap();
+        assert_eq!(
+            output.output_source.as_ref().unwrap().as_one(),
+            "sink/result"
+        );
+    }
+
+    #[test]
+    fn rename_step_errors_on_missing_step() {
+        let mut wf = Workflow::default();
+        assert!(rename_workflow_step_mut(&mut wf, "nope", "new").is_err());
+    }
+
+    #[test]
+    fn scatter_add_then_remove_collapses_to_none() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        write_tool(&tool_path, "in", "out");
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            dir.path().join("workflow.cwl"),
+            "step",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+
+        add_step_to_scatter_mut(&mut wf, "step", "in").unwrap();
+        assert!(step_scatters_over(&wf, "step", "in"));
+
+        remove_step_from_scatter_mut(&mut wf, "step", "in").unwrap();
+        assert_eq!(wf.get_step("step").unwrap().scatter, None);
+    }
+
+    #[test]
+    fn set_and_clear_when() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        write_tool(&tool_path, "in", "out");
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            dir.path().join("workflow.cwl"),
+            "step",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+
+        set_step_when_mut(&mut wf, "step", Some("$(inputs.x != null)".to_string())).unwrap();
+        assert_eq!(
+            wf.get_step("step").unwrap().when.as_deref(),
+            Some("$(inputs.x != null)")
+        );
+
+        set_step_when_mut(&mut wf, "step", None).unwrap();
+        assert_eq!(wf.get_step("step").unwrap().when, None);
+    }
+
+    #[test]
+    fn add_step_input_slot_refuses_duplicate_name() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        write_tool(&tool_path, "in", "out");
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            dir.path().join("workflow.cwl"),
+            "step",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+
+        add_step_input_slot_mut(&mut wf, "step", "gate").unwrap();
+        let slot = wf.get_step("step").unwrap();
+        assert!(slot.r#in.iter().any(|i| i.id.as_deref() == Some("gate")));
+
+        assert!(add_step_input_slot_mut(&mut wf, "step", "gate").is_err());
+    }
+
+    #[test]
+    fn value_from_and_pick_value_set_and_clear() {
+        let dir = tempdir().unwrap();
+        let producer = dir.path().join("producer.cwl");
+        let consumer = dir.path().join("consumer.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+        write_tool(&producer, "dummy", "value");
+        write_tool(&consumer, "value", "result");
+
+        let mut wf = Workflow::default();
+        add_workflow_step_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&producer, "producer", "value"),
+            WorkflowSlot::new(&consumer, "consumer", "value"),
+        )
+        .unwrap();
+
+        set_step_input_value_from_mut(&mut wf, "consumer", "value", Some("$(self)".to_string()))
+            .unwrap();
+        assert_eq!(
+            wf.get_step("consumer").unwrap().r#in[0]
+                .value_from
+                .as_deref(),
+            Some("$(self)")
+        );
+        set_step_input_value_from_mut(&mut wf, "consumer", "value", None).unwrap();
+        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].value_from, None);
+
+        set_step_pick_value_mut(&mut wf, "consumer", "value", PickValueMethod::AllNonNull).unwrap();
+        assert_eq!(
+            wf.get_step("consumer").unwrap().r#in[0].pick_value,
+            Some(PickValueMethod::AllNonNull)
+        );
+        clear_step_pick_value_mut(&mut wf, "consumer", "value").unwrap();
+        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].pick_value, None);
+    }
+
+    #[test]
+    fn link_merge_set_and_clear() {
+        let dir = tempdir().unwrap();
+        let producer = dir.path().join("producer.cwl");
+        let consumer = dir.path().join("consumer.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+        write_tool(&producer, "dummy", "value");
+        write_tool(&consumer, "value", "result");
+        let mut wf = Workflow::default();
+        add_workflow_step_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&producer, "producer", "value"),
+            WorkflowSlot::new(&consumer, "consumer", "value"),
+        )
+        .unwrap();
+
+        set_step_input_link_merge_mut(
+            &mut wf,
+            "consumer",
+            "value",
+            Some(LinkMergeMethod::MergeFlattened),
+        )
+        .unwrap();
+        assert_eq!(
+            wf.get_step("consumer").unwrap().r#in[0].link_merge,
+            Some(LinkMergeMethod::MergeFlattened)
+        );
+        set_step_input_link_merge_mut(&mut wf, "consumer", "value", None).unwrap();
+        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].link_merge, None);
+    }
+
+    #[test]
+    fn output_pick_value_and_link_merge_set_and_clear() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        write_tool(&tool_path, "in", "out");
+        let mut wf = Workflow::default();
+        add_workflow_output_connection(
+            &mut wf,
+            dir.path().join("workflow.cwl"),
+            WorkflowSlot::new(&tool_path, "tool", "out"),
+            "final",
+        )
+        .unwrap();
+
+        set_output_pick_value_mut(&mut wf, "final", Some(PickValueMethod::FirstNonNull)).unwrap();
+        set_output_link_merge_mut(&mut wf, "final", Some(LinkMergeMethod::MergeFlattened)).unwrap();
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final"))
+            .unwrap();
+        assert_eq!(output.pick_value, Some(PickValueMethod::FirstNonNull));
+        assert_eq!(output.link_merge, Some(LinkMergeMethod::MergeFlattened));
+
+        set_output_pick_value_mut(&mut wf, "final", None).unwrap();
+        set_output_link_merge_mut(&mut wf, "final", None).unwrap();
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final"))
+            .unwrap();
+        assert_eq!(output.pick_value, None);
+        assert_eq!(output.link_merge, None);
+    }
+
+    #[test]
+    fn ensure_multiple_input_feature_requirement_adds_it_only_when_needed() {
+        let mut wf = Workflow::default();
+        ensure_multiple_input_feature_requirement_mut(&mut wf);
+        assert!(!wf.has_requirement::<MultipleInputFeatureRequirement>());
+
+        wf.steps.push(
+            commonwl::documents::WorkflowStep::builder()
+                .id("s")
+                .run(commonwl::documents::StringOrDocument::String(
+                    "s.cwl".to_string(),
+                ))
+                .r#in(vec![
+                    WorkflowStepInput::builder()
+                        .id("x".to_string())
+                        .source(OneOrMany::Many(vec!["a".to_string(), "b".to_string()]))
+                        .build(),
+                ])
+                .out(vec![])
+                .build(),
+        );
+        ensure_multiple_input_feature_requirement_mut(&mut wf);
+        assert!(wf.has_requirement::<MultipleInputFeatureRequirement>());
     }
 }
