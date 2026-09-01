@@ -16,14 +16,18 @@ mod requirements;
 mod save;
 
 use crate::{
-    authoring::{AuthoringError, AuthoringResult, paths},
+    authoring::{AuthoringError, AuthoringResult, paths, workflow::save_workflow},
     repository::{self, Repository},
 };
+use anyhow::Context;
 use bon::Builder;
-use commonwl::{documents::CommandLineTool, engine::ContainerEngine};
+use commonwl::{
+    documents::{CWLDocument, CommandLineTool},
+    engine::ContainerEngine,
+};
 pub use requirements::ContainerInfo;
 use std::{
-    io,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -87,6 +91,43 @@ pub struct CreatedTool {
     pub document: CommandLineTool,
     /// `document` as formatted CWL YAML.
     pub yaml: String,
+}
+
+/// Creates a blank tool document named `name`.
+///
+/// Follows the same path scheme as [`crate::authoring::tool::create_tool`]: `output_dir` is
+/// the project folder to place it in; when absent, it falls back to a per-workflow folder
+/// under [`paths::WORKFLOWS_FOLDER`].
+pub fn create_blank_command_line_tool(
+    name: &str,
+    output_dir: Option<PathBuf>,
+    force: bool,
+) -> AuthoringResult<(PathBuf, String)> {
+    let clt = CommandLineTool {
+        cwl_version: Some("v1.2".to_string()),
+        ..Default::default()
+    };
+    let wf = CWLDocument::CommandLineTool(clt);
+
+    let base_dir = output_dir.unwrap_or_else(|| Path::new(paths::WORKFLOWS_FOLDER).join(name));
+    let path = paths::get_qualified_filename_by_name(name, base_dir);
+
+    //removes file first if exists and force is given
+    if force && path.exists() {
+        fs::remove_file(&path)?;
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directories for {}", parent.display()))?;
+    }
+    let yaml = save_workflow(&wf, &path).with_context(|| {
+        format!(
+            "❌ Could not create workflow {name} at {}",
+            path.to_string_lossy(),
+        )
+    })?;
+    Ok((path, yaml))
 }
 
 /// Builds a `CommandLineTool` from `options.command`, run against `project_root`.
