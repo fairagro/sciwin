@@ -104,7 +104,10 @@ rocrate = { path = "../ro-crate-lib" }
 ```
 Building from a directory where such a patch is in scope will then use the local sources instead of the published versions, and all affected repositories should be updated together.
 ## 💚 SciWIn-Studio
-SciWIn-Studio moved to its own repo: https://github.com/fairagro/sciwin_studio
+> [!NOTE]
+> SciWIn-Studio moved to its own repo: https://github.com/fairagro/sciwin_studio
+
+![](https://github.com/fairagro/sciwin_studio/raw/main/.github/studio.png)
 ## 💻 SciWIn-Client
 **SciWIn-Client** is a command-line tool designed to simplify the creation, recording, annotation, and execution of computational workflows. 
 
