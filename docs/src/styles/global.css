@@ -110,6 +110,19 @@ body {
   margin: 3rem 0;
 }
 
+/* Homepage: center the "Examples" and "Get started" section intros.
+   Starlight sets the heading itself to `display: inline` (so its anchor-link
+   icon sits right after the text) and wraps it in `.sl-heading-wrapper`, which
+   is the actual block box: centering the (inline) heading directly does nothing. */
+.sl-heading-wrapper:has(#see-it-on-real-workflows),
+.sl-heading-wrapper:has(#get-started) {
+  text-align: center;
+}
+.section-lede {
+  text-align: center;
+  color: var(--sl-color-gray-3);
+}
+
 /* Homepage: Examples, a thumb/body card, bordered, matching the design proposal */
 .examples-grid {
   display: grid;
@@ -123,13 +136,18 @@ body {
   }
 }
 .ex-card {
+  /* Starlight's markdown.css adds `margin-top` between any two non-inline
+     siblings inside .sl-markdown-content, not just direct children - it was
+     leaking onto the 2nd/3rd card here and offsetting them from the 1st. */
+  margin-top: 0;
   border: 1px solid var(--sl-color-hairline);
   border-radius: 0.75rem;
   overflow: hidden;
-  background: var(--sl-color-gray-6);
+  background: color-mix(in srgb, var(--color-accent-600) 16%, var(--sl-color-bg));
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
 }
 .ex-card .thumb {
   height: 9.5rem;
@@ -189,11 +207,13 @@ body {
   }
 }
 .gs-col {
+  margin-top: 0;
   padding: 1.75rem 1.85rem;
   min-width: 0;
+  height: 100%;
 }
 .gs-col.studio-col {
-  background: var(--sl-color-gray-6);
+  background: color-mix(in srgb, var(--color-accent-600) 16%, var(--sl-color-bg));
   border-top: 1px solid var(--sl-color-hairline);
 }
 @media (min-width: 50rem) {
