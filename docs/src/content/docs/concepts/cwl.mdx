@@ -1,0 +1,87 @@
+---
+title: CWL (Common Workflow Language)
+sidebar:
+  order: 2
+---
+
+The [Common Workflow Language](https://www.commonwl.org/) (CWL) is an open standard for describing command-line tools and the workflows that connect them, in a form any CWL-compliant runner can execute, not only SciWIn's own. It's the file format every `s4n create`, `s4n connect`, and SciWIn-Studio action ultimately writes to disk.
+
+## Why a standard file format instead of a script
+
+A CWL document doesn't just say "run this command" — it declares, in a form a machine can check, everything a script normally leaves implicit: what the tool's inputs and outputs are, what type each one is, what software environment the command needs, and, for a workflow, exactly how each step's inputs are wired to another step's outputs. See [Concepts: Why not just a script?](../concepts#why-not-just-a-script) for the reasoning; this page is about what's actually inside the file.
+
+## The two document types
+
+CWL documents come in two `class` values that matter for `s4n`:
+
+- **`CommandLineTool`** describes a single command: one program, its arguments, its inputs, and its outputs. This is what `s4n create` generates for you by watching a command run.
+- **`Workflow`** describes a directed acyclic graph (DAG) of steps, each one running a `CommandLineTool` (or another `Workflow`), wired together by connecting one step's output to another's input, or to the workflow's own top-level inputs/outputs (`@inputs`/`@outputs` in `s4n connect`). This is what `s4n create --name` and `s4n connect` build up.
+
+## Anatomy of a CommandLineTool
+
+Here's roughly what `s4n create echo "Hello World" \> greeting.txt` would generate, annotated:
+
+```yaml title="echo.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2       # which version of the CWL spec this file follows
+class: CommandLineTool  # a single command, as opposed to a Workflow
+
+baseCommand: echo        # the program to run
+
+inputs:
+- id: hello_world
+  type: string
+  default: Hello World
+  inputBinding:
+    position: 1          # goes right after `echo` on the command line
+
+outputs:
+- id: greeting
+  type: File
+  outputBinding:
+    glob: greeting.txt   # after running, look for this file and call it `greeting`
+
+stdout: greeting.txt
+```
+
+Every field here answers a question a shell script leaves to memory or a README: what can I change (`inputs`), what do I get back (`outputs`), and what exactly runs (`baseCommand`). A [container](container) requirement can be attached the same way, so the environment the command needs travels with the description too.
+
+## Anatomy of a Workflow
+
+A `Workflow` document contains no commands of its own — it references `CommandLineTool` files as `steps` and describes how data flows between them:
+
+```yaml title="echo-cat.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: Workflow
+
+inputs:
+- id: message
+  type: string
+
+outputs: []
+
+steps:
+- id: echo
+  in:
+    hello_world: message         # workflow input -> step input
+  run: '../echo/echo.cwl'
+  out: [greeting]
+- id: cat
+  in:
+    greeting_txt: echo/greeting  # one step's output -> the next step's input
+  run: '../cat/cat.cwl'
+  out: []
+```
+
+This is exactly the graph [`s4n connect`](../reference/connect) builds one edge at a time — see [Workflow creation](../examples/workflow-creation) for the full walkthrough.
+
+## How it fits into SciWIn
+
+- **`s4n create`** authors `CommandLineTool` (and blank `Workflow`) files by observing a command's file inputs and outputs — see [Architecture](architecture) for which crate does the parsing.
+- **`s4n connect`** edits a `Workflow` file's `steps`/`in`/`out` to wire tools together.
+- **`s4n execute`** runs a `CommandLineTool` or `Workflow` file, either with SciWIn's own engine or against a remote backend — the CWL document is identical either way, because that portability is the entire point of the standard.
+
+CWL is deliberately not SciWIn-specific: the same `.cwl` file that `s4n execute` runs will also run under [`cwltool`](https://github.com/common-workflow-language/cwltool), [REANA](https://reanahub.io), or any other conformant runner.

@@ -1,7 +1,7 @@
 ---
 title: Architecture
 sidebar:
-  order: 2
+  order: 4
 ---
 
 import Mermaid from "../../../components/Mermaid.astro";
@@ -29,12 +29,12 @@ SciWIn-Client (`s4n`) and SciWIn-Studio are two front ends over the same shared 
 
 - **`sciwin`** is the shared core: authoring CWL `CommandLineTool`/`Workflow` files, running them, and building provenance graphs. Neither front end duplicates this logic.
 - **`commonwl`** parses CWL documents and provides the execution engine (local, Docker, and TES backends) behind `s4n execute`.
-- **`rocrate`** reads, writes, and validates [RO-Crates](https://www.researchobject.org/ro-crate/), including the Provenance Run Crates `s4n execute run --rocrate` produces — see [Provenance & Publishing](provenance) for what those actually contain.
+- **`rocrate`** reads, writes, and validates [RO-Crates](rocrate), including the Provenance Run Crates `s4n execute run --rocrate` produces — see [Provenance & Publishing](provenance) for what those actually contain.
 - **`reana`** is the client used when execution targets a remote [REANA](https://reanahub.io) server instead of running locally. A compatibility layer for tools that only carry a `Dockerfile` exists in the `sciwin` crate — see [Provenance & Publishing](provenance#remote-execution-specifics) — but isn't wired into execution yet.
 
 ## Automatic container resolution
 
-For a Python or R tool, `s4n create --auto-container` can skip writing a Dockerfile entirely. It reads the project's own dependency file, resolves those dependencies against a FAIRagro-run registry, and attaches whichever pre-built image satisfies them, picking the smallest match.
+For a Python or R tool, `s4n create --auto-container` can skip writing a [Dockerfile](container) entirely. It reads the project's own dependency file, resolves those dependencies against a FAIRagro-run registry, and attaches whichever pre-built image satisfies them, picking the smallest match.
 
 <Mermaid code={`flowchart LR
     Deps["requirements.txt /<br/>pyproject.toml / DESCRIPTION"]

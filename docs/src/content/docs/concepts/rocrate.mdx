@@ -1,0 +1,33 @@
+---
+title: RO-Crate
+sidebar:
+  order: 5
+---
+
+[RO-Crate](https://www.researchobject.org/ro-crate/) (Research Object Crate) is a lightweight community standard for packaging a set of files together with one metadata file, `ro-crate-metadata.json`, that describes what each file is, who or what produced it, and how the files relate to each other. Think of it as a folder that documents itself: open it without any prior context, and the metadata file tells you — and any RO-Crate-aware tool — what you're looking at.
+
+## Why not just a folder with a README
+
+A README is prose, meant for a human, saying whatever its author remembered to write. RO-Crate's metadata file is JSON-LD built on [schema.org](https://schema.org) vocabulary, so a machine can answer the same questions a human would ask: which file is the actual workflow, which are inputs, who authored this, what license does it carry, what tool (and version) produced that particular output file. That's what lets a repository, a search index, or another program work with the crate's contents automatically, not only a person reading carefully.
+
+## What's inside
+
+Every RO-Crate has, at minimum:
+
+- A root `Dataset` entity representing the crate itself, with `hasPart` links to every file and directory it describes.
+- Contextual entities for anything worth naming — a `Person`, an `Organization`, a `SoftwareApplication` — that other entities can reference.
+
+## Profiles: RO-Crate is generic, on purpose
+
+Bare RO-Crate says nothing about *what kind* of thing is being packaged — that's the job of a profile layered on top, which adds required structure and vocabulary for a specific use case:
+
+- The **Workflow RO-Crate** profile packages a workflow and its documentation, so the crate itself is a citable, findable unit.
+- The **Workflow Run RO-Crate** family (Process Run, Workflow Run, Provenance Run) packages not the workflow definition but a *record of running it*: the artifacts used and produced, the commands that ran, the engine that orchestrated them. `s4n execute run --rocrate` produces a Provenance Run Crate; see [Provenance & Publishing](provenance) for exactly what that contains and how it relates to [PROV](https://www.w3.org/TR/prov-o/)'s concepts.
+
+## How SciWIn uses it
+
+The `rocrate` crate ([`ro-crate-lib`](https://github.com/fairagro/ro-crate-lib)) reads, writes, and validates RO-Crates on SciWIn's behalf — it's what `s4n execute run --rocrate` calls into. See [Architecture](architecture) for where it sits relative to the rest of the codebase.
+
+## Why a researcher should care
+
+An RO-Crate is what turns "I ran this once, here's a folder of outputs" into a self-describing package: something a repository like [WorkflowHub](https://workflowhub.eu/) can accept as a citable, FAIR-registered unit, a colleague can download and understand without asking you, and a script (or `s4n` itself) can inspect years later, without you there to explain what's in it.

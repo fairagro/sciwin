@@ -25,7 +25,7 @@ A blank workflow file can be created by using the `s4n create` command.
 Connections can be seen as the arrows in the above figure. Think about a sentence like 
 > The arrow points from the input slot called `speakers` to the calculation steps input.
 
-Therefore the command that created this arrow was `s4nconnect my-workflow --from @inputs/speakers --to calculation/speakers`.
+Therefore the command that created this arrow was `s4n connect my-workflow --from @inputs/speakers --to calculation/speakers`.
 
 In this simple example we will connect the `echo` command with the `cat` command. Use the following Commands to create the needed command line tool specifications.
 ```bash title="Command"

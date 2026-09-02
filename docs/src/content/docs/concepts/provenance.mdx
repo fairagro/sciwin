@@ -1,20 +1,20 @@
 ---
 title: Provenance & Publishing
 sidebar:
-  order: 3
+  order: 6
 ---
 
 import Mermaid from "../../../components/Mermaid.astro";
 
-Every tool `s4n` creates, and every connection it (or SciWIn-Studio) draws between tools, becomes part of a provenance graph: nodes for the data and code artifacts involved, edges for the commands that produced them. That graph is what makes a workflow re-executable somewhere else, not just readable.
+Every tool `s4n` creates, and every connection it (or SciWIn-Studio) draws between tools, becomes part of a provenance graph — think of it as an automatically-kept lab notebook: a node for every data or code artifact involved, and an edge for every command that turned one into another. That graph is what makes a workflow re-executable somewhere else, not just readable: you, or anyone else, can trace any result back to exactly what produced it, and rerun that chain from scratch.
 
 ## Automatic semantic annotation
 
-`s4n create` recognizes common file types by extension — CSV, JSON, images, Python scripts, and more — and tags each recognized input or output with its matching [EDAM ontology](https://edamontology.org/) format term automatically. No separate annotation step, no manual lookup.
+`s4n create` recognizes common file types by extension — CSV, JSON, images, Python scripts, and more — and tags each recognized input or output with its matching [EDAM ontology](https://edamontology.org/) format term automatically: a standardized label for the kind of data a file holds, so other tools and repositories can tell what it is without you writing that down yourself. No separate annotation step, no manual lookup.
 
 ## Provenance Run Crates
 
-Add `--rocrate` to `s4n execute run` and the run's provenance graph is packaged as an [RO-Crate](https://www.researchobject.org/ro-crate/): the workflow, a [PROV](https://www.w3.org/TR/prov-o/)-style record of what actually ran, and structured (schema.org/JSON-LD) metadata, bundled together instead of left as a folder of loose files. Two layouts are available:
+Add `--rocrate` to `s4n execute run` and the run's provenance graph is packaged as an [RO-Crate](rocrate) — a standard way of bundling a folder of files with one machine-readable metadata file describing what each file is and how they relate, so the folder explains itself to anyone (or any tool) that opens it later, without you around to walk them through it. Concretely, that bundle holds: the workflow, a record of what actually ran — following the [Workflow Run RO-Crate](https://w3id.org/ro/wfrun/) profile, which models a run the way [PROV](https://www.w3.org/TR/prov-o/) does (an activity using and producing artifacts, an agent orchestrating it) but expresses it as plain schema.org Actions rather than PROV-O's own vocabulary — and structured (schema.org/JSON-LD) metadata, instead of a folder of loose files. Two layouts are available:
 
 - **`--rocrate files`** (what a bare `--rocrate` means) keeps the original CWL files, directly re-executable.
 - **`--rocrate packed`** writes one packed JSON document holding the whole workflow graph instead.
@@ -24,14 +24,14 @@ Running on REANA (`--engine reana`) always produces a packed crate — that's th
 <Mermaid code={`flowchart LR
     Run["s4n execute run<br/>--rocrate"]
     Graph["provenance graph<br/>artifacts + commands"]
-    Crate["Provenance Run Crate<br/>RO-Crate + PROV"]
+    Crate["Provenance Run Crate<br/>RO-Crate + schema.org Actions"]
 
     Run --> Graph --> Crate
 `} highlight={["Crate"]} />
 
 ## Publishing
 
-A Provenance Run Crate is already in the format [WorkflowHub](https://workflowhub.eu/) expects for a citable, FAIR-registered workflow — what turns "I ran this once" into something a colleague can find, cite with a DOI, and rerun themselves. `s4n` doesn't push a crate to WorkflowHub automatically yet; direct integration is a stated but not-yet-built direction for the project. Publishing today means uploading the generated crate there yourself.
+A Provenance Run Crate is already in the format [WorkflowHub](https://workflowhub.eu/) expects for a citable, FAIR-registered workflow — what turns "I ran this once" into something a colleague can find, cite with a DOI, and rerun themselves, the way you'd deposit code on GitHub or data on Zenodo, but for the whole runnable pipeline. `s4n` doesn't push a crate to WorkflowHub automatically yet; direct integration is a stated but not-yet-built direction for the project. Publishing today means uploading the generated crate there yourself.
 
 ## Remote execution specifics
 

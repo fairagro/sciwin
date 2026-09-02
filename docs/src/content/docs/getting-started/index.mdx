@@ -8,6 +8,11 @@ import { LinkCard, CardGrid } from '@astrojs/starlight/components'
 
 This section gets you from an empty folder to a first re-executable workflow. For what SciWIn actually is and why it's built the way it is, see [Concepts](../concepts).
 
+## Two terms you'll see everywhere
+
+- **CWL** ([Common Workflow Language](https://www.commonwl.org/)) is the file format `s4n` writes for you. Every tool and workflow you create becomes a small YAML file describing the command, its inputs, and its outputs — that's what lets you, or anyone else, re-run it later without a written protocol. See [CWL](../concepts/cwl) for a detailed walkthrough.
+- **Container** (Docker, Podman, and similar) is a self-contained package of the exact software environment a tool needs — so a command like `python analyze.py` behaves the same on your machine, a colleague's, or a server, no matter what's installed there. `s4n` can attach one to a tool automatically; see [Containers](../concepts/container) for how.
+
 <CardGrid>
 	<LinkCard title="Installation" href="installation" description="Install s4n, the command-line tool." />
 	<LinkCard title="SciWIn-Studio" href="../sciwin-studio" description="Prefer a visual canvas? Install SciWIn-Studio instead — same projects, different front end." />
