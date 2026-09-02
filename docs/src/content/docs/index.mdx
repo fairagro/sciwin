@@ -1,10 +1,10 @@
 ---
-title: SciWIn — Scientific Workflow Infrastructure
-description: SciWIn helps scientists build, run, and publish reproducible computational workflows — from the terminal with SciWIn-Client, or visually with SciWIn-Studio
+title: SciWIn - Scientific Workflow Infrastructure
+description: SciWIn helps scientists build, run, and publish reproducible computational workflows - from the terminal with SciWIn-Client, or visually with SciWIn-Studio
 template: splash
 hero:
   title: SciWIn
-  tagline: One workflow format, two ways to work with it. Build, run, and publish reproducible computational workflows from the terminal with SciWIn-Client, or visually with SciWIn-Studio — every project works in both.
+  tagline: One workflow format, two ways to work with it. Build, run, and publish reproducible computational workflows from the terminal with SciWIn-Client, or visually with SciWIn-Studio - every project works in both.
   actions:
     - text: Install SciWIn-Client
       link: getting-started/installation
@@ -19,13 +19,14 @@ hero:
       variant: minimal
 ---
 
-import { Card, Icon, Steps } from '@astrojs/starlight/components';
+import { Icon, Steps } from '@astrojs/starlight/components';
 import { Image } from 'astro:assets'
 import workflow_simple from "../../assets/simple_workflow.svg"
 
 ---
 
-## Examples
+## See it on real workflows
+Every example runs on real data, end to end.
 
 <div class="examples-grid">
 	<div class="ex-card">
@@ -55,14 +56,10 @@ import workflow_simple from "../../assets/simple_workflow.svg"
 		</div>
 	</div>
 </div>
-<Card title="Read the documentation" icon="open-book">
-	You can find more examples describing individual features in the [SciWIn-Client Documentation](examples).
-</Card>
-
 ---
 
 ## Get started
-Pick the side you'll work from — both open the exact same project.
+Pick the side you'll work from - both open the exact same project.
 
 <div class="getstarted-split">
 	<div class="gs-col">
@@ -91,8 +88,8 @@ Pick the side you'll work from — both open the exact same project.
 		<div class="gs-head"><span class="gs-tag">Visual canvas</span><h3>SciWIn-Studio</h3></div>
 		<Steps>
 		1. Download the [latest release](https://github.com/fairagro/sciwin_studio/releases/latest) for your platform.
-		2. Open a folder — a new one, or an existing `s4n` project. Both work.
-		3. Drag a script onto the canvas to record it as a tool, then connect it into a workflow.
+		2. Open a folder - a new one, or an existing `s4n` project.
+		3. Drag a CWL file onto the canvas and connect it into a workflow.
 		</Steps>
 	</div>
 </div>

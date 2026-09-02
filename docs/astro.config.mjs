@@ -36,6 +36,8 @@ export default defineConfig({
       '@fontsource/fira-sans/400-italic.css',
       '@fontsource/fira-sans/700-italic.css',
       '@fontsource/fira-sans/900-italic.css',
+      '@fontsource/fira-code/400.css',
+      '@fontsource/fira-code/500.css',
       './src/styles/global.css'
     ],
     social: [

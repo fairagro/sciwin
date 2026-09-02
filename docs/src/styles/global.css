@@ -6,6 +6,7 @@
 
 :root {
   --sl-font: 'Fira Sans', 'ui-sans-serif', 'system-ui', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --sl-font-mono: 'Fira Code', var(--sl-font-system-mono);
 }
 
 @theme {
@@ -109,7 +110,7 @@ body {
   margin: 3rem 0;
 }
 
-/* Homepage: Examples — a thumb/body card, bordered, matching the design proposal */
+/* Homepage: Examples, a thumb/body card, bordered, matching the design proposal */
 .examples-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -174,7 +175,7 @@ body {
   text-decoration: underline;
 }
 
-/* Homepage: Get started — one bordered panel split in two, not two separate cards */
+/* Homepage: Get started, one bordered panel split in two, not two separate cards */
 .getstarted-split {
   display: grid;
   grid-template-columns: 1fr;
@@ -259,4 +260,12 @@ body {
 .gs-col h4 {
   margin: 0.9rem 0 0.4rem;
   font-size: 0.92rem;
+}
+
+/* Site-wide: notes/tips as a neutral bordered panel instead of a colored
+   strip with a tinted fill, matching the calmer panel look used elsewhere. */
+.starlight-aside {
+  border: 1px solid var(--sl-color-asides-border);
+  border-radius: 0.6rem;
+  background-color: var(--sl-color-gray-6);
 }
