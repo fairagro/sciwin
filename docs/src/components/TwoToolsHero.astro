@@ -1,0 +1,215 @@
+---
+// Split terminal / SciWIn-Studio panel: shows "two tools, one format" in the
+// hero itself instead of relying on copy alone.
+---
+
+<div class="split">
+    <div class="pane term">
+        <div class="pane-chrome">
+            <span class="dot dot-red"></span><span class="dot dot-yellow"
+            ></span><span class="dot dot-green"></span>
+            <span class="pane-label">terminal</span>
+        </div>
+        <div class="term-body">
+            <div><span class="cmd">s4n create python calculation.py --population population.csv --speakers speakers.csv</span></div>
+            <div class="dim">📂 /home/ubuntu/sciwin_test</div>
+            <div class="dim">⏳ Executing command: python calculation.py …</div>
+            <div class="dim">📜 Found changes: results.csv</div>
+            <div class="ok">📄 Created CWL file workflows/calculation/calculation.cwl</div>
+            <div class="spacer"></div>
+            <div><span class="cmd">s4n connect main --from calculation/results --to plot/data</span></div>
+            <div class="dim">➕ Added step calculation to workflow</div>
+            <div class="ok">✔️ Updated Workflow workflows/main/main.cwl!</div>
+        </div>
+    </div>
+    <div class="pane studio">
+        <div class="pane-chrome studio-chrome">
+            <span class="dot"></span><span class="dot"></span><span class="dot"
+            ></span>
+            <span class="pane-label">SciWIn-Studio</span>
+        </div>
+        <div class="studio-shot">
+            <img
+                src="https://github.com/fairagro/sciwin_studio/raw/main/.github/studio.png"
+                alt="SciWIn-Studio graph canvas showing connected workflow nodes"
+                loading="eager"
+            />
+        </div>
+    </div>
+    <div class="seam-badge">⇄ <b>workflow.toml</b> — same project</div>
+</div>
+<div class="pane-caption">
+    <span>Author &amp; run from the command line</span>
+    <span>Wire the same tools together visually</span>
+</div>
+<p class="format-note">
+    Both write the exact same <code>workflow.toml</code> + CWL files + git repo.
+    Start a tool in one, finish the workflow in the other — nothing to export
+    or convert.
+</p>
+
+<style>
+    .split {
+        margin: 0 auto;
+        max-width: 62rem;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-radius: 1rem;
+        overflow: hidden;
+        box-shadow: 0 20px 48px -20px rgba(0, 0, 0, 0.35);
+        position: relative;
+        border: 1px solid var(--sl-color-hairline);
+    }
+    .pane {
+        min-height: 21rem;
+        display: flex;
+        flex-direction: column;
+    }
+    .pane-chrome {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1rem;
+        font-size: 0.75rem;
+        font-family: var(--__sl-font-mono, ui-monospace, monospace);
+    }
+    .dot {
+        width: 0.55rem;
+        height: 0.55rem;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .term {
+        background: #12181a;
+        text-align: left;
+    }
+    .term .pane-chrome {
+        background: #00000030;
+        border-bottom: 1px solid #26302b;
+        color: #7c8a80;
+    }
+    .dot-red {
+        background: #e5675f;
+    }
+    .dot-yellow {
+        background: #e6b450;
+    }
+    .dot-green {
+        background: #5fb75b;
+    }
+    .pane-label {
+        margin-left: 0.35rem;
+    }
+    .term-body {
+        padding: 1.2rem 1.35rem;
+        font-family: var(--__sl-font-mono, ui-monospace, monospace);
+        font-size: 0.78rem;
+        line-height: 1.8;
+        flex: 1;
+        color: #d7ddd4;
+    }
+    .term-body .spacer {
+        height: 0.7rem;
+    }
+    .term-body .cmd {
+        color: #7ed6ff;
+    }
+    .term-body .cmd::before {
+        content: "$ ";
+        color: #7c8a80;
+    }
+    .term-body .dim {
+        color: #7c8a80;
+    }
+    .term-body .ok {
+        color: #8ecf6c;
+    }
+
+    .studio {
+        background: var(--sl-color-gray-6);
+        text-align: left;
+    }
+    .studio-chrome {
+        background: var(--sl-color-bg);
+        border-bottom: 1px solid var(--sl-color-hairline);
+        color: var(--sl-color-gray-3);
+    }
+    .studio-chrome .dot {
+        background: var(--sl-color-hairline);
+    }
+    .studio-shot {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+    }
+    .studio-shot img {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 32% 38%;
+        transform: scale(1.25);
+        display: block;
+    }
+
+    .seam-badge {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 3;
+        background: var(--sl-color-bg);
+        border: 1px solid var(--sl-color-hairline);
+        border-radius: 999px;
+        padding: 0.5rem 1rem;
+        font-family: var(--__sl-font-mono, ui-monospace, monospace);
+        font-size: 0.75rem;
+        font-weight: 500;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+        color: var(--sl-color-white);
+        white-space: nowrap;
+    }
+    .seam-badge b {
+        color: var(--color-accent-200, #6abf5c);
+    }
+
+    .pane-caption {
+        display: flex;
+        justify-content: space-between;
+        max-width: 62rem;
+        margin: 0.85rem auto 0;
+        font-size: 0.8rem;
+        color: var(--sl-color-gray-3);
+        width: 100%;
+    }
+
+    .format-note {
+        max-width: 40rem;
+        margin: 1.6rem auto 0;
+        text-align: center;
+        font-size: 0.9rem;
+        color: var(--sl-color-gray-3);
+    }
+    .format-note code {
+        background: var(--sl-color-gray-6);
+        padding: 0.15em 0.45em;
+        border-radius: 5px;
+        color: var(--sl-color-white);
+    }
+
+    @media (max-width: 50rem) {
+        .split {
+            grid-template-columns: 1fr;
+        }
+        .seam-badge {
+            top: auto;
+            bottom: 0;
+            transform: translate(-50%, 50%);
+        }
+        .term-body {
+            font-size: 0.7rem;
+        }
+    }
+</style>

@@ -23,7 +23,7 @@ export default defineConfig({
   base: '/sciwin/',
 
   integrations: [starlight({
-    title: 'SciWIn Client',
+    title: 'SciWIn',
     favicon: '/favicon.png',
     logo: {
       src: './src/assets/logo.svg',

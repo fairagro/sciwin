@@ -1,9 +1,0 @@
-📄 Created new Workflow file: workflows/main/main.cwl
-[32m        1 | + #!/usr/bin/env cwl-runner[0m
-[32m        2 | + [0m
-[32m        3 | + cwlVersion: v1.2[0m
-[32m        4 | + class: Workflow[0m
-[32m        5 | + [0m
-[32m        6 | + inputs: [][0m
-[32m        7 | + outputs: [][0m
-[32m        8 | + steps: [][0m

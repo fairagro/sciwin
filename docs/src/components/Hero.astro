@@ -1,6 +1,6 @@
 ---
 import { LinkButton } from "@astrojs/starlight/components";
-import RotatingCodeBlock from "./RotatingCodeBlock.astro";
+import TwoToolsHero from "./TwoToolsHero.astro";
 
 const { data } = Astro.locals.starlightRoute.entry;
 const { title = data.title, tagline, actions = [] } = data.hero || {};
@@ -11,6 +11,7 @@ const isHome = Astro.url.pathname === import.meta.env.BASE_URL;
 <div class="hero">
     <div class="sl-flex stack">
         <div class="sl-flex copy">
+            {isHome && <p class="eyebrow">Scientific Workflow Infrastructure</p>}
             <h1 id="_top" data-page-title set:html={title} />
             {tagline && <div class="tagline" set:html={tagline} />}
         </div>
@@ -43,7 +44,7 @@ const isHome = Astro.url.pathname === import.meta.env.BASE_URL;
             )
         }
     </div>
-    {isHome && <RotatingCodeBlock />}
+    {isHome && <TwoToolsHero />}
 </div>
 
 <style>
@@ -78,6 +79,14 @@ const isHome = Astro.url.pathname === import.meta.env.BASE_URL;
             align-items: center;
         }
 
+        .eyebrow {
+            margin: 0;
+            font-size: 0.8125rem;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--color-accent-600);
+        }
         h1 {
             font-size: clamp(
                 var(--sl-text-3xl),

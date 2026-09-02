@@ -9,6 +9,7 @@
 }
 
 @theme {
+  --color-teal: #06947a;
   --color-accent-200: #e1f2df;
   --color-accent-950: #fff;
   --color-accent-900: #c3e5be;
@@ -30,45 +31,22 @@ body {
   overflow-x: hidden;
 }
 
-.hero .expressive-code {
-  width: 100%;
-
-  .is-terminal {
-    background: var(--code-background);
-    border: var(--ec-brdWd) solid var(--ec-brdCol);
-    border-radius: calc(var(--ec-brdRad) + var(--ec-brdWd));
-
-    .header {
-      border: none;
-    }
-  }
-
-  pre {    
-    border: none;
-
-    .ec-line {
-      line-height: normal;
-    }
-  }
-
-  .copy {
-    display: none;
-  }
-}
-
-@media (max-width: 50rem) {
-  .hero pre, .hero pre > * {
-    font-size: .45rem;
-  }
-}
-
+/* Cards: a bordered, theme-adaptive panel instead of a flat accent fill,
+   so default Starlight text colors stay legible in both themes. */
 .card {
-  background-color: var(--color-accent-800);
+  background-color: var(--sl-color-gray-6);
+  border-radius: 0.75rem;
+  min-width: 0;
 
-  .title>span,
-  .body>a,.body>p {
-    color: black;
+  .body > a:not(.button),
+  .body p > a:not(.button) {
+    color: var(--color-accent-600);
+    font-weight: 600;
     text-decoration: none;
+  }
+  .body > a:not(.button):hover,
+  .body p > a:not(.button):hover {
+    text-decoration: underline;
   }
 }
 
@@ -91,4 +69,194 @@ body {
 
 .button:hover {
   background-color: var(--color-accent-950);
+}
+
+/* Hero buttons: gradient primary / outlined secondary / plain-text ghost */
+.sl-link-button {
+  border-radius: 0.6rem;
+  font-weight: 600;
+}
+.sl-link-button.primary {
+  background: linear-gradient(135deg, var(--color-teal), var(--color-accent-600));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 12px 24px -12px color-mix(in srgb, var(--color-teal) 65%, transparent);
+}
+.sl-link-button.primary:hover {
+  color: #fff;
+  filter: brightness(1.08);
+}
+.sl-link-button.secondary {
+  background: transparent;
+  border-color: var(--sl-color-gray-5);
+  color: var(--sl-color-white);
+}
+.sl-link-button.secondary:hover {
+  border-color: var(--color-accent-600);
+  color: var(--color-accent-600);
+}
+.sl-link-button.minimal {
+  color: var(--color-accent-600);
+}
+.sl-link-button.minimal:hover {
+  text-decoration: underline;
+}
+
+/* Section dividers on the homepage */
+.sl-markdown-content hr {
+  border: none;
+  border-top: 1px solid var(--sl-color-hairline);
+  margin: 3rem 0;
+}
+
+/* Homepage: Examples — a thumb/body card, bordered, matching the design proposal */
+.examples-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+@media (min-width: 50rem) {
+  .examples-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+}
+.ex-card {
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--sl-color-gray-6);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ex-card .thumb {
+  height: 9.5rem;
+  background: var(--sl-color-bg);
+  border-bottom: 1px solid var(--sl-color-hairline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+}
+.ex-card .thumb img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+}
+.ex-card .body {
+  padding: 1rem 1.15rem 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  flex: 1;
+}
+.ex-card .body h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--sl-color-white);
+}
+.ex-card .body p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--sl-color-gray-3);
+  flex: 1;
+}
+.ex-card .body a {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-accent-600);
+  text-decoration: none;
+}
+.ex-card .body a:hover {
+  text-decoration: underline;
+}
+
+/* Homepage: Get started — one bordered panel split in two, not two separate cards */
+.getstarted-split {
+  display: grid;
+  grid-template-columns: 1fr;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.85rem;
+  overflow: hidden;
+}
+@media (min-width: 50rem) {
+  .getstarted-split {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.gs-col {
+  padding: 1.75rem 1.85rem;
+  min-width: 0;
+}
+.gs-col.studio-col {
+  background: var(--sl-color-gray-6);
+  border-top: 1px solid var(--sl-color-hairline);
+}
+@media (min-width: 50rem) {
+  .gs-col.studio-col {
+    border-top: none;
+    border-left: 1px solid var(--sl-color-hairline);
+  }
+}
+.gs-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1.15rem;
+}
+.gs-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--sl-color-white);
+}
+.gs-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+.gs-col:not(.studio-col) .gs-tag {
+  background: #12181a;
+  color: #8ecf6c;
+}
+.gs-col.studio-col .gs-tag {
+  background: var(--sl-color-bg);
+  border: 1px solid var(--sl-color-hairline);
+  color: var(--sl-color-gray-3);
+}
+
+/* Flatten the code blocks inside Get started to a compact snippet
+   (matches the design proposal) instead of Starlight's full terminal-window frame. */
+.gs-col .expressive-code {
+  margin: 0.5rem 0 0;
+}
+.gs-col .expressive-code .frame {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+.gs-col .expressive-code .frame.is-terminal .header {
+  display: none;
+}
+.gs-col .expressive-code .copy {
+  display: none;
+}
+.gs-col .expressive-code pre {
+  border: none;
+  border-radius: 0.5rem;
+  background: #12181a;
+  padding-block: 0.55rem;
+}
+.gs-col .expressive-code code {
+  font-size: 0.78rem;
+}
+.gs-col h4 {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.92rem;
 }
