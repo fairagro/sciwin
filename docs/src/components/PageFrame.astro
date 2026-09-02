@@ -191,10 +191,12 @@ const { hasSidebar } = Astro.locals.starlightRoute;
             :global([data-has-sidebar]) .header {
                 padding-inline-end: var(--sl-nav-pad-x);
             }
+            .content-shell {
+                padding-top: var(--sl-nav-height);
+                min-height: 100vh;
+            }
             .sidebar-pane {
                 --sl-sidebar-visibility: visible;
-                /* Sticky instead of fixed: it now lives inside .content-shell,
-                   so it scrolls away with the content and never overlaps the footer. */
                 position: sticky;
                 inset-block-start: var(--sl-nav-height);
                 inset-block-end: auto;
@@ -206,8 +208,7 @@ const { hasSidebar } = Astro.locals.starlightRoute;
                 border-inline-end: 1px solid var(--sl-color-hairline-shade);
             }
             .main-frame {
-                /* The sidebar now reserves its own width via flex, so the old
-                   padding hack (for when it was position: fixed) would double up. */
+                padding-top: 0;
                 padding-inline-start: 0;
             }
         }

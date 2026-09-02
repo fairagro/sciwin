@@ -51,6 +51,8 @@ export default defineConfig({
     },
     sidebar: [
       { label: 'Getting Started', items: [{ autogenerate: { directory: 'getting-started' } }] },
+      { label: 'Concepts', items: [{ autogenerate: { directory: 'concepts' } }] },
+      { label: 'SciWIn-Studio', items: [{ autogenerate: { directory: 'sciwin-studio' } }] },
       { label: 'Examples', items: [{ autogenerate: { directory: 'examples' } }] },
       { label: 'Reference', items: [{ autogenerate: { directory: 'reference' } }] },
     ],
