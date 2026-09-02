@@ -4,45 +4,18 @@ sidebar:
   order: 1
 ---
 
-import Mermaid from "../../../components/Mermaid.astro";
+What Git does for versioning, SciWIn does for provenance.
 
-SciWIn is five repositories that only make sense together. This page draws the two relationships that come up most often: how the pieces fit together, and how a tool gets a container without you writing a Dockerfile.
+Every command you run through `s4n` — or every connection you draw in SciWIn-Studio — is recorded: the artifacts involved, the exact command, and how they connect to the steps before and after them. That record is a graph, not just a log, and it can be re-executed, inspected, or handed to someone else, on their machine or on a remote server. See [Provenance & Publishing](provenance) for what that record actually contains and where it can go from there.
 
-## Component hierarchy
+## Why not just a script?
 
-SciWIn-Client (`s4n`) and SciWIn-Studio are two front ends over the same shared core. Both operate on the exact same on-disk project, a `workflow.toml`, your CWL files, and a git repository, so a project started in one opens cleanly in the other.
+A shell script or a notebook cell also "does the work," but it doesn't describe itself: nothing in `python analyze.py --input data.csv` says what `data.csv` actually is, what produced it, or what the script depends on. Re-running it correctly six months later, or on someone else's machine, means reconstructing all of that from memory, a README, or the shell history.
 
-<Mermaid code={`flowchart TD
-    Studio["SciWIn-Studio<br/>Tauri + Svelte GUI"]
-    CLI["s4n<br/>command-line interface"]
-    Core["sciwin<br/>shared core: authoring · execution · provenance"]
-    CWL["commonwl<br/>CWL parsing + execution engine"]
-    RO["rocrate<br/>RO-Crate read/write"]
-    REANA["reana<br/>REANA client"]
+SciWIn's tool and workflow descriptions are the [Common Workflow Language](https://www.commonwl.org/) (CWL) instead — an open, YAML-based standard for describing command-line tools and how they connect, portable across plain Docker, HPC schedulers, and Kubernetes, and readable by any CWL-compliant runner, not only SciWIn's own. That's the deliberate trade against writing the same pipeline directly in Snakemake or Nextflow: both are capable tools, but a Snakefile only means something to Snakemake. A CWL `Workflow` document means the same thing to `cwltool`, to REANA, to `s4n execute`, or to a colleague using none of the above.
 
-    Studio --> Core
-    CLI --> Core
-    Core --> CWL
-    Core --> RO
-    Core --> REANA
-`} highlight={["Core"]} />
+## What that buys you
 
-- **`sciwin`** is the shared core: authoring CWL `CommandLineTool`/`Workflow` files, running them, and building provenance graphs. Neither front end duplicates this logic.
-- **`commonwl`** parses CWL documents and provides the execution engine (local, Docker, and TES backends) behind `s4n execute`.
-- **`rocrate`** reads, writes, and validates [RO-Crates](https://www.researchobject.org/ro-crate/), including the Provenance Run Crates `s4n execute run --rocrate` produces.
-- **`reana`** is the client used when execution targets a remote [REANA](https://reanahub.io) server instead of running locally.
-
-## Automatic container resolution
-
-For a Python or R tool, `s4n create --auto-container` can skip writing a Dockerfile entirely. It reads the project's own dependency file, resolves those dependencies against a FAIRagro-run registry, and attaches whichever pre-built image satisfies them, picking the smallest match.
-
-<Mermaid code={`flowchart LR
-    Deps["requirements.txt /<br/>pyproject.toml / DESCRIPTION"]
-    Create["s4n create<br/>--auto-container"]
-    Registry["sciwin-container-registry<br/>package → image digest index"]
-    Containers["sciwin-containers<br/>built images"]
-
-    Deps --> Create --> Registry --> Containers
-`} highlight={["Registry", "Containers"]} />
-
-Two repositories do the real work here: [`sciwin-container-registry`](https://github.com/fairagro/sciwin-container-registry) is the index mapping package requirements to image digests, and [`sciwin-containers`](https://github.com/fairagro/sciwin-containers) is where those images are actually built. The resolved image is written straight into the generated CWL tool's `DockerRequirement`, no Dockerfile authoring required.
+- **A re-executable record, not just an audit trail.** How the provenance graph is built, annotated, and packaged for publishing is covered in [Provenance & Publishing](provenance).
+- **A choice of execution backend without rewriting anything** — locally, in Docker, against a GA4GH TES server, or on a remote [REANA](https://reanahub.io) instance.
+- **Two front ends over the same core** — SciWIn-Client on the terminal, SciWIn-Studio on a visual canvas, operating on the exact same on-disk project. See [Architecture](architecture) for how the pieces underneath both fit together.

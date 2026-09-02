@@ -1,0 +1,38 @@
+---
+title: Provenance & Publishing
+sidebar:
+  order: 3
+---
+
+import Mermaid from "../../../components/Mermaid.astro";
+
+Every tool `s4n` creates, and every connection it (or SciWIn-Studio) draws between tools, becomes part of a provenance graph: nodes for the data and code artifacts involved, edges for the commands that produced them. That graph is what makes a workflow re-executable somewhere else, not just readable.
+
+## Automatic semantic annotation
+
+`s4n create` recognizes common file types by extension — CSV, JSON, images, Python scripts, and more — and tags each recognized input or output with its matching [EDAM ontology](https://edamontology.org/) format term automatically. No separate annotation step, no manual lookup.
+
+## Provenance Run Crates
+
+Add `--rocrate` to `s4n execute run` and the run's provenance graph is packaged as an [RO-Crate](https://www.researchobject.org/ro-crate/): the workflow, a [PROV](https://www.w3.org/TR/prov-o/)-style record of what actually ran, and structured (schema.org/JSON-LD) metadata, bundled together instead of left as a folder of loose files. Two layouts are available:
+
+- **`--rocrate files`** (what a bare `--rocrate` means) keeps the original CWL files, directly re-executable.
+- **`--rocrate packed`** writes one packed JSON document holding the whole workflow graph instead.
+
+Running on REANA (`--engine reana`) always produces a packed crate — that's the only layout REANA hands back.
+
+<Mermaid code={`flowchart LR
+    Run["s4n execute run<br/>--rocrate"]
+    Graph["provenance graph<br/>artifacts + commands"]
+    Crate["Provenance Run Crate<br/>RO-Crate + PROV"]
+
+    Run --> Graph --> Crate
+`} highlight={["Crate"]} />
+
+## Publishing
+
+A Provenance Run Crate is already in the format [WorkflowHub](https://workflowhub.eu/) expects for a citable, FAIR-registered workflow — what turns "I ran this once" into something a colleague can find, cite with a DOI, and rerun themselves. `s4n` doesn't push a crate to WorkflowHub automatically yet; direct integration is a stated but not-yet-built direction for the project. Publishing today means uploading the generated crate there yourself.
+
+## Remote execution specifics
+
+Running against REANA has one compatibility wrinkle worth knowing about: REANA can only *pull* a pre-built container image, it can't build a `Dockerfile` the way `--engine docker` or `--engine local` can. The code to work around this already exists in `sciwin` — build the tool's `Dockerfile` locally and push the result to [ttl.sh](https://ttl.sh/), a public, self-expiring registry (images live for one hour), so REANA has somewhere to pull it from — but it isn't currently called from `s4n execute run` ([tracked in #314](https://github.com/fairagro/sciwin/issues/314)). Today, a tool whose `DockerRequirement` only carries a `dockerFile` will simply fail against `--engine reana`; give it a `dockerPull` reference instead if you need to run it there.

@@ -1,0 +1,48 @@
+---
+title: Architecture
+sidebar:
+  order: 2
+---
+
+import Mermaid from "../../../components/Mermaid.astro";
+
+SciWIn is five repositories that only make sense together. This page draws the two relationships that come up most often: how the pieces fit together, and how a tool gets a container without you writing a Dockerfile.
+
+## Component hierarchy
+
+SciWIn-Client (`s4n`) and SciWIn-Studio are two front ends over the same shared core. Both operate on the exact same on-disk project, a `workflow.toml`, your CWL files, and a git repository, so a project started in one opens cleanly in the other.
+
+<Mermaid code={`flowchart TD
+    Studio["SciWIn-Studio<br/>Tauri + Svelte GUI"]
+    CLI["s4n<br/>command-line interface"]
+    Core["sciwin<br/>shared core: authoring · execution · provenance"]
+    CWL["commonwl<br/>CWL parsing + execution engine"]
+    RO["rocrate<br/>RO-Crate read/write"]
+    REANA["reana<br/>REANA client"]
+
+    Studio --> Core
+    CLI --> Core
+    Core --> CWL
+    Core --> RO
+    Core --> REANA
+`} highlight={["Core"]} />
+
+- **`sciwin`** is the shared core: authoring CWL `CommandLineTool`/`Workflow` files, running them, and building provenance graphs. Neither front end duplicates this logic.
+- **`commonwl`** parses CWL documents and provides the execution engine (local, Docker, and TES backends) behind `s4n execute`.
+- **`rocrate`** reads, writes, and validates [RO-Crates](https://www.researchobject.org/ro-crate/), including the Provenance Run Crates `s4n execute run --rocrate` produces — see [Provenance & Publishing](provenance) for what those actually contain.
+- **`reana`** is the client used when execution targets a remote [REANA](https://reanahub.io) server instead of running locally. A compatibility layer for tools that only carry a `Dockerfile` exists in the `sciwin` crate — see [Provenance & Publishing](provenance#remote-execution-specifics) — but isn't wired into execution yet.
+
+## Automatic container resolution
+
+For a Python or R tool, `s4n create --auto-container` can skip writing a Dockerfile entirely. It reads the project's own dependency file, resolves those dependencies against a FAIRagro-run registry, and attaches whichever pre-built image satisfies them, picking the smallest match.
+
+<Mermaid code={`flowchart LR
+    Deps["requirements.txt /<br/>pyproject.toml / DESCRIPTION"]
+    Create["s4n create<br/>--auto-container"]
+    Registry["sciwin-container-registry<br/>package → image digest index"]
+    Containers["sciwin-containers<br/>built images"]
+
+    Deps --> Create --> Registry --> Containers
+`} highlight={["Registry", "Containers"]} />
+
+Two repositories do the real work here: [`sciwin-container-registry`](https://github.com/fairagro/sciwin-container-registry) is the index mapping package requirements to image digests, and [`sciwin-containers`](https://github.com/fairagro/sciwin-containers) is where those images are actually built. The resolved image is written straight into the generated CWL tool's `DockerRequirement`, no Dockerfile authoring required.

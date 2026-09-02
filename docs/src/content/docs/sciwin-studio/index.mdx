@@ -4,4 +4,48 @@ sidebar:
   order: 1
 ---
 
-![](https://raw.githubusercontent.com/fairagro/sciwin_studio/main/.github/studio.png)
+import { Icon, Steps } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import empty from "../../../assets/studio/empty.png";
+import code from "../../../assets/studio/code.png";
+import flow from "../../../assets/studio/flow.png";
+import graphConsole from "../../../assets/studio/graph-console-open.png";
+import codeConsole from "../../../assets/studio/code-console-open.png";
+
+SciWIn-Studio is the visual companion to SciWIn-Client: a desktop app for building, inspecting, and running CWL workflows without touching a terminal. It has no CWL parsing or execution logic of its own — it's a front end over the same `sciwin` and `commonwl` crates `s4n` uses, so nothing behaves differently between the two.
+
+<Image src={flow} alt="SciWIn-Studio showing a workflow graph of connected tool nodes" />
+
+## The same project, either way
+
+Every SciWIn-Studio project is an `s4n` project on disk: a `workflow.toml`, your CWL files, and a git repository. Open an existing `s4n` project in Studio and it's already there, history included; author a tool in Studio and `s4n list`/`s4n execute` see exactly what you'd expect from the command line. Nothing needs exporting or converting either way.
+
+## Installation
+
+SciWIn-Studio is currently in testing (beta). Download the installer for your platform from the [latest release](https://github.com/fairagro/sciwin_studio/releases/latest):
+
+- **macOS** — `.dmg` (separate builds for Apple Silicon and Intel)
+- **Windows** — `.msi` or a `.exe` installer
+- **Linux** — `.AppImage`, `.deb`, or `.rpm`
+
+Studio's built-in terminal picks up an installed `s4n` automatically. If it can't find one, it'll tell you and point at the [installation guide](../getting-started/installation).
+
+## Working with a project
+
+<Steps>
+1. Open a folder. A blank one becomes a new `s4n` project as soon as you save; an existing one opens exactly as `s4n list` would report it.
+    <Image src={empty} alt="SciWIn-Studio with no project open, prompting to open a folder" />
+2. The file tree on the left mirrors the project's real files, honoring `.gitignore`, with CWL documents opening in a syntax- and schema-aware editor.
+    <Image src={code} alt="SciWIn-Studio's CWL-aware editor showing a workflow document" />
+3. Switch to the graph view to see tools as nodes: drag a CWL file from the tree onto the canvas, then connect its ports to another tool's, or to the workflow's own inputs and outputs — the same connections `s4n connect` makes from the command line. The inspector panel exposes per-step settings like `scatter` and conditional `when` expressions.
+    <Image src={graphConsole} alt="SciWIn-Studio's graph canvas with a step selected in the inspector panel" />
+4. Run the workflow from the canvas, or drop into the integrated terminal to reach for `s4n` directly, without leaving the app.
+    <Image src={codeConsole} alt="SciWIn-Studio's integrated terminal open alongside the code editor" />
+</Steps>
+
+## Features
+
+- **Graph canvas** — tools as connectable nodes, with an inspector for the settings a plain `connect`/`disconnect` doesn't reach: `scatter`, conditional `when` expressions, `pickValue`, and `linkMerge`.
+- **CWL-aware editor** — a [Monaco](https://microsoft.github.io/monaco-editor/)-based editor backed by `cwl-lsp`, the same CWL language server that lives in the `commonwl` repository, running in-process for autocomplete and diagnostics as you type.
+- **Integrated terminal** — a real shell in the app, for the moments a graphical action doesn't cover.
+- **File explorer** — the project's actual filesystem tree, `.gitignore` and all, not a synthetic project view.

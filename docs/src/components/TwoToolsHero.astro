@@ -1,6 +1,8 @@
 ---
 // Split terminal / SciWIn-Studio panel: shows "two tools, one format" in the
 // hero itself instead of relying on copy alone.
+import { Image } from 'astro:assets'
+import studioShot from '../assets/studio/flow.png'
 ---
 
 <div class="split">
@@ -29,8 +31,8 @@
             <span class="pane-label">SciWIn-Studio</span>
         </div>
         <div class="studio-shot">
-            <img
-                src="https://github.com/fairagro/sciwin_studio/raw/main/.github/studio.png"
+            <Image
+                src={studioShot}
                 alt="SciWIn-Studio graph canvas showing connected workflow nodes"
                 loading="eager"
             />
