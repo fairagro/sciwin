@@ -1,0 +1,105 @@
+---
+title: create
+sidebar:
+  order: 3
+slug: 1.2/reference/create
+---
+
+## `create`
+
+The `create` command can be used to easily generate CWL CommandLineTools. It serves as a prefix to the usual command line prompt. Calling `create` with a command attached will execute the command, determine in- and outputs and create a CWL tool definition file in the `workflows` folder.
+
+:::note
+Before using this command all changes need to be commited as it uses `git` to determine tool outputs!
+`git status` can be used to check beforehand.
+:::
+
+:::tip
+Redirection `>` and pipes `|` can be used, but need to be escaped with a backslash fot the parser to use. Otherwise the console output of `s4n` will be redirected / piped.
+:::
+
+```txt frame="terminal" title="Usage"
+    Creates a new CWL File or Workflow
+
+    Usage: s4n create [OPTIONS] [COMMAND]...
+
+    Arguments:
+      [COMMAND]...  Command line call e.g. python script.py [ARGUMENTS]
+
+    Options:
+      -n, --name <NAME>                        A name to be used for this workflow or tool
+      -c, --container-image <CONTAINER_IMAGE>  An image to pull from e.g. docker hub or path to a Dockerfile
+      -t, --container-tag <CONTAINER_TAG>      The tag for the container when using a Dockerfile
+      -r, --raw                                Outputs the raw CWL contents to terminal
+          --no-commit                          Do not commit at the end of tool creation
+          --no-run                             Do not run given command
+          --clean                              Deletes created outputs after usage
+          --no-defaults                        Removes default values from inputs
+          --net                                Enables network in container
+      -i, --inputs <INPUTS>                    Force values to be considered as an input.
+      -o, --outputs <OUTPUTS>                  Force values to be considered as an output.
+      -m, --mount <MOUNT>                      Mounts a directory into the working directory
+      -f, --force                              Overwrites existing workflow
+      -h, --help                               Print help
+```
+
+:::tip[Example]
+The following command will create a CWL CommandLineTool description for executing a python script `echo.py` with a txt file as parameter `--test`.
+
+```bash
+s4n create python echo.py --test input.txt
+```
+
+The command will create this CWL file in the workflows folder.
+
+```yaml
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: echo.py
+    entry:
+      $include: '../../echo.py'
+
+inputs:
+- id: test
+  type: File
+  default:
+    class: File
+    location: '../../input.txt'
+  inputBinding:
+    prefix: '--test'
+
+outputs:
+- id: results
+  type: File
+  outputBinding:
+    glob: results.txt
+
+baseCommand:
+- python
+- echo.py
+```
+:::
+
+### Options
+
+If only `--name` is given the command will create an empty workflow. However this is completely optional as the workflow will also be created upon the creating the first connection.
+
+With the `--name` option the resulting filename can be manipulated. Without the argument SciWIn client will automatically generate a name based on the command. If for example the same base command is used in two tools there would be a file name conflict.
+
+The two container options `--container-image` and `--container-tag` can be used to add Docker requirements to the resulting CWL file. However Docker will **NOT** be used to execute the script while generating the tool, so make sure to either use `s4n` in Docker container or provide all neccesary tools for it to run.
+
+With the `--raw` flag no CWL file will be written to disk. Instead the raw cwl will be outputted to the command prompt (stdout) to process it further.
+
+As `create` needs all changes to be commited beforehand it will create a commit after it completed the tool creation. To prevent that because e.g. manual changes to the CWL file have to be made before committing the `--no-commit` flag can be used.
+
+Some scripts tend to run for a very long time - e.g. quantum chemistry calculations. To prevent the tool from running the `--no-run` flag can be used. If this flag is set the parser will just use information from the command line to create the tool, outputs need to be set manually.
+
+Sometimes it can be beneficial to not commit the created outputs. With the `--clean` flag all outputs will be deleted before commiting the freshly created tool.
+
+Implicit in- and outputs can be added using `-i` or `-o`. ([See Examples](../examples/tool-creation.md#implicit-inputs-hardcoded-files))

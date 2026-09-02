@@ -1,0 +1,67 @@
+[package]
+name = "sciwin"
+description = "Headless core library for SciWIn: authoring and running CWL workflows"
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+categories = ["science"]
+keywords = ["cwl", "commonwl", "workflow", "fairagro"]
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+bon.workspace = true
+chrono.workspace = true
+commonwl.workspace = true
+configparser.workspace = true
+crankshaft.workspace = true
+dunce.workspace = true
+futures.workspace = true
+git2.workspace = true
+miette.workspace = true
+pathdiff.workspace = true
+rand.workspace = true
+reana.workspace = true
+smart-default.workspace = true
+semver.workspace = true
+uv-requirements-txt.workspace = true
+uv-pypi-types.workspace = true
+r-description.workspace = true
+versions.workspace = true
+serde.workspace = true
+serde-saphyr.workspace = true
+serde_json.workspace = true
+slugify.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
+tokio = { workspace = true, features = ["process"] }
+toml.workspace = true
+toml_edit.workspace = true
+tracing.workspace = true
+url.workspace = true
+uuid.workspace = true
+walkdir.workspace = true
+rocrate.workspace = true
+reqwest.workspace = true
+file_type.workspace = true
+urlencoding.workspace = true
+
+[dev-dependencies]
+tracing-subscriber.workspace = true
+dotenvy.workspace = true
+shlex.workspace = true
+rstest.workspace = true
+fstest.workspace = true
+# required by the `#[fstest]` macro, which expands to a bare `serial_test::serial` path
+serial_test.workspace = true
+
+[lints]
+workspace = true

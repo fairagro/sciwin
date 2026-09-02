@@ -27,5 +27,5 @@ outputs:
     outputBinding:
       glob: output.txt
 baseCommand:
-- python
+- python3
 - read_bin.py

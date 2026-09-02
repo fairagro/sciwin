@@ -131,7 +131,7 @@
                 },
                 {
                     "class": "DockerRequirement",
-                    "dockerFile": "FROM python\nRUN pip install matplotlib SciencePlots pandas",
+                    "dockerFile": "FROM python\nRUN pip install matplotlib==3.10.6 SciencePlots pandas",
                     "dockerImageId": "matplotlib"
                 }
             ],

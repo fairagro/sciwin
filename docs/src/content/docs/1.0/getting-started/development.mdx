@@ -1,0 +1,70 @@
+---
+title: Development
+sitemap:
+  order: 9
+slug: 1.0/getting-started/development
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+If you want to be part of the SciWIn Client development feel free to checkout our Repository: [SciWIn Client](https://github.com/fairagro/m4.4_sciwin_client).
+
+## Feature requests and bug reports
+
+We use GitHub issues to track progress and work on feature requests and bug reports. If there is any kind of improvement to be made to SciWIn Client, please consider opening a new issue on GitHub.
+
+<a href="https://github.com/fairagro/m4.4_sciwin_client/issues/new" class="button">Open Issue</a>
+
+## Building SciWIn Client
+
+To build SciWIn Client locally the repository needs to be cloned from GitHub:
+
+### Cloning the repository
+
+```
+# Clone the repository
+git clone https://github.com/fairagro/m4.4_sciwin_client
+
+# Navigate to the project directory
+cd m4.4_sciwin_client
+```
+
+Furthermore a [Rust](https://www.rust-lang.org/) environment needs to be set up.
+
+### Setting up Rust
+
+<Tabs>
+  <TabItem label="Linux">
+    Use the following Bash command to install Rustup
+
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+  </TabItem>
+
+  <TabItem label="Windows">
+    Use the Rustup installer from the [Rust website](https://www.rust-lang.org/tools/install).
+
+    For WSL2 the following command can be used.
+
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+  </TabItem>
+</Tabs>
+
+If VSCode is used as development environment the [rust-analyzer](https://code.visualstudio.com/docs/languages/rust) extension needs to be installed.
+
+### Build and test
+
+SciWIn Client can than be build using the  `cargo` commandline tool
+
+```bash
+cargo build
+```
+
+To run & build `cargo run` can be used followed by the commands and parameters of SciWIn Client, e.g. `cargo run tool create python echo.py`.
+
+For linting clippy is used which can be called using `cargo clippy --all-targets`
+
+Unit and integration tests can be run using `cargo test`. If logging to stdout needs to be displayed the no-capture flag needs to be set `cargo test -- --nocapture`

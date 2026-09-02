@@ -1,0 +1,229 @@
+//! Deriving tool names and file locations. Pure path arithmetic -- nothing here touches the
+//! filesystem.
+
+use crate::authoring::tool::parser::command::{matches_script_executor, matches_script_modifier};
+use commonwl::OneOrMany;
+use std::path::{Path, PathBuf};
+
+/// Conventional folder a project keeps its CWL documents in. Callers are free to save
+/// elsewhere -- [`get_qualified_filename`] takes the base directory as an argument.
+pub const WORKFLOWS_FOLDER: &str = "workflows";
+
+/// Derives the tool's base name (no extension) from its command line, or from `name`
+pub fn derive_tool_name(command: &OneOrMany<String>, name: Option<&str>) -> String {
+    if let Some(name) = name {
+        return strip_cwl_extension(name);
+    }
+
+    match command {
+        OneOrMany::One(cmd) => get_filename_without_extension(cmd.as_str()),
+        OneOrMany::Many(cmd) => get_filename_without_extension(script_token(cmd)),
+    }
+}
+
+/// Picks the token a multi-part base command is named after. Mirrors how
+/// `parser::get_base_command` assembled that command in the first place
+fn script_token(cmd: &[String]) -> &str {
+    if !matches_script_executor(&cmd[0]) {
+        return &cmd[0];
+    }
+    //`python -m module` / `R -e script.R`: the payload is the third token
+    if cmd.len() > 2 && matches_script_modifier(&cmd[1]) {
+        return &cmd[2];
+    }
+    //usual command `python script.py`
+    cmd.get(1).map_or(cmd[0].as_str(), String::as_str)
+}
+
+/// Drops a trailing `.cwl`/`.CWL` while leaving any directory part and inner dots alone.
+fn strip_cwl_extension(name: &str) -> String {
+    match Path::new(name).extension() {
+        //`extension` is always preceded by a `.` and matched ASCII here, so this stays on a
+        //char boundary
+        Some(ext) if ext.eq_ignore_ascii_case("cwl") => {
+            name[..name.len() - ext.len() - 1].to_string()
+        }
+        _ => name.to_string(),
+    }
+}
+
+/// Builds `{base_dir}/{tool_name}.cwl` for the given command/name.
+pub fn get_qualified_filename(
+    command: &OneOrMany<String>,
+    the_name: Option<&str>,
+    base_dir: impl AsRef<Path>,
+) -> PathBuf {
+    get_qualified_filename_by_name(&derive_tool_name(command, the_name), base_dir)
+}
+
+/// Builds `{base_dir}/{name}.cwl` for a document that always has an explicit name -- a
+/// workflow, unlike a tool, is never named after a command line.
+pub fn get_qualified_filename_by_name(name: &str, base_dir: impl AsRef<Path>) -> PathBuf {
+    let filename = format!("{}.cwl", strip_cwl_extension(name));
+    base_dir.as_ref().join(filename)
+}
+
+pub(crate) fn get_filename_without_extension(relative_path: impl AsRef<Path>) -> String {
+    let filename = relative_path
+        .as_ref()
+        .file_name()
+        .map(|f| f.to_string_lossy())
+        .unwrap_or(relative_path.as_ref().to_string_lossy());
+    filename.split('.').next().unwrap_or(&filename).to_string()
+}
+
+/// Rewrites `filename` to be relative to `relative_to`. Returns a `String` rather than a
+/// `PathBuf` because every caller assigns the result straight into a CWL `location`/`include`
+/// field, which the schema types as a string.
+pub(crate) fn resolve_path<P: AsRef<Path>, Q: AsRef<Path>>(filename: P, relative_to: Q) -> String {
+    let path = filename.as_ref();
+    let relative_path = Path::new(relative_to.as_ref());
+    let base_dir = match relative_path.extension() {
+        Some(_) => relative_path.parent().unwrap_or_else(|| Path::new(".")),
+        None => relative_path,
+    };
+
+    // pathdiff can't relativize across roots (e.g. different drives on Windows) --
+    // fall back to the original path unchanged rather than panicking.
+    pathdiff::diff_paths(path, base_dir)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rstest::rstest;
+
+    fn os_path(path: &str) -> String {
+        if cfg!(target_os = "windows") {
+            Path::new(path).to_string_lossy().replace('/', "\\")
+        } else {
+            path.to_string()
+        }
+    }
+
+    #[rstest]
+    #[case("results.csv", "results")]
+    #[case("/some/relative/path.txt", "path")]
+    #[case("some/archive.tar.gz", "archive")]
+    pub fn test_get_filename_without_extension(#[case] input: &str, #[case] expected: &str) {
+        assert_eq!(get_filename_without_extension(input), expected.to_string());
+    }
+
+    #[rstest]
+    #[case(
+        "tests/testdata/input.txt",
+        "workflows/echo/echo.cwl",
+        "../../tests/testdata/input.txt"
+    )]
+    #[case(
+        "tests/testdata/input.txt",
+        "workflows/echo/",
+        "../../tests/testdata/input.txt"
+    )]
+    #[case("workflows/echo/echo.py", "workflows/echo/echo.cwl", "echo.py")]
+    #[case("workflows/lol/echo.py", "workflows/echo/echo.cwl", "../lol/echo.py")]
+    #[case(
+        "/home/user/workflows/echo/echo.py",
+        "/home/user/workflows/echo/echo.cwl",
+        "echo.py"
+    )]
+    fn test_resolve_path(#[case] path: &str, #[case] relative_to: &str, #[case] expected: &str) {
+        assert_eq!(resolve_path(path, relative_to), os_path(expected));
+    }
+
+    #[rstest]
+    #[case(OneOrMany::Many(vec!["python3".to_string(), "test/data/script.py".to_string()]), "script")]
+    #[case(OneOrMany::One("echo".to_string()), "echo")]
+    fn test_derive_tool_name(#[case] command: OneOrMany<String>, #[case] expected: &str) {
+        assert_eq!(derive_tool_name(&command, None), expected);
+    }
+
+    #[test]
+    fn test_derive_tool_name_with_name() {
+        assert_eq!(
+            derive_tool_name(&OneOrMany::One("echo".to_string()), Some("hello")),
+            "hello"
+        );
+    }
+
+    #[rstest]
+    #[case(vec!["python3.11", "script.py"], "script")]
+    #[case(vec!["python3", "script.py"], "script")]
+    //`python -m module` / `R -e script.R`: name comes from the third token
+    #[case(vec!["python3", "-m", "my_module"], "my_module")]
+    #[case(vec!["Rscript", "-e", "analysis.R"], "analysis")]
+    //not an executor -- named after the command itself
+    #[case(vec!["Rake", "build"], "Rake")]
+    fn test_derive_tool_name_mirrors_base_command(
+        #[case] command: Vec<&str>,
+        #[case] expected: &str,
+    ) {
+        use crate::authoring::tool::parser::command::get_base_command;
+
+        let base = get_base_command(&command);
+        assert_eq!(derive_tool_name(&base, None), expected);
+    }
+
+    #[rstest]
+    #[case("MyTool.CWL", "MyTool")]
+    #[case("hello.cwl", "hello")]
+    #[case("a.cwl.bak.cwl", "a.cwl.bak")]
+    #[case("no_extension", "no_extension")]
+    #[case("tool.txt", "tool.txt")]
+    //a directory part in the name is preserved -- only the extension is dropped
+    #[case("group/tool.cwl", "group/tool")]
+    fn test_derive_tool_name_strips_cwl_extension(#[case] name: &str, #[case] expected: &str) {
+        assert_eq!(
+            derive_tool_name(&OneOrMany::One("echo".to_string()), Some(name)),
+            expected
+        );
+    }
+
+    #[rstest]
+    #[case(OneOrMany::Many(vec!["python3".to_string(), "test/data/script.py".to_string()]), "workflows/script.cwl")]
+    #[case(OneOrMany::One("echo".to_string()), "workflows/echo.cwl")]
+    fn test_get_qualified_filename(#[case] command: OneOrMany<String>, #[case] expected: &str) {
+        assert_eq!(
+            get_qualified_filename(&command, None, WORKFLOWS_FOLDER),
+            Path::new(&os_path(expected))
+        );
+    }
+
+    #[test]
+    fn test_get_qualified_filename_with_name() {
+        assert_eq!(
+            get_qualified_filename(
+                &OneOrMany::One("echo".to_string()),
+                Some("hello"),
+                WORKFLOWS_FOLDER
+            ),
+            Path::new(&os_path("workflows/hello.cwl"))
+        );
+    }
+
+    #[test]
+    fn test_get_qualified_filename_custom_base_dir() {
+        // the base directory is entirely the caller's decision, not derived here
+        assert_eq!(
+            get_qualified_filename(&OneOrMany::One("echo".to_string()), None, "out/dir"),
+            Path::new(&os_path("out/dir/echo.cwl"))
+        );
+    }
+
+    #[test]
+    fn test_get_qualified_filename_shared_folder_for_multiple_tools() {
+        // ARC-style grouping: caller points several tools (and a subworkflow) at
+        // the same folder instead of getting a fresh folder per tool forced on them
+        let shared = "workflows/my_group";
+        assert_eq!(
+            get_qualified_filename(&OneOrMany::One("tool_a".to_string()), None, shared),
+            Path::new(&os_path("workflows/my_group/tool_a.cwl"))
+        );
+        assert_eq!(
+            get_qualified_filename(&OneOrMany::One("tool_b".to_string()), None, shared),
+            Path::new(&os_path("workflows/my_group/tool_b.cwl"))
+        );
+    }
+}

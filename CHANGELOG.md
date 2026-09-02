@@ -1,4 +1,38 @@
 # Unreleased
+## 🚀 Features
+- Unified `s4n execute` around a single `--engine` flag (`local`, `docker`, `tes`, `reana`) instead of separate `local`/`remote` subcommands, wiring `commonwl`'s Docker and TES backends into the CLI for the first time
+- `run` (engine `local` by default) is now `execute`'s default subcommand, so `s4n execute <FILE> [INPUT_FILE]` works directly without typing `run`
+- `s4n execute reana status|download|rocrate` replace the old `execute remote` subcommands for querying/fetching runs already submitted to REANA
+- `s4n execute run --detach` submits a REANA run and returns immediately instead of waiting; every other engine always waits, since only REANA keeps server-side run state to reconnect to afterward
+- REANA/TES credentials (`REANA_SERVER_URL`/`REANA_ACCESS_TOKEN`/`TES_URL`/`TES_STORAGE`/`TES_TOKEN`) can now be set in a `.env` file, loaded automatically
+- Can export RO Crates from local backend
+- Updated the underlying CWL libraries to our [`commonwl`](https://github.com/fairagro/commonwl) library #236
+- Removed `annotate` command due to lack of usage
+- Removed `init` Option `-a` which could be used to create ARCs - from a long term perspective the ARC spec may change - if we are not able to provide updates everytime this feature obsoletes anyway
+- adds EDAM Ontology based lookups to input and output formats (closes #271 & closes #272 & closes #265)
+- is able to select an existing container from https://fairagro.github.io/sciwin-container-registry/ which partially fixes #196 
+- use `reana-cwl-client` which fixes #297 
+- REANA should be able to run Tools also
+- Own Error-Types instead of `anyhow` in most places
+- Add global `--debug` flag to be extra verbose
+
+> [!IMPORTANT]
+> `s4n execute`'s command structure changed (**Breaking Change**). The mapping is as follows:
+> | Old Command | New Command |
+> |---|---|
+> | `s4n execute local <FILE> [ARGS...]` | `s4n execute <FILE> [INPUT_FILE]` |
+> | `s4n execute local --podman`/`--singularity`/`--apptainer` | `s4n execute --runtime podman`/`singularity`/`apptainer` |
+> | `s4n execute remote start <FILE> [INPUT_FILE] --watch` | `s4n execute --engine reana <FILE> [INPUT_FILE]` (now waits by default; add `--detach` to submit and return instead) |
+> | `s4n execute remote status [NAME]` | `s4n execute reana status [NAME]` |
+> | `s4n execute remote download <NAME>` | `s4n execute reana download <NAME>` |
+> | `s4n execute remote rocrate <NAME>` | `s4n execute reana rocrate <NAME>` |
+> | `s4n execute remote logout` / `--logout` | removed -- credentials are just `REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` env vars (optionally via `.env`), nothing is persisted to log out of |
+>
+> The `--key value ...` trailing-argument input override syntax is also removed; only a single YAML/JSON job file positional is supported now.
+
+## 🐛 Bugfixes
+- ramping up runner conformance from 223/378 to 376/378
+- fixed `execute`'s `--rocrate`/`--rocrate_dir` (and other options) being silently swallowed when placed after the CWL file argument
 
 # v1.2.0
 ## 🚀 Features

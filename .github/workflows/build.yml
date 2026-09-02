@@ -16,13 +16,13 @@ jobs:
           - os: "macos-latest"
     runs-on: ${{matrix.os}}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           override: true
       - name: Cache Cargo
-        uses: actions/cache@v3
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo
@@ -39,22 +39,6 @@ jobs:
           podman machine init
           $Env:DOCKER_HOST = 'npipe:////./pipe/podman-machine-default'
           podman machine start
-      - name: Install Systen Packages
-        if: ${{ runner.os == 'linux' }}
-        run: |
-          sudo apt-get update 
-          sudo apt-get install -y \
-          libgtk-3-dev \
-          libglib2.0-dev \
-          libwebkit2gtk-4.1-dev \
-          build-essential \
-          curl \
-          wget \
-          file \
-          libxdo-dev \
-          libssl-dev \
-          libayatana-appindicator3-dev \
-          librsvg2-dev
       - name: Install cargo-nextest
         uses: baptiste0928/cargo-install@v3
         with:

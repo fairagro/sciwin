@@ -1,0 +1,419 @@
+---
+title: Getting Started Example
+sidebar:
+  order: 2
+slug: 1.0/examples/getting-started
+---
+
+This example is a sample use case for building a small project with `s4n`. It features the creation of two commandline scripts and the combination of those into a workflow as well as the execution of this workflow using the internal CWL runner. For detailed examples for the used `s4n` commands visit the [examples](../examples/index.md) page.
+
+## Prerequisites
+
+Add `s4n` to your `PATH` environment variable if not done already.
+
+```bash
+export PATH=$PATH:/path/to/your/s4n/executable
+```
+
+To verify the successful addition to the `PATH` variable the following command can be used.
+
+```bash
+s4n -V
+# s4n 0.1.0
+```
+
+## Initialization
+
+To initialize a new project use the `s4n init` command. A project folder can be specifies using the `-p` argument.
+The command will initialize a git repository in this folder if there is none already. Furthermore a `workflows` folder will be created.
+
+```bash
+s4n init -p test_project
+# 📂 s4n project initialisation sucessfully:
+# test_project (Base)
+#   ├── workflows
+```
+
+For this example some data needs to be created. To download the data a new folder `data` needs to be created. The raw data files can be downloaded using e.g. `wget`.
+
+```bash
+wget https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client/refs/heads/main/tests/test_data/hello_world/data/population.csv
+wget https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client/refs/heads/main/tests/test_data/hello_world/data/speakers_revised.csv
+```
+
+## Creation of Tools
+
+The keep the demo project organized, the `workflows` folder will also be used to house the scripts used in this demo. The following bash script needs to be created as `workflows/calculation/calculation.py`
+
+```python
+import argparse
+import csv
+
+def calculate_total_population(population_file):
+    total_population = 0
+    with open(population_file, 'r') as f:
+        reader = csv.reader(f)
+        next(reader) 
+        for row in reader:
+            try:
+                total_population += int(row[1]) 
+            except ValueError:
+                print(f"Error: Invalid population value in {row[0]}")
+                return None
+    return total_population
+
+def calculate_speaker_percentages(speakers_file, total_population):
+    print("Language,Speakers,Percentage")
+    with open(speakers_file, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            try:
+                language = row[0]
+                speakers = int(row[1])
+                percentage = (speakers / total_population) * 100
+                print(f"{language},{speakers},{percentage:.2f}%")
+            except ValueError:
+                print(f"Error: Invalid speakers value in {row[0]}")
+
+def main():
+    parser = argparse.ArgumentParser(description='Calculate population-based percentages.')
+    parser.add_argument('--population', required=True, help='CSV file containing population data')
+    parser.add_argument('--speakers', required=True, help='CSV file containing speakers data')
+
+    args = parser.parse_args()
+    try:
+        total_population = calculate_total_population(args.population)
+        calculate_speaker_percentages(args.speakers, total_population)
+    except FileNotFoundError as e:
+        print(f"Error: File not found: {e.filename}")
+        return
+
+if __name__ == "__main__":
+    main()
+```
+
+To run the tool creation command the changes need to be committed beforehand. The shell script usually would be called with the command `python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv`. To create a CommandLineTool this only needs to be prefixed with `s4n tool create` or `s4n run`. However the `>` operator needs to be escaped using a backslash.
+
+```bash
+s4n create python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv
+# 📂 The current working directory is /home/ubuntu/test_project
+# ⏳ Executing Command: `python workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv`
+# 📜 Found changes:
+#         - results.csv
+# 
+# 📄 Created CWL file workflows/calculation/calculation.cwl
+```
+
+This created CWL file should look like the following example:
+
+```yaml
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: workflows/calculation/calculation.py
+    entry:
+      $include: calculation.py
+
+inputs:
+- id: speakers
+  type: File
+  default:
+    class: File
+    location: '../../data/speakers_revised.csv'
+  inputBinding:
+    prefix: '--speakers'
+- id: population
+  type: File
+  default:
+    class: File
+    location: '../../data/population.csv'
+  inputBinding:
+    prefix: '--population'
+
+outputs:
+- id: results
+  type: File
+  outputBinding:
+    glob: results.csv
+stdout: results.csv
+
+baseCommand:
+- python
+- workflows/calculation/calculation.py
+```
+
+The `create` command created a description of the script which can be used to build workflows. In this example a second script will be used to have a linear two-step-workflow at the end (`matplotlib` needs to be installed beforehand!)
+
+```python
+import argparse
+import csv
+import matplotlib.pyplot as plt
+
+def generate_bar_plot(results_file):
+    languages = []
+    percentages = []
+    with open(results_file, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)
+        for row in reader:
+            language = row[0]
+            percentage = float(row[2].replace('%', ''))  
+            languages.append(language)
+            percentages.append(percentage)
+
+    plt.bar(languages, percentages)
+    plt.xlabel('Language')
+    plt.ylabel('Percentage of Total Population')
+    plt.title('Language Speakers as Percentage of Total Population')
+    plt.xticks(rotation=45)
+    plt.tight_layout()    
+    plt.savefig("figure.png")
+
+def main():
+    parser = argparse.ArgumentParser(description='Generate a bar plot from results.csv.')
+    parser.add_argument('--data', required=True, help='CSV file containing the results data for bar plot')
+
+    args = parser.parse_args()
+
+    try:
+        generate_bar_plot(args.data)
+    except FileNotFoundError as e:
+        print(f"Error: File not found: {e.filename}")
+        return
+
+if __name__ == "__main__":
+    main()
+```
+
+To create the tool for this script the following command can be used to create the CWL definition. SciWIn client automatically determines that `figure.png` shall be listed as an output for this tool.
+
+```bash
+s4ncreate python workflows/plot/plot.py --data results.csv
+# 📂 The current working directory is /home/ubuntu/test_project
+# ⏳ Executing Command: `python workflows/plot/plot.py --data results.csv`
+# 📜 Found changes:
+#         - figure.png
+# 
+# 📄 Created CWL file workflows/plot/plot.cwl
+```
+
+The freshly created plot tool should look like this:
+
+```yaml
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: workflows/plot/plot.py
+    entry:
+      $include: plot.py
+
+inputs:
+- id: data
+  type: File
+  default:
+    class: File
+    location: '../../results.csv'
+  inputBinding:
+    prefix: '--data'
+
+outputs:
+- id: figure
+  type: File
+  outputBinding:
+    glob: figure.png
+
+baseCommand:
+- python
+- workflows/plot/plot.py
+```
+
+## Combining Tools to Workflows
+
+To check that all has been created correctly the `list` command can be used to visualize tools and their in- and outputs.
+
+```bash
+s4n list -a
+# 📂 Scanning for tools in: /home/ubuntu/test_project
+# +-------------+----------------------------------------------+---------------------+
+# | Tool        | Inputs                                       | Outputs             |
+# +-------------+----------------------------------------------+---------------------+
+# | plot        | plot/data                                    | plot/figure         |
+# +-------------+----------------------------------------------+---------------------+
+# | calculation | calculation/speakers, calculation/population | calculation/results |
+# +-------------+----------------------------------------------+---------------------+
+```
+
+To execute those tools and to really benefit from using CWL a workflow can be created connecting the tools. To create a blank workflow file the
+
+```bash
+s4n create --name main
+# 📄 Created new Workflow file: workflows/main/main.cwl
+```
+
+Connections between tools and in- and outputs can be created by the `connect` command. There are the two arguments `--from` and `--to` which creates a line from one node to another. Furthermore a workflow needs inputs and outputs to process its steps. The slot names can be copied from the aforementioned `s4n tool list` command, a connection to in. and outputs needs to be prefixed with `@` and will result in creation of a new in- oder output slot.
+
+```bash
+s4n connect main --from @inputs/speakers --to calculation/speakers
+# ➕ Added step calculation to workflow
+# ➕ Added or updated connection from inputs.speakers to calculation/speakers in workflow
+# ✔️  Updated Workflow workflows/main/main.cwl!
+```
+
+A report of the current status of the workflow can be received by using the `list` command. Doing this now will result in the following table. As it states there currently is no output and one input (`speakers`). The only step is the calculation step, which has the input connected to its `speakers` slot. The `population` slot would use its default value and nothing is done with the steps output `results`.
+
+```bash
+s4n list main
+# Status report for Workflow workflows/main/main.cwl
+# +--------------------------------+------------------+---------------+
+# | Tool                           | Inputs           | Outputs       |
+# +================================+==================+===============+
+# | <Workflow>                     | ✅    speakers   |               |
+# +--------------------------------+------------------+---------------+
+# | Steps:                         |                  |               |
+# +--------------------------------+------------------+---------------+
+# | ../calculation/calculation.cwl | ✅    speakers   | ❌    results |
+# |                                | 🔘    population |               |
+# +--------------------------------+------------------+---------------+
+# ✅ : connected - 🔘 : tool default - ❌ : no connection
+```
+
+To connect another input to the `population` slot the above command can be reused with the neccessary adjustments. The stdout will be one line shorter now, as the step will not be created a second time.
+
+```bash
+s4n connect main --from @inputs/population --to calculation/population
+# ➕ Added or updated connection from inputs.population to calculation/population in workflow
+# ✔️  Updated Workflow workflows/main/main.cwl!
+```
+
+As done before the result of the calculation step shall be used in the plot script. Therefore a connection between both steps is needed. The `s4n tool ls -a` command can be used to to copy and paste the slot names for this connection.
+
+```bash
+s4n connect main --from calculation/results --to plot/data
+# 🔗 Found step calculation in workflow. Not changing that!
+# ➕ Added step plot to workflow
+# ✔️  Updated Workflow workflows/main/main.cwl!
+```
+
+To complete the workflow a connection to an output is needed. Otherwise no file will be copied back after running the workflow.
+
+```bash
+s4n connect main --from plot/figure --to @outputs/image
+# ➕ Added or updated connection from plot/figure to outputs.image in workflow!
+# ✔️  Updated Workflow workflows/main/main.cwl!
+```
+
+Running the status command again will show that everything is fine now!
+
+```bash
+s4n list main
+# Status report for Workflow workflows/main/main.cwl
+# +--------------------------------+------------------+---------------+
+# | Tool                           | Inputs           | Outputs       |
+# +================================+==================+===============+
+# | <Workflow>                     | ✅    speakers   | ✅    image   |
+# |                                | ✅    population |               |
+# +--------------------------------+------------------+---------------+
+# | Steps:                         |                  |               |
+# +--------------------------------+------------------+---------------+
+# | ../calculation/calculation.cwl | ✅    speakers   | ✅    results |
+# |                                | ✅    population |               |
+# +--------------------------------+------------------+---------------+
+# | ../plot/plot.cwl               | ✅    data       | ✅    figure  |
+# +--------------------------------+------------------+---------------+
+# ✅ : connected - 🔘 : tool default - ❌ : no connection
+```
+
+The finished CWL workflow file looks like this:
+
+```yaml
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: Workflow
+
+inputs:
+- id: speakers
+  type: File
+- id: population
+  type: File
+
+outputs:
+- id: image
+  type: File
+  outputSource: plot/figure
+
+steps:
+- id: calculation
+  in:
+    population: population
+    speakers: speakers
+  run: '../calculation/calculation.cwl'
+  out:
+  - results
+- id: plot
+  in:
+    data: calculation/results
+  run: '../plot/plot.cwl'
+  out:
+  - figure
+```
+
+Use the save command to commit the workflow
+
+```bash
+s4n save main
+```
+
+![Workflow](../../../../assets/1.0/simple_workflow.svg)
+
+## Execution
+
+The workflow now can be executed using a standard CWL runner like `cwltool` or using SciWIn-client's internal runner. SciWIn's internal runner is still in a testing phase so it will not be able to support all features `cwltool` does, but is does support everything the client can generate. CWL can either be executed by using commandline arguments or by using a input file in YAML format. For this demo the following input file (`inputs.yml`) is used:
+
+```yaml
+population:
+  class: File
+  location: data/population.csv
+speakers:
+  class: File
+  location: data/speakers_revised.csv
+```
+
+Before running the workflow the output files of the script execution should be deleted to verify the correct execution. The workflow can be executed locally by using the following command which concludes this example.
+
+```bash
+s4n execute local workflows/main/main.cwl inputs.yml
+# ⚠️  The internal runner currently is for testing purposes only and does not support containerization, yet!
+# 🚲 Executing CommandLineTool "workflows/main/../calculation/calculation.cwl" ...
+# 📁 Created staging directory: "/tmp/.tmpo1VAdn"
+# ⏳ Executing Command: `python workflows/calculation/calculation.py --speakers /tmp/.tmpo1VAdn/data/speakers_revised.csv --population /tmp/.tmpo1VAdn/data/population.csv`
+# 📜 Wrote output file: "/tmp/.tmp7ol6bV/results.csv"
+# ✔️  CommandLineTool "workflows/main/../calculation/calculation.cwl" executed successfully in 196ms!
+# 🚲 Executing CommandLineTool "workflows/main/../plot/plot.cwl" ...
+# 📁 Created staging directory: "/tmp/.tmphnWjUa"
+# ⏳ Executing Command: `python workflows/plot/plot.py --data /tmp/.tmphnWjUa/results.csv`
+# 📜 Wrote output file: "/tmp/.tmp7ol6bV/figure.png"
+# ✔️  CommandLineTool "workflows/main/../plot/plot.cwl" executed successfully in 1s!
+# {
+#   "image": {
+#     "location": "file:///home/ubuntu/test_project/figure.png",
+#     "basename": "figure.png",
+#     "class": "File",
+#     "checksum": "sha1$65a86b4fa5d42ee81ecda344fc1030c61ad6cb06",
+#     "size": 40074,
+#     "path": "/home/ubuntu/test_project/figure.png"
+#   }
+# }
+# ✔️  Workflow "workflows/main/main.cwl" executed successfully in 1s!
+```

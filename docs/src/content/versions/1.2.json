@@ -1,0 +1,34 @@
+{
+  "sidebar": [
+    {
+      "label": "Getting Started",
+      "items": [
+        {
+          "autogenerate": {
+            "directory": "getting-started"
+          }
+        }
+      ]
+    },
+    {
+      "label": "Examples",
+      "items": [
+        {
+          "autogenerate": {
+            "directory": "examples"
+          }
+        }
+      ]
+    },
+    {
+      "label": "Reference",
+      "items": [
+        {
+          "autogenerate": {
+            "directory": "reference"
+          }
+        }
+      ]
+    }
+  ]
+}

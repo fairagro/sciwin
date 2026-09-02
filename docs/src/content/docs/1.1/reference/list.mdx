@@ -1,0 +1,130 @@
+---
+title: list
+sidebar:
+  order: 4
+slug: 1.1/reference/list
+---
+
+## `list`
+
+`list` or `ls` can be used to list all existing CWL Workflows and Tools. Using the command without the `-a` flag just ouputs the names of all existing CWL files in the project. Using the `-all` (or `-a`) flag will also output the tools in- and outputs which than can easily be used for the `connect` command.
+
+```txt frame="terminal" title="Usage"
+Lists either all CWL Files or details to a given file
+
+Usage: s4n list [OPTIONS] [FILE]
+
+Arguments:
+  [FILE]  
+
+Options:
+  -a, --all   Outputs the tools with inputs and outputs
+  -h, --help  Print help
+```
+
+:::tip[Example]
+Simple Usage:
+
+```bash
+> s4n list
+📂 Available CWL Files in: /mnt/m4.4_sciwin_client
+📄 test-wf_features (Workflow) in /mnt/m4.4_sciwin_client/testdata
+📄 echo_id (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata
+📄 default (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata
+📄 remote (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata
+📄 mkdir_wf (Workflow) in /mnt/m4.4_sciwin_client/testdata
+📄 read_bin (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata
+📄 wf_inout (Workflow) in /mnt/m4.4_sciwin_client/testdata
+📄 plot (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata/hello_world/workflows/plot
+📄 main (Workflow) in /mnt/m4.4_sciwin_client/testdata/hello_world/workflows/main
+📄 calculation (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata/hello_world/workflows/calculation
+📄 test_expr (ExpressionTool) in /mnt/m4.4_sciwin_client/testdata
+📄 mkdir (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata
+📄 wf_inout_dir (Workflow) in /mnt/m4.4_sciwin_client/testdata
+📄 array_test (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata
+📄 echo (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata
+📄 test-wf (Workflow) in /mnt/m4.4_sciwin_client/testdata
+📄 calculation_packed (CommandLineTool) in /mnt/m4.4_sciwin_client/testdata/packed
+📄 wf_inout_file (Workflow) in /mnt/m4.4_sciwin_client/testdata
+📄 plot (CommandLineTool) in /mnt/m4.4_sciwin_client/crates/remote-execution/testdata/hello_world/workflows/plot
+📄 main (Workflow) in /mnt/m4.4_sciwin_client/crates/remote-execution/testdata/hello_world/workflows/main
+📄 calculation (CommandLineTool) in /mnt/m4.4_sciwin_client/crates/remote-execution/testdata/hello_world/workflows/calculation
+```
+
+Outputting details with `-a`:
+
+```bash
+> s4n list -a
+📂 Available CWL Files in: /mnt/m4.4_sciwin_client
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| Tool                                 | Inputs                                                                 | Outputs                          |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| test-wf_features (Workflow)          | test-wf_features/pop                                                   | test-wf_features/out             |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| echo_id (CommandLineTool)            | echo_id/test                                                           | echo_id/results                  |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| default (CommandLineTool)            | default/file1                                                          | default/out                      |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| remote (CommandLineTool)             | remote/file                                                            |                                  |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| mkdir_wf (Workflow)                  | mkdir_wf/dirname                                                       | mkdir_wf/out                     |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| read_bin (CommandLineTool)           | read_bin/data                                                          | read_bin/output                  |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| wf_inout (Workflow)                  | wf_inout/first                                                         | wf_inout/last                    |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| plot (CommandLineTool)               | plot/results                                                           | plot/o_results                   |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| main (Workflow)                      | main/population, main/speakers                                         | main/out                         |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| calculation (CommandLineTool)        | calculation/population, calculation/speakers                           | calculation/results              |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| test_expr (ExpressionTool)           | test_expr/message                                                      | test_expr/uppercase_message      |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| mkdir (CommandLineTool)              | mkdir/dirname                                                          | mkdir/out                        |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| wf_inout_dir (Workflow)              | wf_inout_dir/dir                                                       | wf_inout_dir/newdir              |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| array_test (CommandLineTool)         |                                                                        | array_test/array                 |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| echo (CommandLineTool)               | echo/test                                                              | echo/results                     |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| test-wf (Workflow)                   | test-wf/pop                                                            | test-wf/out                      |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| calculation_packed (CommandLineTool) | calculation_packed/#main/population, calculation_packed/#main/speakers | calculation_packed/#main/results |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| wf_inout_file (Workflow)             | wf_inout_file/file                                                     | wf_inout_file/newfile            |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| plot (CommandLineTool)               | plot/results                                                           | plot/results                     |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| main (Workflow)                      | main/population, main/speakers                                         | main/out                         |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+| calculation (CommandLineTool)        | calculation/population, calculation/speakers                           | calculation/results              |
++--------------------------------------+------------------------------------------------------------------------+----------------------------------+
+```
+
+Listing a specific file:
+
+```bash
+> s4n list testdata/hello_world/workflows/main/main.cwl
+🔎 Workflow: `testdata/hello_world/workflows/main/main.cwl`
+_________________________________________________________________
+CWL Version:    v1.2
+_________________________________________________________________
+Connection status:
++--------------------------------+------------------+-----------------+
+| Tool                           | Inputs           | Outputs         |
++================================+==================+=================+
+| <Workflow>                     | ✅    population | ✅    out       |
+|                                | ✅    speakers   |                 |
++--------------------------------+------------------+-----------------+
+| Steps:                         |                  |                 |
++--------------------------------+------------------+-----------------+
+| ../calculation/calculation.cwl | ✅    population | ✅    results   |
+|                                | ✅    speakers   |                 |
++--------------------------------+------------------+-----------------+
+| ../plot/plot.cwl               | ✅    results    | ✅    o_results |
++--------------------------------+------------------+-----------------+
+✅ : connected - 🔘 : tool default - ❌ : no connection
+```
+:::

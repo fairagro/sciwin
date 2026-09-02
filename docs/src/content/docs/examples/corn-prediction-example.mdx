@@ -251,11 +251,12 @@ yield:
 
 ### 🔹 Run the Full Pipeline
 ```bash
-s4n execute local workflows/demo/demo.cwl inputs.yml
+s4n execute workflows/demo/demo.cwl inputs.yml
 ```
 
 
 ### 🔹 Run Remotely (Optional)
+Requires a [REANA](https://reanahub.io) instance, with `REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` set (directly, or via a `.env` file):
 ```bash
-s4n execute remote start workflows/demo/demo.cwl inputs.yml
+s4n execute --engine reana workflows/demo/demo.cwl inputs.yml
 ```

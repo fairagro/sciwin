@@ -1,8 +1,0 @@
-# this crate does not print any output!
-disallowed-macros = [
-    "std::println",
-    "std::print",
-    "std::eprintln",
-    "std::eprint",
-]
-disallowed-methods = ["util::is_cwl_file"]

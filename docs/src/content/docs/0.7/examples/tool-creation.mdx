@@ -1,0 +1,434 @@
+---
+title: Tool creation
+slug: 0.7/examples/tool-creation
+---
+
+CWL command line tools can be created easily using `s4n`. The simplest approach is to just add the `s4n tool create` or `s4n run` as prefix to the command.
+
+A command line tool consists of a `baseCommand` which is usually any kind of executable which accepts `inputs` and writes `outputs`. In- and Outputs can be of multiple kinds of value type but Files are generally the most used kind. The `baseCommand` can be a single term like `echo` or a list like `[python, script.py]`. All of this is handle by SciWIn Client.
+
+!!! note
+The following examples assume that they are being executed in a git repository with clean status. If there is no repository yet, use `s4n init` to create an environment.
+
+## Wrapping `echo`
+
+A common example is to wrap the `echo` command for its simplicity. To create the tool `echo "Hello World"` is prefixed with `s4n tool create`.
+
+```bash title="Command"
+s4n tool create echo "Hello World"
+```
+
+```yaml title="echo.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+inputs:
+- id: hello_world
+  type: string
+  default: Hello World
+  inputBinding:
+    position: 0
+
+outputs: []
+baseCommand: echo
+```
+
+The baseCommand was correctly determined as `echo` and an input slot was created named with the value of the input as slug `hello_world`. This could be renamed by editing the file, but for now we leave it as is. Currrently the tool is not producing any outputs. Assuming we want to create a file using the `echo` command which is a common use case a redirection `>` operator can be used. To not redirect the `s4n` output it needs to be shielded by a backslash `\>`.
+Assuming the following `yaml` file needs to be created
+
+```yaml
+message: "Hello World"
+```
+
+The usual command would be `echo 'message: "Hello World"' > hello.yaml`. To create the command line tool the command will be
+
+```bash title="Command"
+s4n tool create --name echo2 echo 'message: "Hello World"' \> hello.yaml
+```
+
+```yaml title="echo2.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+inputs:
+- id: message_hello_world
+  type: string
+  default:
+    message: Hello World
+  inputBinding:
+    position: 0
+
+outputs:
+- id: hello
+  type: File
+  outputBinding:
+    glob: hello.yaml
+stdout: hello.yaml
+
+baseCommand: echo
+```
+
+The `stdout` part will tell the tool to redirect output to the file called `hello.yaml`. Noticed the `--name` option? This is used to specify the file name of the to be created tool.
+
+## Wrapping a python script
+
+A common usecase is to wrap a script in an interpreted language like python or R. Wrapping a python script follows the same principles like shown in the previous example where the `echo` command was wrapped.
+
+```bash title="Command"
+s4n tool create --name echo_python python echo.py --message "SciWIn rocks!" --output-file out.txt
+```
+
+```python title="echo.py"
+import argparse;
+
+parser = argparse.ArgumentParser(description='Echo your input')
+parser.add_argument('--message', help='Message to echo', required=True)
+parser.add_argument('--output-file', help='File to save the message', required=True)
+
+args = parser.parse_args()
+
+with open(args.output_file, 'w') as f:
+    f.write(args.message)
+    print(args.message)
+```
+
+```yaml title="echo_python.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: echo.py
+    entry:
+      $include: '../../echo.py'
+  - class: InlineJavascriptRequirement
+
+inputs:
+- id: message
+  type: string
+  default: SciWIn rocks!
+  inputBinding:
+    prefix: '--message'
+- id: outputfile
+  type: string
+  default: out.txt
+  inputBinding:
+    prefix: '--output-file'
+
+outputs:
+- id: out
+  type: File
+  outputBinding:
+    glob: $(inputs.outputfile)
+
+baseCommand:
+- python
+- echo.py
+```
+
+As shown in `echo_python.cwl` the `outputBinding` for the output file is set to `$(inputs.outputfile)` and therefore automatically gets the name given in the input. `s4n` also automatically detects the usage of `python` and adds the used script as an `InitialWorkDirRequirement` which makes the script available for the execution engine.
+
+## Wrapping a long running script
+
+Sometimes it is neccessary to run a highly complicated script on a remote environment because it would take to long on a simple machine. But how to get the CWL file than? In the example python file the script will sleep for 1 minute and then writes a file. One could use the `s4n tool create` command as shown above and just wait 60 seconds. But what if the calculation takes a week? This is possible for example in quantum chemical calculations like DFT.
+There is the `--no-run` flag which tells `s4n` to not run the script. However this will not create an output and therefore can not detect any output files.
+
+```bash title="Command"
+s4n tool create --no-run python sleep.py
+```
+
+```python title="sleep.py"
+from time import sleep
+
+sleep(60)
+
+with open('sleep.txt', 'w') as f:
+    f.write('I slept for 60 seconds')
+```
+
+```yaml title="sleep.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: sleep.py
+    entry:
+      $include: '../../sleep.py'
+
+inputs: []
+outputs: []
+baseCommand:
+- python
+- sleep.py
+```
+
+For this cases there is the possibility to specify outputs via the commandline using the `-o` or `--outputs` argument which tells the parser to add a output slot.
+
+```bash title="Command"
+s4n tool create --name sleep2 --no-run -o sleep.txt python sleep.py
+```
+
+```yaml title="sleep2.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: sleep.py
+    entry:
+      $include: '../../sleep.py'
+
+inputs: []
+outputs:
+- id: sleep
+  type: File
+  outputBinding:
+    glob: sleep.txt
+
+baseCommand:
+- python
+- sleep.py
+```
+
+This CWL file can then be executed remotely by using any runner e.g. `cwltool` and will write the `sleep.txt` file after 60 seconds.
+
+## Implicit inputs - hardcoded files
+
+Like shown in the above example there is also the possibility to specify inputs explictly. This is needed e.g. if the scripts loads a hardcoded file like in the following example.
+
+```bash title="Command"
+s4n tool create -i file.txt -o out.txt python load.py
+```
+
+```python title="load.py"
+with open('file.txt', 'r') as file:
+    data = file.read()
+    with open('out.txt', 'w') as out:
+        out.write(data)
+```
+
+```yaml title="load.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: file.txt
+    entry:
+      $include: '../../file.txt'
+  - entryname: load.py
+    entry:
+      $include: '../../load.py'
+
+inputs: []
+outputs:
+- id: out
+  type: File
+  outputBinding:
+    glob: out.txt
+
+baseCommand:
+- python
+- load.py
+```
+
+## Piping
+
+Using the pipe operator `|` is a common usecase when using the commandline. Let's assume the first 5 lines of a file are needed e.g `cat speakers.csv | head -n 5 > speakers_5.csv`
+
+```bash title="Command"
+s4n tool create cat speakers.csv \| head -n 5 \> speakers_5.csv
+```
+
+```yaml title="cat.cwl"
+   #!/usr/bin/env cwl-runner
+   
+   cwlVersion: v1.2
+   class: CommandLineTool
+   
+   requirements:
+   - class: ShellCommandRequirement
+   
+   inputs:
+   - id: speakers_csv
+     type: File
+     default:
+       class: File
+       location: '../../speakers.csv'
+     inputBinding:
+       position: 0
+   
+   outputs:
+   - id: speakers_5
+     type: File
+     outputBinding:
+       glob: speakers_5.csv
+   
+   baseCommand: cat
+   arguments:
+   - position: 1
+     valueFrom: '|'
+     shellQuote: false
+   - position: 1
+     valueFrom: head
+   - position: 2
+     valueFrom: '-n'
+   - position: 3
+     valueFrom: '5'
+   - position: 4
+     valueFrom: '>'
+   - position: 5
+     valueFrom: speakers_5.csv
+```
+
+## Pulling containers
+
+For full reproducibility it is recommended to use containers e.g. `docker` as requirement inside of the CWL files. Adding an existing container image is quite easy. The `s4n tool create` command needs to be called using `-c` or `--container-image` argument. For testing a python script using `pandas` is used together with the `pandas/pandas` container.
+
+```bash title="Command"
+s4n tool create -c pandas/pandas:pip-all python calculation.py --population population.csv --speakers speakers_revised.csv
+```
+
+```python title="calculation.py"
+import pandas as pd
+import argparse
+
+parser = argparse.ArgumentParser(prog="python calculation.py", description="Calculates the percentage of speakers for each language")
+parser.add_argument("-p", "--population", required=True, help="Path to the population.csv File")
+parser.add_argument("-s", "--speakers", required=True, help="Path to the speakers.csv File")
+
+args = parser.parse_args()
+
+df = pd.read_csv(args.population)
+sum = df["population"].sum()
+
+print(f"Total population: {sum}")
+
+df = pd.read_csv(args.speakers)
+df["percentage"] = df["speakers"] / sum * 100
+
+df.to_csv("results.csv")
+print(df.head(10))
+```
+
+```yaml title="calculation.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: calculation.py
+    entry:
+      $include: '../../calculation.py'
+- class: DockerRequirement
+  dockerPull: pandas/pandas:pip-all
+
+inputs:
+- id: population
+  type: File
+  default:
+    class: File
+    location: '../../population.csv'
+  inputBinding:
+    prefix: '--population'
+- id: speakers
+  type: File
+  default:
+    class: File
+    location: '../../speakers_revised.csv'
+  inputBinding:
+    prefix: '--speakers'
+
+outputs:
+- id: results
+  type: File
+  outputBinding:
+    glob: results.csv
+
+baseCommand:
+- python
+- calculation.py
+```
+
+When the tool is executed by a runner supporting containerization e.g. `cwltool` it is using the `pandas/pandas:pip-all` container to run the script in a reproducible environment.
+
+## Building custom containers
+
+Using a complex research environments a custom container is may needed. The same example from above will be executed in a container built from a `Dockerfile`.
+This can be achieved by using the `-c` argument with a path to a `Dockerfile`. A tag can be specified by using `-t`.
+
+```bash title="Command"
+s4n tool create -c Dockerfile -t my-docker python calculation.py --population population.csv --speakers speakers_revised.csv
+```
+
+```yaml title="calculation.cwl"
+#!/usr/bin/env cwl-runner
+
+cwlVersion: v1.2
+class: CommandLineTool
+
+requirements:
+- class: InitialWorkDirRequirement
+  listing:
+  - entryname: calculation.py
+    entry:
+      $include: '../../calculation.py'
+- class: DockerRequirement
+  dockerFile:
+    $include: '../../Dockerfile'
+  dockerImageId: my-docker
+
+inputs:
+- id: population
+  type: File
+  default:
+    class: File
+    location: '../../population.csv'
+  inputBinding:
+    prefix: '--population'
+- id: speakers
+  type: File
+  default:
+    class: File
+    location: '../../speakers_revised.csv'
+  inputBinding:
+    prefix: '--speakers'
+
+outputs:
+- id: results
+  type: File
+  outputBinding:
+    glob: results.csv
+
+baseCommand:
+- python
+- calculation.py
+
+```
+
+```docker title="Dockerfile"
+FROM python
+RUN pip install pandas
+```
+
+A runner will check whether a container with the specified image is existent and build it using the `Dockerfile` otherwise.

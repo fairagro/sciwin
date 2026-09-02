@@ -14,6 +14,8 @@
 
 ⭐ **Star this Repo** to say "Thank you!" ⭐
 
+This is the 2.x Branch, for [1.x click this link](https://github.com/fairagro/sciwin/tree/1.x)
+
 [![Share](https://img.shields.io/badge/share-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/sharing/share-offsite/?url=https://github.com/fairagro/sciwin)
 [![Share](https://img.shields.io/badge/share-FF4500?logo=reddit&logoColor=white)](https://www.reddit.com/submit?title=Check%20out%20this%20project%20on%20GitHub:%20https://github.com/fairagro/sciwin)
 [![Share](https://img.shields.io/badge/share-1877F2?logo=facebook&logoColor=white)](https://www.facebook.com/sharer/sharer.php?u=https://github.com/fairagro/sciwin)
@@ -36,7 +38,8 @@ or the FAIRagro Blogpost:
 ## 📖 Table of Contents<!-- omit from toc -->
 - [🚀 About](#-about)
 - [🏗️ How to Build and Test](#️-how-to-build-and-test)
-- [💚 SciWin Studio](#-sciwin-studio)
+  - [Crate architecture \& sibling repositories](#crate-architecture--sibling-repositories)
+- [💚 SciWin Studio](https://github.com/fairagro/sciwin_studio)
 - [🎯 Installation](#-installation)
 - [📚 How to Use](#-how-to-use)
   - [Project initialization](#project-initialization)
@@ -80,48 +83,26 @@ To run tests (unit and integration)
 cargo nextest --workspace           # Run all tests
 ```
 
-## 💚 SciWIn-Studio
-**SciWIn-Studio** is a graphical user interface (GUI) application currently in testing that complements SciWIn-Client. It provides an intuitive visual environment for researchers who prefer graphical tools over command-line interactions.
-### Features
-- Visual workflow design and management
-- Drag-and-drop interface for connecting workflow steps
-- Real-time workflow visualization
-- Accessible workflow creation without terminal expertise
+### Crate architecture & sibling repositories
+This repository is a Cargo workspace with three crates:
+- **`crates/sciwin`** (lib `sciwin`) — the shared core logic for authoring, executing and annotating workflows, used by both the CLI and the GUI.
+- **`crates/cli`** (bin `s4n`) — the SciWIn-Client command-line interface, a thin wrapper around `sciwin`.
 
-<img src=".github/studio.png" alt="Screenshot of SciWIn Studio" width=750>
+The `sciwin` crate itself builds on three sibling FAIRagro libraries, each maintained in its own repository and published as its own crate:
+| Crate | Repository | Purpose |
+|--|--|--|
+| [`commonwl`](https://github.com/fairagro/commonwl) | `commonwl` | Parses CWL documents and provides the execution engine (local, Docker and TES backends) used by `s4n execute` |
+| [`rocrate`](https://github.com/fairagro/ro-crate-lib) | `ro-crate-lib` | Reads, writes, builds and validates [RO-Crates](https://www.researchobject.org/ro-crate/), including Workflow RO-Crates and Workflow Run Crates |
+| [`reana`](https://github.com/fairagro/reana-cwl-client) | `reana-cwl-client` | Client for [REANA](https://reanahub.io/), used as an alternative execution backend to local runs |
 
-### Running SciWIn-Studio
-To run SciWIn-Studio in Development mode, you need to [install the Dioxus CLI `dx`](https://dioxuslabs.com/learn/0.7/getting_started/):
-```bash
-# Install requirements
-sudo apt-get update 
-sudo apt-get install -y \
-    libgtk-3-dev \
-    libglib2.0-dev \
-    libwebkit2gtk-4.1-dev \
-    build-essential \
-    curl \
-    wget \
-    file \
-    libxdo-dev \
-    libssl-dev \
-    libayatana-appindicator3-dev \
-    librsvg2-dev
-
-# Install Dioxus CLI
-curl -sSL https://dioxus.dev/install.sh | bash
-
-# or (slower)
-cargo install dioxus-cli
-
-# Navigate to the project directory
-cd sciwin
-
-# Launch SciWIn-Studio in debug mode
-dx serve -p sciwin
+By default these are pulled from crates.io like any other dependency, so a plain `cargo build`/`cargo run` works without checking out the other repositories. When developing a change that spans repositories (e.g. a `commonwl` API change consumed by `sciwin`), clone `commonwl`, `reana-cwl-client` and `ro-crate-lib` next to this repository and add a `[patch.crates-io]` section (in a workspace-level `.cargo/config.toml` one directory above all four checkouts, or directly in this repo's `Cargo.toml`) pointing each crate at its local path, e.g.:
+```toml
+[patch.crates-io]
+commonwl = { path = "../commonwl/crates/commonwl" }
+reana = { path = "../reana-cwl-client/crates/reana" }
+rocrate = { path = "../ro-crate-lib" }
 ```
-> [!NOTE]
-> SciWIn-Studio is currently in testing phase. Features and functionality may change as development progresses.
+Building from a directory where such a patch is in scope will then use the local sources instead of the published versions, and all affected repositories should be updated together.
 
 ## 💻 SciWIn-Client
 **SciWIn-Client** is a command-line tool designed to simplify the creation, recording, annotation, and execution of computational workflows. 
@@ -157,26 +138,6 @@ Most commands need the context of a Git repo to work. Project initialization can
 ```bash
 s4n init -p <FOLDER/PROJECT NAME>
 ```
-Besides the minimal project structure, the creation of an ["Annotated Research Context"](https://arc-rdm.org/) or ARC is also possible.
-```bash
-s4n init -a -p <FOLDER/PROJECT NAME>
-```
-
-> [!IMPORTANT]
-> The commands have changed in v1.0.0 (**Breaking Change**). The mapping is as follows:
-> | Old Command               | New Command            |
->  |---------------------------|------------------------|
->  | s4n tool create           | s4n create             |
->  | s4n tool list             | s4n list               |
->  | s4n tool remove           | s4n remove             |
->  | s4n workflow create       | s4n create --name (optional!)|
->  | s4n workflow list         | s4n list               |
->  | s4n workflow remove       | s4n remove             |
->  | s4n workflow status       | s4n list [WORKFLOW_NAME]|
->  | s4n workflow connect      | s4n connect            |
->  | s4n workflow disconnect   | s4n disconnect         |
->  | s4n workflow visualize    | s4n visualize          |
->  | s4n workflow save         | s4n save               |
 
 ### Creation of CWL CommandLineTools
 To create [CWL](https://www.commonwl.org/) CommandLineTools which can be combined to workflows later a prefix command can be used. `s4n create` will execute any given command and creates a CWL CommandLineTool accordingly.
@@ -218,10 +179,11 @@ s4n connect <NAME> --from [FILE]/[SLOT] --to [FILE/SLOT]
 For example: `s4n connect demo --from @inputs/speakers --to calculation/speakers` - The Step `calculation` will be added pointing to `workflows/calculation/calculation.cwl`, which will use the newly created input `speakers` as input for its `speakers` input.
 
 ### Execution of CWL Files
-SciWIn-Client comes with its custom CWL Runner (which does not support all `cwltool` can do, yet!) to run Workflows and CommandLineTools. The command `s4n execute local` can also be triggered using `s4n ex l`.
+SciWIn-Client comes with its custom CWL Runner (which does not support all `cwltool` can do, yet!) to run Workflows and CommandLineTools. `s4n execute` defaults to its `run` subcommand, so it can be omitted (`s4n execute` can also be triggered using `s4n ex`):
 ```bash
-s4n execute local <CWLFILE> [ARGUMENTS]
+s4n execute workflows/main/main.cwl inputs.yml
 ```
+By default this runs on the `local` engine. `--engine` also accepts `docker` (every step containerized via Docker directly), `tes` (submit to a GA4GH TES server), and `reana` (submit to a [REANA](https://reanahub.io) server, e.g. `s4n execute --engine reana workflows/main/main.cwl inputs.yml`) — see the [`execute` reference](https://fairagro.github.io/sciwin/reference/execute/) for the full flag set and required environment variables per backend.
 
 ## 🪂 Contributors
 <a href="https://github.com/fairagro/sciwin/graphs/contributors">
