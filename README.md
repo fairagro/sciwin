@@ -9,7 +9,7 @@
 [![🦀 Continuous Integration](https://github.com/fairagro/sciwin/actions/workflows/ci.yml/badge.svg)](https://github.com/fairagro/sciwin/actions/workflows/ci.yml)
 ![GitHub License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-green)
 [![GitHub Release](https://img.shields.io/github/v/release/fairagro/sciwin)](https://github.com/fairagro/sciwin/releases/latest)
-[![GitHub Downloads](https://raw.githubusercontent.com/fairagro/m4.4_metrics/refs/heads/master/badge.svg)]([https](https://github.com/fairagro/sciwin/releases/latest))
+[![GitHub Downloads](https://raw.githubusercontent.com/fairagro/m4.4_metrics/refs/heads/master/sciwin_badge.svg)]([https](https://github.com/fairagro/sciwin/releases/latest))
 
 
 ⭐ **Star this Repo** to say "Thank you!" ⭐
