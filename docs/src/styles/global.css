@@ -10,6 +10,7 @@
 }
 
 @theme {
+  --color-dark-green: #20312e;
   --color-teal: #06947a;
   --color-accent-200: #e1f2df;
   --color-accent-950: #fff;
@@ -39,14 +40,15 @@ body {
   border-radius: 0.75rem;
   min-width: 0;
 
-  .body > a:not(.button),
-  .body p > a:not(.button) {
+  .body>a:not(.button),
+  .body p>a:not(.button) {
     color: var(--color-accent-600);
     font-weight: 600;
     text-decoration: none;
   }
-  .body > a:not(.button):hover,
-  .body p > a:not(.button):hover {
+
+  .body>a:not(.button):hover,
+  .body p>a:not(.button):hover {
     text-decoration: underline;
   }
 }
@@ -77,28 +79,34 @@ body {
   border-radius: 0.6rem;
   font-weight: 600;
 }
+
 .sl-link-button.primary {
   background: linear-gradient(135deg, var(--color-teal), var(--color-accent-600));
   border-color: transparent;
   color: #fff;
   box-shadow: 0 12px 24px -12px color-mix(in srgb, var(--color-teal) 65%, transparent);
 }
+
 .sl-link-button.primary:hover {
   color: #fff;
   filter: brightness(1.08);
 }
+
 .sl-link-button.secondary {
   background: transparent;
   border-color: var(--sl-color-gray-5);
   color: var(--sl-color-white);
 }
+
 .sl-link-button.secondary:hover {
   border-color: var(--color-accent-600);
   color: var(--color-accent-600);
 }
+
 .sl-link-button.minimal {
   color: var(--color-accent-600);
 }
+
 .sl-link-button.minimal:hover {
   text-decoration: underline;
 }
@@ -118,6 +126,7 @@ body {
 .sl-heading-wrapper:has(#get-started) {
   text-align: center;
 }
+
 .section-lede {
   text-align: center;
   color: var(--sl-color-gray-3);
@@ -129,26 +138,35 @@ body {
   grid-template-columns: 1fr;
   gap: 1rem;
 }
+
 @media (min-width: 50rem) {
   .examples-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 1.5rem;
   }
 }
+
 .ex-card {
-  /* Starlight's markdown.css adds `margin-top` between any two non-inline
-     siblings inside .sl-markdown-content, not just direct children - it was
-     leaking onto the 2nd/3rd card here and offsetting them from the 1st. */
   margin-top: 0;
   border: 1px solid var(--sl-color-hairline);
   border-radius: 0.75rem;
   overflow: hidden;
-  background: color-mix(in srgb, var(--color-accent-600) 16%, var(--sl-color-bg));
+  background: var(--color-dark-green);
   display: flex;
   flex-direction: column;
   min-width: 0;
   height: 100%;
 }
+
+:root[data-theme='light'] .ex-card {
+  background: var(--color-accent-800);
+}
+
+:root[data-theme='light'] .gs-col.studio-col {
+  background: var(--color-accent-800);
+}
+
+
 .ex-card .thumb {
   height: 9.5rem;
   background: var(--sl-color-bg);
@@ -158,12 +176,14 @@ body {
   justify-content: center;
   padding: 0.75rem;
 }
+
 .ex-card .thumb img {
   max-width: 100%;
   max-height: 100%;
   width: auto;
   height: auto;
 }
+
 .ex-card .body {
   padding: 1rem 1.15rem 1.15rem;
   display: flex;
@@ -171,11 +191,13 @@ body {
   gap: 0.45rem;
   flex: 1;
 }
+
 .ex-card .body h3 {
   margin: 0;
   font-size: 1rem;
   color: var(--sl-color-white);
 }
+
 .ex-card .body p {
   margin: 0;
   font-size: 0.85rem;
@@ -183,12 +205,14 @@ body {
   color: var(--sl-color-gray-3);
   flex: 1;
 }
+
 .ex-card .body a {
   font-size: 0.82rem;
   font-weight: 600;
   color: var(--color-accent-600);
   text-decoration: none;
 }
+
 .ex-card .body a:hover {
   text-decoration: underline;
 }
@@ -201,38 +225,45 @@ body {
   border-radius: 0.85rem;
   overflow: hidden;
 }
+
 @media (min-width: 50rem) {
   .getstarted-split {
     grid-template-columns: 1fr 1fr;
   }
 }
+
 .gs-col {
   margin-top: 0;
   padding: 1.75rem 1.85rem;
   min-width: 0;
   height: 100%;
 }
+
 .gs-col.studio-col {
-  background: color-mix(in srgb, var(--color-accent-600) 16%, var(--sl-color-bg));
+  background: var(--color-dark-green);
   border-top: 1px solid var(--sl-color-hairline);
 }
+
 @media (min-width: 50rem) {
   .gs-col.studio-col {
     border-top: none;
     border-left: 1px solid var(--sl-color-hairline);
   }
 }
+
 .gs-head {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   margin-bottom: 1.15rem;
 }
+
 .gs-head h3 {
   margin: 0;
   font-size: 1.05rem;
   color: var(--sl-color-white);
 }
+
 .gs-tag {
   font-size: 0.68rem;
   font-weight: 700;
@@ -242,10 +273,12 @@ body {
   border-radius: 999px;
   line-height: 1.4;
 }
+
 .gs-col:not(.studio-col) .gs-tag {
   background: #12181a;
   color: #8ecf6c;
 }
+
 .gs-col.studio-col .gs-tag {
   background: var(--sl-color-bg);
   border: 1px solid var(--sl-color-hairline);
@@ -257,26 +290,22 @@ body {
 .gs-col .expressive-code {
   margin: 0.5rem 0 0;
 }
-.gs-col .expressive-code .frame {
-  border: none;
-  box-shadow: none;
-  background: transparent;
-}
-.gs-col .expressive-code .frame.is-terminal .header {
-  display: none;
-}
-.gs-col .expressive-code .copy {
-  display: none;
-}
+
+
+
 .gs-col .expressive-code pre {
   border: none;
   border-radius: 0.5rem;
-  background: #12181a;
+  /* Follow expressive-code's own terminal-frame background instead of a
+     hardcoded dark fill, so it stays light in light mode like plain Starlight. */
+  background: var(--ec-frm-trmBg);
   padding-block: 0.55rem;
 }
+
 .gs-col .expressive-code code {
   font-size: 0.78rem;
 }
+
 .gs-col h4 {
   margin: 0.9rem 0 0.4rem;
   font-size: 0.92rem;

@@ -67,19 +67,19 @@ import workflow_simple from "../../assets/simple_workflow.svg"
 		<Steps>
 		1. Install `s4n`. The easiest way is the installer script.
 			<h4 class="flex items-center gap-2"><Icon name="linux" label="Linux"/> Linux</h4>
-			```bash 
+			```bash frame=none
 			curl --proto '=https' --tlsv1.2 -LsSf https://fairagro.github.io/sciwin/get_s4n.sh | sh 
 			```
 			<h4 class="flex items-center gap-2"><Icon name="seti:windows" label="Windows"/> Windows</h4>
-			```powershell
+			```powershell frame=none
 			powershell -ExecutionPolicy Bypass -c "irm https://fairagro.github.io/sciwin/get_s4n.ps1 | iex"
 			```
 		2. Initialize a project in your code repository.
-			```bash
+			```bash frame=none
 			s4n init
 			```
 		3. Record your first tool by prefixing any command with `create`.
-			```bash
+			```bash frame=none
 			s4n create python echo.py "Hello World"
 			```
 		</Steps>
