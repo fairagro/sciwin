@@ -553,6 +553,12 @@ pub fn add_step_to_scatter_mut(
         _ => OneOrMany::Many(ports),
     });
 
+    if let Some(OneOrMany::Many(_)) = step.scatter
+        && step.scatter_method.is_none()
+    {
+        step.scatter_method = Some(ScatterMethod::Dotproduct);
+    }
+
     //add scatter feature requirement
     workflow.append_requirement_mut(WorkflowRequirements::ScatterFeatureRequirement(
         ScatterFeatureRequirement {},
@@ -673,6 +679,10 @@ pub fn remove_step_from_scatter_mut(
         1 => Some(OneOrMany::One(remaining.into_iter().next().unwrap())),
         _ => Some(OneOrMany::Many(remaining)),
     };
+
+    if step.scatter.is_none() {
+        step.scatter_method = None;
+    }
     Ok(())
 }
 
