@@ -38,7 +38,8 @@ Usage: s4n execute run [OPTIONS] <FILE> [INPUT_FILE]
 
 Arguments:
   <FILE>
-          CWL File to execute
+          CWL file to execute, or a Workflow/Run RO-Crate to execute (a directory or .zip archive
+          holding a ro-crate-metadata.json whose mainEntity is CWL)
 
   [INPUT_FILE]
           Input YAML/JSON job file
@@ -98,6 +99,10 @@ Options:
 - **`reana`** — submits the workflow to a [REANA](https://reanahub.io) server. Requires `REANA_SERVER_URL` and `REANA_ACCESS_TOKEN` environment variables.
 
 `local`, `docker`, and `tes` always wait for the run to finish before returning (there is no REANA-style server-side state to reconnect to once the CLI exits). `reana` also waits by default; pass `--detach` to submit and return immediately instead, then check on it later with [`execute reana status`](#execute-reana).
+
+### Executing from an RO-Crate
+
+`<FILE>` doesn't have to be a raw CWL file. It can also be a Workflow or [Run RO-Crate](../concepts/rocrate) produced by an earlier `s4n execute run --rocrate`, given either as a directory or as a `.zip` archive, as long as it contains a `ro-crate-metadata.json` whose `mainEntity` is CWL. This is what makes a published crate directly re-executable: hand someone (or a CI job) the crate, and `s4n execute run my-run.zip` runs it the same way `s4n execute run my-tool.cwl` would, without unpacking it by hand first. The crate doesn't have to be one `s4n` produced locally either; a Workflow RO-Crate downloaded from a registry like [WorkflowHub](https://workflowhub.eu/) works the same way, as long as it satisfies the same `mainEntity`-is-CWL requirement.
 
 ### Credentials and `.env`
 
