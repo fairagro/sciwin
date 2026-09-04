@@ -1,5 +1,6 @@
 use crate::execution::{
-    LogCursor, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner, tail_lines,
+    LogCursor, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner,
+    reana_compat::compatibility_adjustments, tail_lines,
 };
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::future::try_join_all;
@@ -121,11 +122,14 @@ impl WorkflowRunner for ReanaRunner {
     ) -> RunnerResult<RunId> {
         let name = "workflow"; //todo: set
 
+        let (doc, mut graph) = reana::client::pack_workflow_graph(cwlfile)?;
+        compatibility_adjustments(&mut graph).await?;
+
         let CreatedWorkspace {
             workflow_id,
             specification,
             local_workspace,
-        } = reana::client::create2(self.client.clone(), name, cwlfile, &inputs).await?;
+        } = reana::client::create_from_packed(self.client.clone(), name, cwlfile, &doc, graph, &inputs).await?;
 
         let mut files: HashSet<PathBuf> = specification.inputs.files.into_iter().collect();
         for item in specification.inputs.directories {

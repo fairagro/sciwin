@@ -28,12 +28,10 @@ use tracing::{info, warn};
 /// `dockerFile`, or falling back to a default image for bare script interpreters.
 ///
 /// # Errors
-/// Returns [`RunnerError::DockerUnavailable`] if Docker isn't running, or
-/// [`RunnerError::DockerCommandFailed`] if building or publishing an ephemeral image fails.
+/// Returns [`RunnerError::DockerUnavailable`] if a tool needs an ephemeral image published and
+/// Docker isn't running, or [`RunnerError::DockerCommandFailed`] if building or publishing one
+/// fails.
 pub async fn compatibility_adjustments(graph: &mut [CWLDocument]) -> RunnerResult<()> {
-    if !docker_running() {
-        return Err(RunnerError::DockerUnavailable);
-    }
     info!("starting REANA compatibility adjustments");
 
     let mut docker_jobs: Vec<CommandLineTool> = vec![];
@@ -44,6 +42,13 @@ pub async fn compatibility_adjustments(graph: &mut [CWLDocument]) -> RunnerResul
                 docker_jobs.push(tool.clone());
             }
         }
+    }
+
+    // Only tools without a `dockerPull` reach here, and only some of those actually need an
+    // ephemeral image (see `publish_docker_ephemeral`) -- so Docker is required lazily, and
+    // only when one of them turns out to have a `dockerFile` that needs building.
+    if !docker_jobs.is_empty() && docker_jobs.iter().any(needs_ephemeral_image) && !docker_running() {
+        return Err(RunnerError::DockerUnavailable);
     }
 
     for mut tool in docker_jobs {
@@ -137,6 +142,15 @@ fn inject_docker_pull(tool: &mut CommandLineTool) {
             info!("added container {container} to tool {id}");
         }
     }
+}
+
+/// Whether `tool` has a `DockerRequirement` carrying a `dockerFile` -- the case
+/// [`publish_docker_ephemeral`] actually builds and publishes an image for. A bare script
+/// interpreter with no `DockerRequirement` at all doesn't need Docker; it falls back to
+/// [`inject_docker_pull`] instead.
+fn needs_ephemeral_image(tool: &CommandLineTool) -> bool {
+    tool.get_requirement::<DockerRequirement>()
+        .is_some_and(|dr| dr.docker_file.is_some())
 }
 
 fn has_docker_pull(tool: &CommandLineTool) -> bool {
@@ -255,6 +269,26 @@ mod tests {
                 command.iter().map(|s| s.to_string()).collect(),
             ))
             .build()
+    }
+
+    #[test]
+    fn needs_ephemeral_image_only_for_docker_file() {
+        let tool = tool_with_command(&["python3", "script.py"]);
+        assert!(!needs_ephemeral_image(&tool));
+
+        let mut tool_with_pull = tool.clone();
+        tool_with_pull.append_requirement_mut(ToolRequirements::DockerRequirement(
+            DockerRequirement::builder().docker_pull("python").build(),
+        ));
+        assert!(!needs_ephemeral_image(&tool_with_pull));
+
+        let mut tool_with_dockerfile = tool;
+        tool_with_dockerfile.append_requirement_mut(ToolRequirements::DockerRequirement(
+            DockerRequirement::builder()
+                .docker_file(StringOrInclude::String("FROM python".to_string()))
+                .build(),
+        ));
+        assert!(needs_ephemeral_image(&tool_with_dockerfile));
     }
 
     #[test]
