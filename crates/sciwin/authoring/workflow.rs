@@ -1166,6 +1166,44 @@ mod tests {
     }
 
     #[test]
+    fn connect_workflow_input_to_a_scattered_slot_gets_array_type() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+        write_tool(&tool_path, "message", "out"); // message: string, scalar
+
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            &workflow_path,
+            "tool",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+        add_step_to_scatter_mut(&mut wf, "tool", "message").unwrap();
+
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "messages",
+            WorkflowSlot::new(&tool_path, "tool", "message"),
+        )
+        .unwrap();
+
+        let input = wf
+            .inputs
+            .iter()
+            .find(|i| i.id.as_deref() == Some("messages"))
+            .expect("a new workflow input must be registered");
+        assert_eq!(
+            input.r#type,
+            wrap_type_as_array(OneOrMany::One(InputType::CWLType(CWLType::String))),
+            "a fresh input feeding a scattered slot must be array-shaped, not the tool's per-iteration scalar type"
+        );
+    }
+
+    #[test]
     fn connect_workflow_input_reuses_existing_input_with_matching_type() {
         let dir = tempdir().unwrap();
         let tool_a = dir.path().join("a.cwl");
@@ -1266,6 +1304,47 @@ mod tests {
         assert_eq!(
             output.output_source.as_ref().unwrap().as_many(),
             vec!["tool/result".to_string()]
+        );
+    }
+
+    #[test]
+    fn connect_workflow_output_from_a_scattered_step_gets_array_type() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+
+        write_tool(&tool_path, "in", "result"); // result: string, scalar per iteration
+
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            &workflow_path,
+            "tool",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+        add_step_to_scatter_mut(&mut wf, "tool", "in").unwrap();
+
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&tool_path, "tool", "result"),
+            "final_result",
+        )
+        .unwrap();
+
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final_result"))
+            .unwrap();
+        assert_eq!(
+            output.r#type,
+            wrap_output_type_as_array(CommandOutputParameterType::CommandOutputType(
+                OneOrMany::One(CommandOutputType::CWLType(CWLType::String))
+            )),
+            "a fresh output from a scattered step must be array-shaped -- scatter runs the step once per element"
         );
     }
 
