@@ -10,7 +10,9 @@ use commonwl::{
         CommandOutputParameterType, CommandOutputSchema, CommandOutputType, LinkMergeMethod,
         PickValueMethod,
     },
-    requirements::{MultipleInputFeatureRequirement, WorkflowRequirements},
+    requirements::{
+        MultipleInputFeatureRequirement, ScatterFeatureRequirement, WorkflowRequirements,
+    },
     types::CWLType,
 };
 use std::{
@@ -550,6 +552,11 @@ pub fn add_step_to_scatter_mut(
         1 => OneOrMany::One(ports.into_iter().next().expect("checked len == 1")),
         _ => OneOrMany::Many(ports),
     });
+
+    //add scatter feature requirement
+    workflow.append_requirement_mut(WorkflowRequirements::ScatterFeatureRequirement(
+        ScatterFeatureRequirement {},
+    ));
     Ok(())
 }
 
