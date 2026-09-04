@@ -76,3 +76,69 @@ pub fn set_output_pick_value_mut(
     output.pick_value = method;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_support::*;
+    use super::super::{WorkflowSlot, add_workflow_output_connection, add_workflow_step_connection};
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn step_pick_value_set_and_clear() {
+        let dir = tempdir().unwrap();
+        let producer = dir.path().join("producer.cwl");
+        let consumer = dir.path().join("consumer.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+        write_tool(&producer, "dummy", "value");
+        write_tool(&consumer, "value", "result");
+
+        let mut wf = Workflow::default();
+        add_workflow_step_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&producer, "producer", "value"),
+            WorkflowSlot::new(&consumer, "consumer", "value"),
+        )
+        .unwrap();
+
+        set_step_pick_value_mut(&mut wf, "consumer", "value", PickValueMethod::AllNonNull).unwrap();
+        assert_eq!(
+            wf.get_step("consumer").unwrap().r#in[0].pick_value,
+            Some(PickValueMethod::AllNonNull)
+        );
+        clear_step_pick_value_mut(&mut wf, "consumer", "value").unwrap();
+        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].pick_value, None);
+    }
+
+    #[test]
+    fn output_pick_value_set_and_clear() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        write_tool(&tool_path, "in", "out");
+        let mut wf = Workflow::default();
+        add_workflow_output_connection(
+            &mut wf,
+            dir.path().join("workflow.cwl"),
+            WorkflowSlot::new(&tool_path, "tool", "out"),
+            "final",
+        )
+        .unwrap();
+
+        set_output_pick_value_mut(&mut wf, "final", Some(PickValueMethod::FirstNonNull)).unwrap();
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final"))
+            .unwrap();
+        assert_eq!(output.pick_value, Some(PickValueMethod::FirstNonNull));
+
+        set_output_pick_value_mut(&mut wf, "final", None).unwrap();
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final"))
+            .unwrap();
+        assert_eq!(output.pick_value, None);
+    }
+}

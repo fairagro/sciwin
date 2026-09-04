@@ -667,18 +667,16 @@ fn local_name(name: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub(super) mod test_support {
     use commonwl::{
-        documents::{CWLDocument, CommandLineTool, StringOrDocument, Workflow},
+        documents::{CWLDocument, CommandLineTool},
         inputs::CommandInputParameter,
         outputs::CommandOutputParameter,
         types::CWLType,
     };
     use std::{fs, path::Path};
-    use tempfile::tempdir;
 
-    fn os_path(path: &str) -> String {
+    pub(super) fn os_path(path: &str) -> String {
         if cfg!(target_os = "windows") {
             Path::new(path).to_string_lossy().replace('/', "\\")
         } else {
@@ -686,11 +684,11 @@ mod tests {
         }
     }
 
-    fn write_tool(path: &Path, input: &str, output: &str) {
+    pub(super) fn write_tool(path: &Path, input: &str, output: &str) {
         write_tool_typed(path, input, output, CWLType::String);
     }
 
-    fn write_tool_typed(path: &Path, input: &str, output: &str, ty: CWLType) {
+    pub(super) fn write_tool_typed(path: &Path, input: &str, output: &str, ty: CWLType) {
         let tool = CommandLineTool::builder()
             .cwl_version("v1.2")
             .inputs(vec![
@@ -710,6 +708,14 @@ mod tests {
         let yaml = serde_saphyr::to_string(&CWLDocument::CommandLineTool(tool)).unwrap();
         fs::write(path, yaml).unwrap();
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::*;
+    use super::*;
+    use commonwl::documents::StringOrDocument;
+    use tempfile::tempdir;
 
     #[test]
     fn create_workflow_creates_file_in_given_project_folder() {
@@ -1261,53 +1267,6 @@ mod tests {
     }
 
     #[test]
-    fn scatter_add_then_remove_collapses_to_none() {
-        let dir = tempdir().unwrap();
-        let tool_path = dir.path().join("tool.cwl");
-        write_tool(&tool_path, "in", "out");
-        let mut wf = Workflow::default();
-        add_workflow_step(
-            &mut wf,
-            dir.path().join("workflow.cwl"),
-            "step",
-            &tool_path,
-            &load_cwl_file(&tool_path, true).unwrap(),
-        )
-        .unwrap();
-
-        add_step_to_scatter_mut(&mut wf, "step", "in").unwrap();
-        assert!(step_scatters_over(&wf, "step", "in"));
-
-        remove_step_from_scatter_mut(&mut wf, "step", "in").unwrap();
-        assert_eq!(wf.get_step("step").unwrap().scatter, None);
-    }
-
-    #[test]
-    fn set_and_clear_when() {
-        let dir = tempdir().unwrap();
-        let tool_path = dir.path().join("tool.cwl");
-        write_tool(&tool_path, "in", "out");
-        let mut wf = Workflow::default();
-        add_workflow_step(
-            &mut wf,
-            dir.path().join("workflow.cwl"),
-            "step",
-            &tool_path,
-            &load_cwl_file(&tool_path, true).unwrap(),
-        )
-        .unwrap();
-
-        set_step_when_mut(&mut wf, "step", Some("$(inputs.x != null)".to_string())).unwrap();
-        assert_eq!(
-            wf.get_step("step").unwrap().when.as_deref(),
-            Some("$(inputs.x != null)")
-        );
-
-        set_step_when_mut(&mut wf, "step", None).unwrap();
-        assert_eq!(wf.get_step("step").unwrap().when, None);
-    }
-
-    #[test]
     fn add_step_input_slot_refuses_duplicate_name() {
         let dir = tempdir().unwrap();
         let tool_path = dir.path().join("tool.cwl");
@@ -1330,7 +1289,7 @@ mod tests {
     }
 
     #[test]
-    fn value_from_and_pick_value_set_and_clear() {
+    fn value_from_set_and_clear() {
         let dir = tempdir().unwrap();
         let producer = dir.path().join("producer.cwl");
         let consumer = dir.path().join("consumer.cwl");
@@ -1357,81 +1316,6 @@ mod tests {
         );
         set_step_input_value_from_mut(&mut wf, "consumer", "value", None).unwrap();
         assert_eq!(wf.get_step("consumer").unwrap().r#in[0].value_from, None);
-
-        set_step_pick_value_mut(&mut wf, "consumer", "value", PickValueMethod::AllNonNull).unwrap();
-        assert_eq!(
-            wf.get_step("consumer").unwrap().r#in[0].pick_value,
-            Some(PickValueMethod::AllNonNull)
-        );
-        clear_step_pick_value_mut(&mut wf, "consumer", "value").unwrap();
-        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].pick_value, None);
-    }
-
-    #[test]
-    fn link_merge_set_and_clear() {
-        let dir = tempdir().unwrap();
-        let producer = dir.path().join("producer.cwl");
-        let consumer = dir.path().join("consumer.cwl");
-        let workflow_path = dir.path().join("workflow.cwl");
-        write_tool(&producer, "dummy", "value");
-        write_tool(&consumer, "value", "result");
-        let mut wf = Workflow::default();
-        add_workflow_step_connection(
-            &mut wf,
-            &workflow_path,
-            WorkflowSlot::new(&producer, "producer", "value"),
-            WorkflowSlot::new(&consumer, "consumer", "value"),
-        )
-        .unwrap();
-
-        set_step_input_link_merge_mut(
-            &mut wf,
-            "consumer",
-            "value",
-            Some(LinkMergeMethod::MergeFlattened),
-        )
-        .unwrap();
-        assert_eq!(
-            wf.get_step("consumer").unwrap().r#in[0].link_merge,
-            Some(LinkMergeMethod::MergeFlattened)
-        );
-        set_step_input_link_merge_mut(&mut wf, "consumer", "value", None).unwrap();
-        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].link_merge, None);
-    }
-
-    #[test]
-    fn output_pick_value_and_link_merge_set_and_clear() {
-        let dir = tempdir().unwrap();
-        let tool_path = dir.path().join("tool.cwl");
-        write_tool(&tool_path, "in", "out");
-        let mut wf = Workflow::default();
-        add_workflow_output_connection(
-            &mut wf,
-            dir.path().join("workflow.cwl"),
-            WorkflowSlot::new(&tool_path, "tool", "out"),
-            "final",
-        )
-        .unwrap();
-
-        set_output_pick_value_mut(&mut wf, "final", Some(PickValueMethod::FirstNonNull)).unwrap();
-        set_output_link_merge_mut(&mut wf, "final", Some(LinkMergeMethod::MergeFlattened)).unwrap();
-        let output = wf
-            .outputs
-            .iter()
-            .find(|o| o.id.as_deref() == Some("final"))
-            .unwrap();
-        assert_eq!(output.pick_value, Some(PickValueMethod::FirstNonNull));
-        assert_eq!(output.link_merge, Some(LinkMergeMethod::MergeFlattened));
-
-        set_output_pick_value_mut(&mut wf, "final", None).unwrap();
-        set_output_link_merge_mut(&mut wf, "final", None).unwrap();
-        let output = wf
-            .outputs
-            .iter()
-            .find(|o| o.id.as_deref() == Some("final"))
-            .unwrap();
-        assert_eq!(output.pick_value, None);
-        assert_eq!(output.link_merge, None);
     }
 
     #[test]

@@ -195,3 +195,34 @@ pub fn set_step_scatter_method_mut(
     step.scatter_method = method;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::test_support::*;
+    use super::super::add_workflow_step;
+    use super::*;
+    use commonwl::load_cwl_file;
+    use tempfile::tempdir;
+
+    #[test]
+    fn scatter_add_then_remove_collapses_to_none() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        write_tool(&tool_path, "in", "out");
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            dir.path().join("workflow.cwl"),
+            "step",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+
+        add_step_to_scatter_mut(&mut wf, "step", "in").unwrap();
+        assert!(step_scatters_over(&wf, "step", "in"));
+
+        remove_step_from_scatter_mut(&mut wf, "step", "in").unwrap();
+        assert_eq!(wf.get_step("step").unwrap().scatter, None);
+    }
+}
