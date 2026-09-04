@@ -4,17 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-SciWIn (Scientific Workflow Infrastructure) helps researchers create, record, annotate, execute, and publish reproducible computational workflows as CWL (Common Workflow Language). It consists of two complementary tools built from one Cargo workspace:
-
-- **SciWIn-Client** (`s4n`) — the command-line tool; primary and stable.
-- **SciWIn-Studio** — a Dioxus-based desktop GUI wrapping the same core logic; currently in testing.
+SciWIn (Scientific Workflow Infrastructure) helps researchers create, record, annotate, execute, and publish reproducible computational workflows as CWL (Common Workflow Language). This repository is SciWIn-Client (`s4n`), the command-line tool; primary and stable. SciWIn-Studio, a Tauri v2 + SvelteKit desktop GUI wrapping the same core logic, lives in the separate sibling repo `../sciwin_studio` (see its own `CLAUDE.md`), not in this Cargo workspace.
 
 Crates (`crates/`):
-- `sciwin` (lib `sciwin`) — the shared core logic used by both CLI and GUI: `authoring/` (generating CWL `CommandLineTool`/`Workflow` files, incl. `authoring/tool`), `execution/` (running workflows, `reana_runner.rs`/`task_runner.rs`, `reana_compat.rs` for REANA compatibility), `provenance/` (building provenance graphs — `builder.rs`, `graph.rs`, `inputs.rs`), `project/` (project/config handling), `repository/` (git plumbing: commits, `.ini`, submodules — most commands need the context of a git repo).
+- `sciwin` (lib `sciwin`) — the shared core logic used by both the CLI and SciWIn-Studio: `authoring/` (generating CWL `CommandLineTool`/`Workflow` files, incl. `authoring/tool`), `execution/` (running workflows, `reana_runner.rs`/`task_runner.rs`, `reana_compat.rs` for REANA compatibility), `provenance/` (building provenance graphs — `builder.rs`, `graph.rs`, `inputs.rs`), `project/` (project/config handling), `repository/` (git plumbing: commits, `.ini`, submodules — most commands need the context of a git repo).
 - `cli` (bin `s4n`) — the CLI entrypoint; `commands/` holds one file per subcommand (`create`, `connect`, `execute`, `init`, `list`, `packages`, `remove`, `save`, `visualize`), each calling into the `sciwin` crate.
-- `gui` (bin `sciwin_studio`) — the SciWIn-Studio desktop app (Dioxus), `src/components` for UI, `js/` for embedded JS, `assets/` for static assets.
 
-Sibling repos this project depends on / relates to: `commonwl` (`../commonwl`, CWL parsing + execution engine, imported here as the `commonwl` crate with `engine`/`tes` features), `rocrate` (`../ro-crate-lib`, RO-Crate support), and REANA execution support relates to `../reana-cwl-client`.
+Sibling repos this project depends on / relates to: `commonwl` (`../commonwl`, CWL parsing + execution engine, imported here as the `commonwl` crate with `engine`/`tes` features), `rocrate` (`../ro-crate-lib`, RO-Crate support), REANA execution support relates to `../reana-cwl-client`, and `../sciwin_studio` depends on this repo's `sciwin` crate.
 
 ## Common commands
 
@@ -26,10 +22,7 @@ cargo test -p sciwin some_test_name  # run a single test
 cargo clippy --all-targets --all-features --workspace   # matches CI lint (CI runs with RUSTFLAGS=-Dwarnings)
 ```
 
-SciWIn-Studio (GUI) requires the [Dioxus CLI](https://dioxuslabs.com/learn/0.7/getting_started/) (`dx`) plus GTK/WebKit system packages (see `.github/workflows/clippy.yml` for the exact apt package list on Linux):
-```bash
-dx serve -p sciwin_studio   # or: dx serve -p sciwin — launch SciWIn-Studio in dev mode
-```
+SciWIn-Studio is built and run from the `../sciwin_studio` repo (see its own `CLAUDE.md`), not from here.
 
 ### CI
 
@@ -44,4 +37,4 @@ CI (`.github/workflows/ci.yml`) fans out to `clippy.yml` (`cargo clippy --all-ta
 - `s4n execute local` runs CWL files using SciWIn's own CWL runner (via the `commonwl` engine), not `cwltool`; conformance is not yet 1:1 with `cwltool`.
 - Execution can also target REANA (`sciwin::execution::reana_runner`/`reana_compat`) as an alternative to local execution.
 - Provenance tracking (`sciwin::provenance`) builds a provenance graph from executions, separate from the CWL authoring path.
-- The CLI (`crates/cli`) and GUI (`crates/gui`) are thin front ends; business logic belongs in `crates/sciwin` so both share it.
+- The CLI (`crates/cli`) and SciWIn-Studio (`../sciwin_studio`) are thin front ends; business logic belongs in `crates/sciwin` so both share it.

@@ -1,0 +1,42 @@
+---
+title: SciWIn-Studio
+sidebar:
+  order: 3
+---
+
+SciWIn-Studio is a [Tauri v2](https://tauri.app/) app: a Rust backend plus a SvelteKit/Svelte 5 frontend. It lives in its own repository and depends on the `sciwin` and `commonwl` crates from their sibling repos, so building it from source means having all three checked out side by side.
+
+## Cloning the repository
+
+```
+# Clone the repository
+git clone https://github.com/fairagro/sciwin_studio
+
+# Navigate to the project directory
+cd sciwin_studio
+```
+
+## Prerequisites
+
+Building SciWIn-Studio needs [Rust](https://www.rust-lang.org/), [Node.js](https://nodejs.org/), and the Tauri CLI's native dependencies:
+
+- The Tauri CLI itself (`@tauri-apps/cli`) is already a devDependency, installed via `npm install`.
+- On Linux, `npx tauri dev`/`build` need GTK/WebKit system packages: `libgtk-3-dev`, `libglib2.0-dev`, `libwebkit2gtk-4.1-dev`, `build-essential`, `curl`, `wget`, `file`, `libxdo-dev`, `libssl-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`.
+- On macOS or Windows, follow the [Tauri prerequisites guide](https://tauri.app/start/prerequisites/) for your platform.
+
+## Build and run
+
+```bash
+npm install       # install frontend dependencies
+npx tauri dev      # full app in dev mode (backend + frontend, hot reload)
+npx tauri build    # production bundle
+```
+
+`npm run dev` on its own starts only the SvelteKit dev server, without the Tauri window, useful for quick frontend-only iteration.
+
+For linting and tests, matching CI:
+```bash
+cargo clippy --workspace                       # Rust lint
+cargo nextest run --workspace --no-fail-fast   # Rust tests
+npm run check                                   # frontend typecheck (svelte-check)
+```

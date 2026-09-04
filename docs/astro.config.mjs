@@ -55,6 +55,7 @@ export default defineConfig({
       { label: 'SciWIn-Studio', items: [{ autogenerate: { directory: 'sciwin-studio' } }] },
       { label: 'Examples', items: [{ autogenerate: { directory: 'examples' } }] },
       { label: 'Reference', items: [{ autogenerate: { directory: 'reference' } }] },
+      { label: 'Development', items: [{ autogenerate: { directory: 'development' } }] },
     ],
     plugins: [
       starlightLinksValidator({
