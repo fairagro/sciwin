@@ -4,11 +4,11 @@ use commonwl::{
     OneOrMany,
     documents::{CWLDocument, ScatterMethod, Workflow},
     format::format_cwl,
-    inputs::{InputSchema, InputType, WorkflowStepInput},
+    inputs::{InputArraySchema, InputSchema, InputType, WorkflowStepInput},
     load_cwl_file,
     outputs::{
-        CommandOutputParameterType, CommandOutputSchema, CommandOutputType, LinkMergeMethod,
-        PickValueMethod,
+        CommandOutputArraySchema, CommandOutputParameterType, CommandOutputSchema,
+        CommandOutputType, LinkMergeMethod, PickValueMethod,
     },
     requirements::{
         MultipleInputFeatureRequirement, ScatterFeatureRequirement, WorkflowRequirements,
@@ -154,7 +154,15 @@ pub fn add_workflow_input_connection(
             }
         }
     } else {
+        // The slot's declared type is what the tool receives per iteration; a
+        // fresh input feeding a slot the step already scatters over must
+        // itself be array-shaped, one element per iteration. A scalar
+        // default from the slot no longer fits that array type, so it's
+        // dropped rather than carried over mismatched.
         let (input_type, default) = match to_slot {
+            Some(slot) if step_scatters_over(workflow, to.name, to.slot_id) => {
+                (wrap_type_as_array(slot.r#type.clone()), None)
+            }
             Some(slot) => (slot.r#type.clone(), slot.default.clone()),
             None => (OneOrMany::One(InputType::CWLType(CWLType::Any)), None),
         };
@@ -204,6 +212,15 @@ pub fn add_workflow_output_connection(
             .map(|i| i.r#type.clone()),
     }
     .expect("No slot");
+
+    // The slot's declared type is what the tool produces per iteration; once
+    // the step scatters (over any of its inputs) every one of its outputs
+    // becomes array-shaped, one element per iteration.
+    let from_type = if step_is_scattered(workflow, from.name) {
+        wrap_output_type_as_array(from_type)
+    } else {
+        from_type
+    };
 
     // Checked before any mutation, refusing here must not leave a step
     // registered with nothing wired to it, the way checking after
@@ -463,6 +480,34 @@ pub fn is_scattered_array_of(
         },
         _ => false,
     })
+}
+
+/// Wraps `t` as a single-element array schema -- the shape a fresh workflow
+/// input must take when the step port it feeds scatters over it: the tool
+/// declares (and receives) `t` per iteration, but the source has to supply
+/// one array element per iteration.
+pub fn wrap_type_as_array(t: OneOrMany<InputType>) -> OneOrMany<InputType> {
+    OneOrMany::One(InputType::InputSchema(Box::new(InputSchema::Array(
+        InputArraySchema::builder().items(t).build(),
+    ))))
+}
+
+/// Wraps `t` as a single-element array schema -- the shape a scattered
+/// step's own output takes: scatter runs the step once per element and
+/// collects the results, so every output becomes an array regardless of
+/// which input(s) are being scattered over.
+pub fn wrap_output_type_as_array(t: CommandOutputParameterType) -> CommandOutputParameterType {
+    let items = match t {
+        CommandOutputParameterType::Stdout | CommandOutputParameterType::Stderr => {
+            OneOrMany::One(CommandOutputType::CWLType(CWLType::File))
+        }
+        CommandOutputParameterType::CommandOutputType(types) => types,
+    };
+    CommandOutputParameterType::CommandOutputType(OneOrMany::One(
+        CommandOutputType::CommandOutputSchema(Box::new(CommandOutputSchema::Array(
+            CommandOutputArraySchema::builder().items(items).build(),
+        ))),
+    ))
 }
 
 #[derive(Debug)]
