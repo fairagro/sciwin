@@ -33,7 +33,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Level, info};
 
 mod backend;
-pub use backend::{docker_backend, local_backend, tes_backend};
+pub use backend::{
+    TesBackendConfig, docker_backend, docker_backend_with_storage, local_backend,
+    local_backend_with_storage, tes_backend, tes_backend_from_config,
+};
 mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;

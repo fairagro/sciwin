@@ -13,7 +13,14 @@ use url::Url;
 /// `Engine::Local`: only containerizes steps with a `DockerRequirement`, via `runtime`.
 #[must_use]
 pub fn local_backend(runtime: ContainerEngine) -> Arc<dyn TaskBackend> {
-    let storage = Arc::new(StorageBackend::new());
+    local_backend_with_storage(runtime, Arc::new(StorageBackend::new()))
+}
+
+#[must_use]
+pub fn local_backend_with_storage(
+    runtime: ContainerEngine,
+    storage: Arc<StorageBackend>,
+) -> Arc<dyn TaskBackend> {
     Arc::new(LocalBackend::new(
         runtime,
         storage,
@@ -27,7 +34,12 @@ pub fn local_backend(runtime: ContainerEngine) -> Arc<dyn TaskBackend> {
 /// # Errors
 /// The Docker daemon is not reachable.
 pub async fn docker_backend() -> miette::Result<Arc<dyn TaskBackend>> {
-    let storage = Arc::new(StorageBackend::new());
+    docker_backend_with_storage(Arc::new(StorageBackend::new())).await
+}
+
+pub async fn docker_backend_with_storage(
+    storage: Arc<StorageBackend>,
+) -> miette::Result<Arc<dyn TaskBackend>> {
     let backend = DockerBackend::new(
         docker::Config::default(),
         storage,
@@ -38,38 +50,60 @@ pub async fn docker_backend() -> miette::Result<Arc<dyn TaskBackend>> {
     Ok(Arc::new(backend))
 }
 
-/// `Engine::Tes`: submits to a GA4GH TES server. Reads `TES_URL` (required), `TES_STORAGE`
-/// (required, e.g. `s3://my-bucket` -- TES uploads/downloads through this, it cannot be local),
-/// and `TES_TOKEN` (optional bearer token) from the environment.
+/// `TES Backend but env variabels
 ///
 /// # Errors
 /// `TES_URL`/`TES_STORAGE` are unset or malformed, or the TES server is not reachable.
 pub async fn tes_backend() -> miette::Result<Arc<dyn TaskBackend>> {
-    let storage = Arc::new(StorageBackend::new());
-    let data_store = StoragePath::from_url(tes_storage_url()?);
-    let backend = TesBackend::new(tes_config()?, storage, data_store)
+    tes_backend_from_config(tes_config_from_env()?, Arc::new(StorageBackend::new())).await
+}
+
+/// Same as [`tes_backend`] but storage
+///
+/// # Errors
+/// The TES server described by `config` is not reachable.
+pub async fn tes_backend_from_config(
+    config: TesBackendConfig,
+    storage: Arc<StorageBackend>,
+) -> miette::Result<Arc<dyn TaskBackend>> {
+    let data_store = StoragePath::from_url(config.storage_url);
+    let http = match config.token {
+        Some(token) => tes::http::Config {
+            auth: Some(tes::http::HttpAuthConfig::Bearer { token }),
+            ..Default::default()
+        },
+        None => tes::http::Config::default(),
+    };
+    let tes_config = tes::Config::builder().url(config.url).http(http).build();
+    let backend = TesBackend::new(tes_config, storage, data_store)
         .await
         .into_diagnostic()?;
     Ok(Arc::new(backend))
 }
 
-fn tes_config() -> miette::Result<tes::Config> {
+/// What a GA4GH TES server needs to submit work to it
+#[derive(Debug, Clone)]
+pub struct TesBackendConfig {
+    pub url: Url,
+    /// Where TES uploads/downloads through, e.g. `s3://my-bucket` -- cannot be local.
+    pub storage_url: Url,
+    pub token: Option<String>,
+}
+
+fn tes_config_from_env() -> miette::Result<TesBackendConfig> {
     let url = env::var("TES_URL")
         .map_err(|_| miette::miette!("TES_URL is not set (needed for --engine tes)"))?;
     let url = Url::parse(&url).into_diagnostic()?;
-
-    let http = match env::var("TES_TOKEN") {
-        Ok(token) => tes::http::Config {
-            auth: Some(tes::http::HttpAuthConfig::Bearer { token }),
-            ..Default::default()
-        },
-        Err(_) => tes::http::Config::default(),
-    };
-
-    Ok(tes::Config::builder().url(url).http(http).build())
+    let storage_url = tes_storage_url_from_env()?;
+    let token = env::var("TES_TOKEN").ok();
+    Ok(TesBackendConfig {
+        url,
+        storage_url,
+        token,
+    })
 }
 
-fn tes_storage_url() -> miette::Result<Url> {
+fn tes_storage_url_from_env() -> miette::Result<Url> {
     let raw = env::var("TES_STORAGE").map_err(|_| {
         miette::miette!("TES_STORAGE is not set (needed for --engine tes, e.g. s3://my-bucket)")
     })?;
@@ -87,7 +121,7 @@ mod tests {
         // SAFETY: `#[serial]` prevents this from racing other env-var-touching tests in the
         // same binary; `TES_URL` is not read anywhere outside this module.
         unsafe { env::remove_var("TES_URL") };
-        let err = tes_config().unwrap_err();
+        let err = tes_config_from_env().unwrap_err();
         assert!(err.to_string().contains("TES_URL"));
     }
 
@@ -95,7 +129,7 @@ mod tests {
     #[serial]
     fn tes_storage_url_reports_missing_tes_storage_clearly() {
         unsafe { env::remove_var("TES_STORAGE") };
-        let err = tes_storage_url().unwrap_err();
+        let err = tes_storage_url_from_env().unwrap_err();
         assert!(err.to_string().contains("TES_STORAGE"));
     }
 }
