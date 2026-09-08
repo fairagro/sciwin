@@ -1,0 +1,115 @@
+---
+title: SciWIn - Scientific Workflow Infrastructure
+description: SciWIn helps scientists build, run, and publish reproducible
+  computational workflows - from the terminal with SciWIn-Client, or visually
+  with SciWIn-Studio
+template: splash
+hero:
+  title: SciWIn
+  tagline: One workflow format, two ways to work with it. Build, run, and publish
+    reproducible computational workflows from the terminal with SciWIn-Client,
+    or visually with SciWIn-Studio - every project works in both.
+  actions:
+    - text: Install SciWIn-Client
+      link: getting-started/installation
+      icon: right-arrow
+    - text: Get SciWIn-Studio
+      link: https://github.com/fairagro/sciwin_studio/releases/latest
+      icon: external
+      variant: secondary
+    - text: Read the docs
+      link: getting-started
+      icon: open-book
+      variant: minimal
+slug: "2.0"
+---
+
+import { Icon, Steps } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets'
+import workflow_simple from "../../../assets/2.0/simple_workflow.svg"
+
+***
+
+## See it on real workflows
+
+<p class="section-lede">Every example runs on real data, end to end.</p>
+
+<div class="examples-grid">
+  <div class="ex-card">
+    <div class="thumb">
+      <Image src={workflow_simple} alt="simple workflow" />
+    </div>
+
+    <div class="body">
+      <h3>Getting started example</h3>
+      <p>The Guide that gets you started with SciWIn-Client. If you just installed the software it is recommended to start here.</p>
+      <a href="examples/getting-started">Read the walkthrough →</a>
+    </div>
+  </div>
+
+  <div class="ex-card">
+    <div class="thumb">
+      <img src="https://raw.githubusercontent.com/fairagro/m4.4_sciwin_client_demo/refs/heads/complete_run/workflow_final.svg" alt="advanced example" />
+    </div>
+
+    <div class="body">
+      <h3>Real world example</h3>
+      <p>A real world example based on real data of election results containing several steps and making use of containerization.</p>
+      <a href="examples/advanced-example">See the workflow →</a>
+    </div>
+  </div>
+
+  <div class="ex-card">
+    <div class="thumb">
+      <img src="https://raw.githubusercontent.com/fairagro/m4.4_demo_corn_prediction/main/workflow.svg" alt="corn example" />
+    </div>
+
+    <div class="body">
+      <h3>Corn Prediction (Iowa)</h3>
+      <p>A simplified crop yield prediction pipeline that combines soil and weather data to train models and generate county-level yield predictions for Iowa.</p>
+      <a href="examples/corn-prediction-example">See the workflow →</a>
+    </div>
+  </div>
+</div>
+
+***
+
+## Get started
+
+<p class="section-lede">Pick the side you'll work from - both open the exact same project.</p>
+
+<div class="getstarted-split">
+  <div class="gs-col">
+    <div class="gs-head"><span class="gs-tag">Terminal</span><h3>SciWIn-Client</h3></div>
+
+    <Steps>
+      1. Install `s4n`. The easiest way is the installer script.
+         <h4 class="flex items-center gap-2"><Icon name="linux" label="Linux" /> Linux</h4>
+         ```bash frame=none
+         curl --proto '=https' --tlsv1.2 -LsSf https://fairagro.github.io/sciwin/get_s4n.sh | sh 
+         ```
+         <h4 class="flex items-center gap-2"><Icon name="seti:windows" label="Windows" /> Windows</h4>
+         ```powershell frame=none
+         powershell -ExecutionPolicy Bypass -c "irm https://fairagro.github.io/sciwin/get_s4n.ps1 | iex"
+         ```
+      2. Initialize a project in your code repository.
+         ```bash frame=none
+         s4n init
+         ```
+      3. Record your first tool by prefixing any command with `create`.
+         ```bash frame=none
+         s4n create python echo.py "Hello World"
+         ```
+    </Steps>
+  </div>
+
+  <div class="gs-col studio-col">
+    <div class="gs-head"><span class="gs-tag">Visual canvas</span><h3>SciWIn-Studio</h3></div>
+
+    <Steps>
+      1. Download the [latest release](https://github.com/fairagro/sciwin_studio/releases/latest) for your platform.
+      2. Open a folder - a new one, or an existing `s4n` project.
+      3. Drag a CWL file onto the canvas and connect it into a workflow.
+    </Steps>
+  </div>
+</div>

@@ -1,0 +1,39 @@
+---
+title: install/uninstall
+sidebar:
+  order: 8
+slug: 2.0/reference/install
+---
+
+## `install` and `uninstall`
+
+The `install` and `uninstall` commands are used to manage workflow submodules.
+
+```txt frame="terminal" title="Usage"
+Installs a workflow as submodule
+
+Usage: s4n install [OPTIONS] [PACKAGE_IDENTIFIER]
+
+Arguments:
+[PACKAGE_IDENTIFIER]  
+
+Options:
+-b, --branch <BRANCH>  Specify branch or commit
+-q, --quiet            Only print errors
+  --debug            Explain in high detail what the CLI is doing internally
+-h, --help             Print help
+```
+
+```txt frame="terminal" title="Usage"
+Removes an installed workflow
+
+Usage: s4n uninstall [OPTIONS] [PACKAGE_IDENTIFIER]
+
+Arguments:
+[PACKAGE_IDENTIFIER]  
+
+Options:
+-q, --quiet  Only print errors
+  --debug  Explain in high detail what the CLI is doing internally
+-h, --help   Print help
+```
