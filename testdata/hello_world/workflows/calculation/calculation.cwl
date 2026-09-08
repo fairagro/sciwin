@@ -35,5 +35,5 @@ outputs:
     glob: results.csv
 
 baseCommand:
-- python
+- python3
 - calculation.py

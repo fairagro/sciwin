@@ -27,5 +27,5 @@ outputs:
     glob: results.svg
 
 baseCommand:
-- python
+- python3
 - plot.py
