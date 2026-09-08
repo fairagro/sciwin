@@ -286,7 +286,7 @@ mod tests {
         assert_eq!(calculation.position, 0);
         assert_eq!(
             calculation.container_image.as_deref(),
-            Some("sciwin/python-datascience:latest")
+            Some("pandas/pandas:pip-all")
         );
 
         let plot = graph.steps.iter().find(|s| s.id == "#main/plot").unwrap();
