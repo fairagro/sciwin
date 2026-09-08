@@ -10,7 +10,7 @@ requirements:
     entry:
       $include: calculation.py
 - class: DockerRequirement
-  dockerPull: pandas/pandas:pip-all
+  dockerPull: sciwin/python-datascience:latest
 
 inputs:
 - id: population

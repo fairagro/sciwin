@@ -1514,8 +1514,6 @@ dependencies = [
 [[package]]
 name = "commonwl"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "107720356640ea5e6cef231bd02a60c1943b8529644b71eb854edb8430f7d323"
 dependencies = [
  "cwl_core",
  "cwl_engine",
@@ -1949,8 +1947,6 @@ dependencies = [
 [[package]]
 name = "cwl_core"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8a650ee786012b0494bbc9ecb6461f46f6c1ef53c42bf62b6f56bb2d3e30ff2"
 dependencies = [
  "anyhow",
  "base16ct 1.0.0",
@@ -1972,8 +1968,6 @@ dependencies = [
 [[package]]
 name = "cwl_engine"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f28b381f555c47b089aa5a7ae8ee3b929b00793e6fd6728f8c818131f8ddad8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2016,8 +2010,6 @@ dependencies = [
 [[package]]
 name = "cwl_engine_storage"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa11e8fec17146b4cbd6f45555b48992ffc229c4e9411c8fe530e91ae1854d84"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2038,8 +2030,6 @@ dependencies = [
 [[package]]
 name = "cwl_salad"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "515e4b1e60c9c360a03fcb68d28c4c2c7b2e7f381918c48639c402fad432b7bc"
 dependencies = [
  "cwl_salad_derive",
  "serde",
@@ -2050,8 +2040,6 @@ dependencies = [
 [[package]]
 name = "cwl_salad_derive"
 version = "0.14.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b87eaf448bc4348b8ad9608a48790e3103a60f53b876dca8b63d18567bbd85e2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9340,3 +9328,7 @@ dependencies = [
  "syn 3.0.5",
  "winnow",
 ]
+
+[[patch.unused]]
+name = "cwl-lsp"
+version = "0.14.1"
