@@ -1,6 +1,6 @@
 use crate::execution::{
     ExecutionTiming, FailureDetail, JobHandle, LogStream, RunId, RunSpecification, RunStatus,
-    RunnerError, RunnerResult, WorkflowRunner, tail_lines,
+    RunnerError, RunnerResult, StepEventLog, StepEventStream, WorkflowRunner, tail_lines,
 };
 use commonwl::{
     engine::{
@@ -84,7 +84,9 @@ impl WorkflowRunner for TaskRunner {
         let cancel = CancellationToken::new();
         let (status_tx, _) = watch::channel(RunStatus::Queued);
 
-        let request = create_execution_request_with_inputs(cwlfile, inputs, out_dir, None)?;
+        let mut request = create_execution_request_with_inputs(cwlfile, inputs, out_dir, None)?;
+        let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel();
+        request.progress = Some(progress_tx);
         // `cwlfile` may carry a `#fragment` selecting one document out of a packed `$graph`
         // file (e.g. `scatter-wf3.cwl#main`), same convention `cwl_core::load_cwl_file` checks
         // for. `dunce::canonicalize` stats the filesystem and knows nothing about fragments, so
@@ -109,6 +111,14 @@ impl WorkflowRunner for TaskRunner {
         let timing_for_task = timing_slot.clone();
         let failure_slot = Arc::new(Mutex::new(None));
         let failure_for_task = failure_slot.clone();
+        let step_events = Arc::new(Mutex::new(StepEventLog::new()));
+        let step_events_for_forwarder = step_events.clone();
+
+        tokio::spawn(async move {
+            while let Some(event) = progress_rx.recv().await {
+                step_events_for_forwarder.lock().unwrap().record(event);
+            }
+        });
 
         let task = tokio::spawn(
             async move {
@@ -172,6 +182,7 @@ impl WorkflowRunner for TaskRunner {
                 timing: timing_slot,
                 failure: failure_slot,
                 specification,
+                step_events,
             },
         );
 
@@ -188,6 +199,31 @@ impl WorkflowRunner for TaskRunner {
         Err(RunnerError::NotSupported(
             "local runner logs are only available live via run_workflow's console output",
         ))
+    }
+
+    async fn step_events(&self, id: &RunId) -> RunnerResult<StepEventStream> {
+        let step_events = {
+            let jobs = self.jobs.lock().unwrap();
+            let job = jobs.get(id).ok_or(RunnerError::JobNotFound)?;
+            job.step_events.clone()
+        };
+        let (replay, mut rx) = step_events.lock().unwrap().replay_and_subscribe();
+
+        let stream = async_stream::stream! {
+            for event in replay {
+                yield Ok(event);
+            }
+            loop {
+                use tokio::sync::broadcast::error::RecvError;
+                match rx.recv().await {
+                    Ok(event) => yield Ok(event),
+                    Err(RecvError::Lagged(_)) => continue,
+                    Err(RecvError::Closed) => break,
+                }
+            }
+        };
+
+        Ok(StepEventStream::new(stream))
     }
 
     async fn cancel(&self, id: &RunId) -> RunnerResult<()> {

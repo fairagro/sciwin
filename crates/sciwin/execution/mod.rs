@@ -12,7 +12,7 @@
 
 use commonwl::{
     documents::CWLDocument,
-    engine::{InputObject, StepTiming},
+    engine::{InputObject, StepEvent, StepTiming},
     inputs::DefaultValue,
 };
 use futures::Stream;
@@ -21,7 +21,7 @@ use miette::IntoDiagnostic;
 use reana::{api::response::WorkflowStatus, logs::ReanaLogMessage};
 use std::io;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, Mutex},
@@ -193,6 +193,7 @@ struct JobHandle {
     timing: Arc<Mutex<Option<ExecutionTiming>>>,
     failure: Arc<Mutex<Option<FailureDetail>>>,
     specification: RunSpecification,
+    step_events: Arc<Mutex<StepEventLog>>,
 }
 pub struct LogStream(Pin<Box<dyn Stream<Item = RunnerResult<LogLine>> + Send>>);
 impl LogStream {
@@ -208,6 +209,50 @@ impl Stream for LogStream {
     type Item = RunnerResult<LogLine>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.0.as_mut().poll_next(cx)
+    }
+}
+
+pub struct StepEventStream(Pin<Box<dyn Stream<Item = RunnerResult<StepEvent>> + Send>>);
+impl StepEventStream {
+    pub fn new<S>(stream: S) -> Self
+    where
+        S: Stream<Item = RunnerResult<StepEvent>> + Send + 'static,
+    {
+        Self(Box::pin(stream))
+    }
+}
+
+impl Stream for StepEventStream {
+    type Item = RunnerResult<StepEvent>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        self.0.as_mut().poll_next(cx)
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct StepEventLog {
+    buffer: Vec<StepEvent>,
+    sender: tokio::sync::broadcast::Sender<StepEvent>,
+}
+
+impl StepEventLog {
+    pub(crate) fn new() -> Self {
+        let (sender, _) = tokio::sync::broadcast::channel(1024);
+        Self {
+            buffer: Vec::new(),
+            sender,
+        }
+    }
+
+    pub(crate) fn record(&mut self, event: StepEvent) {
+        self.buffer.push(event.clone());
+        let _ = self.sender.send(event);
+    }
+
+    pub(crate) fn replay_and_subscribe(
+        &self,
+    ) -> (Vec<StepEvent>, tokio::sync::broadcast::Receiver<StepEvent>) {
+        (self.buffer.clone(), self.sender.subscribe())
     }
 }
 
@@ -260,6 +305,39 @@ impl LogCursor {
     }
 }
 
+/// REANA has no push channel for step progress, so [`ReanaRunner::step_events`] polls the same
+/// job log response [`LogCursor`] does and diffs it against what this has already reported
+#[derive(Default)]
+struct StepEventCursor {
+    started: HashSet<String>,
+    finished: HashSet<String>,
+}
+
+impl StepEventCursor {
+    fn diff(&mut self, msg: &ReanaLogMessage) -> Vec<StepEvent> {
+        let mut events = Vec::new();
+        for job in msg.job_logs.values() {
+            if let Some(started_at) = job.started_at
+                && self.started.insert(job.job_name.clone())
+            {
+                events.push(StepEvent::Started {
+                    step_id: job.job_name.clone(),
+                    started_at,
+                });
+            }
+            if let Some(finished_at) = job.finished_at
+                && self.finished.insert(job.job_name.clone())
+            {
+                events.push(StepEvent::Finished {
+                    step_id: job.job_name.clone(),
+                    finished_at,
+                });
+            }
+        }
+        events
+    }
+}
+
 #[async_trait::async_trait]
 pub trait WorkflowRunner {
     async fn submit(
@@ -270,6 +348,13 @@ pub trait WorkflowRunner {
     ) -> RunnerResult<RunId>;
     async fn status(&self, id: &RunId) -> RunnerResult<RunStatus>;
     async fn logs(&self, id: &RunId) -> RunnerResult<LogStream>;
+
+    async fn step_events(&self, _id: &RunId) -> RunnerResult<StepEventStream> {
+        Err(RunnerError::NotSupported(
+            "this runner does not report live step events",
+        ))
+    }
+
     async fn cancel(&self, id: &RunId) -> RunnerResult<()>;
     async fn outputs(
         &self,
