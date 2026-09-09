@@ -6067,7 +6067,7 @@ checksum = "04d056b875a9d2e6cb9a61d127afee9ac5999b9f87bcb32079d1318e505be714"
 
 [[package]]
 name = "s4n"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "chrono",
  "clap",
@@ -6126,7 +6126,7 @@ dependencies = [
 
 [[package]]
 name = "sciwin"
-version = "2.0.0"
+version = "2.0.1"
 dependencies = [
  "anyhow",
  "async-stream",
