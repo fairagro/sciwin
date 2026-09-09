@@ -1,6 +1,8 @@
 # v2.0.1
 ## 🐛 Bugfixes
 - Fixed critical but making auto-container resolved images unexecutable. fix generated CWL with with appending the algorithm after the @-sign sha256:{uuid}
+- fixes bugs with File format propagation
+- Updated dependencies (`reana` & `commonwl`)
 
 # v2.0.0
 ## 🚀 Features
