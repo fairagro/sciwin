@@ -44,11 +44,13 @@ pub(crate) async fn build_inputs(
             CommandInputParameterType::CommandInputType(OneOrMany::One(CommandInputType::CWLType(
                 CWLType::File
             )))
-        ) && let Some(DefaultValue::FileOrDirectory(default)) = &input.default
-            && let Some(location) = default.location()
+        ) && let Some(DefaultValue::FileOrDirectory(FileOrDirectory::File(file))) =
+            &mut input.default
+            && let Some(location) = &file.location
         {
             let file_type = edam::find_edam_format(location).await?;
-            input.format = Some(OneOrMany::One(file_type));
+            input.format = Some(OneOrMany::One(file_type.clone()));
+            file.format = Some(file_type); //needs to be added to default also
         }
 
         inputs.push(input);
