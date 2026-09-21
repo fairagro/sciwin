@@ -64,7 +64,7 @@ Reproducibility in computational research is essential for effective collaborati
 This project is being developed using Rust and Cargo. 
 To run SciWIn-Client you can just use `cargo run` to run from source code, to build use `cargo build`. 
 
-To run the tests use `cargo nextest` or `bacon nextest` to run as watcher (implying that bacon and nextest are installed).
+To run the tests use `cargo nextest run` or `bacon nextest` to run as watcher (implying that bacon and nextest are installed).
 
 ```bash
 # Clone the repository
@@ -80,7 +80,7 @@ cargo run
 
 To run tests (unit and integration)
 ```bash
-cargo nextest --workspace           # Run all tests
+cargo nextest run --workspace           # Run all tests
 ```
 
 ### Crate architecture & sibling repositories
