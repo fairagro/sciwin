@@ -1,5 +1,5 @@
 ---
-title: 'SciWin-Client: something subtitle'
+title: 'SciWIn-Client: something subtitle'
 
 tags:
   - CWL
@@ -28,13 +28,13 @@ authors:
 
 affiliations:
   - name: Johann Heinrich von Thünen Institute, Braunschweig, Germany
-    ror: 00mr84n67 
+    ror: 00mr84n67
     index: 1
-  - name:  Leibniz Institute of Plant Genetics and Crop Plant Research, Gatersleben, Germany
+  - name: Leibniz Institute of Plant Genetics and Crop Plant Research, Gatersleben, Germany
     ror: 02skbsp27
     index: 2
   - name: Bielefeld University, Bielefeld, Germany
-    ror: 02hpadn98 
+    ror: 02hpadn98
     index: 3
   - name: PowerCo SE, Salzgitter, Germany (current affiliation)
     index: 4
@@ -81,7 +81,7 @@ SciWIn-Client adresses a critical gap in open and reproducible science: The gap 
 Within the FAIRagro-consortium[@Ewert2023Proposal], SciWIn-Client directly supports the FAIR principles for data by ensuring that computational processes in agricultural research are FAIR compliant by using a defined standard. Workflows produced by SciWIn-Client are natively compatible with the ARC format [@dataplant2025ARCSpec; @Weil2023PLANTdataHUB], enabling seamless integration with DataPLANT's research data management infrastructure, and can be exported as Workflow Run RO-Crates [@Leo2024WRRC], providing machine-readable provenance records for every execution.
 The tool's Git-native design ensures transparent versioning of both data and workflow definitions, making the full computational history of a study useable and shareable. By supporting both local and remote execution SciWIn-Client accommodates the full spectrum of research computing needs, from exploratory analysis on a laptop to large-scale runs on institutional infrastructure.
 
-The source code is openly available at https://github.com/fairagro/sciwin under a permissive license, and the project welcomes community contributions.
+The source code is openly available at https://github.com/fairagro/sciwin under MIT OR Apache-2.0, and the project welcomes community contributions.
 
 # CRediT authorship contribution statement
 
