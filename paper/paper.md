@@ -1,5 +1,5 @@
 ---
-title: 'SciWIn-Client: something subtitle'
+title: 'SciWIn-Client: Reproducible Computational Workflows from the Command-line'
 
 tags:
   - CWL
