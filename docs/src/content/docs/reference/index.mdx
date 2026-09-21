@@ -15,46 +15,31 @@ sidebar:
   Client tool for Scientific Workflow Infrastructure (SciWIn)
   Documentation: https://fairagro.github.io/sciwin/
 
-  Version: 1.0.0
+  Version: 2.0.0-beta.3
 
   Usage: s4n <COMMAND>
 
   Commands:
     init         Initializes project folder structure and repository
     create       Creates a new CWL File or Workflow
-    list         Lists either all CWL Files or details to a given file [aliases: ls]
-    remove       Removes a CWL File from the workflows Directory [aliases: rm]
+    list         Lists either all CWL Files or details to a given file [alias: ls]
+    remove       Removes a CWL File from the workflows Directory [alias: rm]
     connect      Connects a workflow node
     disconnect   Disconnects a workflow node
     visualize    Visualizes a workflow
     save         Saves a workflow
-    install      Installs a workflow as submodule [aliases: i]
+    install      Installs a workflow as submodule [alias: i]
     uninstall    Removes an installed workflow
-    execute      Execution of CWL Files locally or on remote servers [aliases: ex]
+    execute      Execution of CWL Files locally or on remote servers [alias: ex]
     completions  Generate shell completions
     help         Print this message or the help of the given subcommand(s)
 
   Options:
+    -q, --quiet    Only print errors
+        --debug    Explain in high detail what the CLI is doing internally
     -h, --help     Print help
     -V, --version  Print version
     ```
-:::tip[The 1.0.0 Release]
-  The 1.0.0 Release changed a lot of commands. Please check the [Command Reference](../reference) for updated commands.
-  The old commands map as follows:
-  | Old Command               | New Command            |
-  |---------------------------|------------------------|
-  | s4n tool create           | s4n create             |
-  | s4n tool list             | s4n list               |
-  | s4n tool remove           | s4n remove             |
-  | s4n workflow create       | s4n create --name      |
-  | s4n workflow list         | s4n list               |
-  | s4n workflow remove       | s4n remove             |
-  | s4n workflow status       | s4n list [WORKFLOW_NAME]|
-  | s4n workflow connect      | s4n connect            |
-  | s4n workflow disconnect   | s4n disconnect         |
-  | s4n workflow visualize    | s4n visualize          |
-  | s4n workflow save         | s4n save               |
-:::
 
 
 ## Shell completions
@@ -63,13 +48,15 @@ Shell completions are available using the `s4n completions` command
     ```txt frame="terminal" title="Usage"
     Generate shell completions
 
-    Usage: s4n completions <SHELL>
+    Usage: s4n completions [OPTIONS] <SHELL>
 
     Arguments:
       <SHELL>  [possible values: bash, elvish, fish, powershell, zsh]
 
     Options:
-      -h, --help  Print help
+      -q, --quiet  Only print errors
+          --debug  Explain in high detail what the CLI is doing internally
+      -h, --help   Print help
     ```
 The command can be used to generate the shell completions for several shells.
 ```bash

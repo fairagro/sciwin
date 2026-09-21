@@ -141,7 +141,7 @@ pub struct Image {
 
 impl Image {
     pub fn to_requirement(self) -> DockerRequirement{
-        let pull_str = format!("{}/{}@{}", self.registry, self.repository, self.digest);
+        let pull_str = format!("{}/{}@sha256:{}", self.registry, self.repository, self.digest);
         DockerRequirement::builder().docker_pull(pull_str).build()
     }
 }

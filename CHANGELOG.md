@@ -1,4 +1,10 @@
-# Unreleased
+# v2.0.1
+## 🐛 Bugfixes
+- Fixed critical but making auto-container resolved images unexecutable. fix generated CWL with with appending the algorithm after the @-sign sha256:{uuid}
+- fixes bugs with File format propagation
+- Updated dependencies (`reana` & `commonwl`)
+
+# v2.0.0
 ## 🚀 Features
 - Unified `s4n execute` around a single `--engine` flag (`local`, `docker`, `tes`, `reana`) instead of separate `local`/`remote` subcommands, wiring `commonwl`'s Docker and TES backends into the CLI for the first time
 - `run` (engine `local` by default) is now `execute`'s default subcommand, so `s4n execute <FILE> [INPUT_FILE]` works directly without typing `run`

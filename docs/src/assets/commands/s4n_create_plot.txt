@@ -1,7 +1,0 @@
-📂 The current working directory is [1;32m/home/ubuntu/sciwin_test[0m
-▶️  Executing command: python plot.py --results results.csv
-
-📜 Found changes:
-        - results.svg
-
-📄 Created CWL file [1;32mworkflows/plot/plot.cwl[0m

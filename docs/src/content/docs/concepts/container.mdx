@@ -1,0 +1,44 @@
+---
+title: Containers
+sidebar:
+  order: 3
+---
+
+A container packages a program together with the exact software environment it needs — OS libraries, language runtime, dependencies — so that running it produces the same result regardless of what's installed on the host machine. If a [CWL](cwl) file is the recipe (what command, what inputs), a container is the fully-stocked kitchen it's guaranteed to run in.
+
+## Why this matters for reproducibility
+
+`python analyze.py` depends silently on whatever Python version and package versions happen to be installed wherever it's run. That dependency is invisible both in the script and in a bare CWL `baseCommand`, until the command is run somewhere those versions differ, and the result is subtly wrong or fails outright. A container makes the environment explicit and portable: build it once, and `analyze.py` runs identically on your laptop, a colleague's machine, or an HPC cluster.
+
+## How CWL declares one
+
+A tool asks for a container with a `DockerRequirement`, in one of two ways:
+
+```yaml
+requirements:
+  DockerRequirement:
+    dockerPull: python:3.12-slim   # pull a pre-built image from a registry
+```
+
+```yaml
+requirements:
+  DockerRequirement:
+    dockerFile: |                  # or build one from a Dockerfile, inline
+      FROM python:3.12-slim
+      RUN pip install pandas matplotlib
+    dockerImageId: my-analysis
+```
+
+Whichever form a tool carries, a compliant runner is expected to run the command inside that environment rather than directly on the host.
+
+## Container runtimes
+
+"Container" doesn't mean only Docker. `s4n execute` can run a tool's container under several runtimes, selected with `--runtime`: `docker`, `podman`, `singularity`, or `apptainer`. Docker and Podman are the common choice on a workstation; HPC clusters typically run Singularity or Apptainer instead, because they don't require root privileges the way Docker does — an important constraint on shared academic compute.
+
+## Getting one without writing a Dockerfile
+
+Writing and maintaining a `Dockerfile` by hand is its own skill, and not one this documentation assumes you have. `s4n create --auto-container` sidesteps it: for a Python or R tool, it reads your project's own dependency file (`requirements.txt`, `pyproject.toml`, `DESCRIPTION`), resolves those dependencies against a FAIRagro-run registry of pre-built images, and writes the matching `dockerPull` reference straight into the generated tool. See [Architecture: Automatic container resolution](architecture#automatic-container-resolution) for how that resolution works end to end.
+
+## When there isn't one yet
+
+A tool with no `DockerRequirement` at all simply runs on the host machine — useful for quickly recording a command, but not something you should expect to be reproducible elsewhere. Adding a container, whether by hand or via `--auto-container`, is what turns a tool from "worked on my machine" into "will work on any machine."

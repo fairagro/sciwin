@@ -1,0 +1,47 @@
+---
+title: Development
+sidebar:
+  order: 1
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components'
+import Mermaid from "../../../components/Mermaid.astro";
+
+SciWIn is five repositories developed together: [`sciwin`](https://github.com/fairagro/sciwin) (the `s4n` CLI and the shared core it's built on), [`sciwin_studio`](https://github.com/fairagro/sciwin_studio) (the desktop GUI), [`commonwl`](https://github.com/fairagro/commonwl) (CWL parsing and the execution engine), [`ro-crate-lib`](https://github.com/fairagro/ro-crate-lib) (crate `rocrate`, RO-Crate support), and [`reana-cwl-client`](https://github.com/fairagro/reana-cwl-client) (crate `reana`, the REANA client). See [Architecture](../concepts/architecture) for how they fit together.
+
+Two more repositories back the `--auto-container` feature ([Containers](../concepts/container#getting-one-without-writing-a-dockerfile)) rather than being Rust crates themselves: [`sciwin-container-registry`](https://github.com/fairagro/sciwin-container-registry), the index mapping package requirements to image digests, and [`sciwin-containers`](https://github.com/fairagro/sciwin-containers), where those images are actually built.
+
+<Mermaid code={`flowchart TD
+    Studio["sciwin_studio<br/>Tauri + Svelte GUI"]
+    Sciwin["sciwin<br/>s4n CLI + shared core"]
+    CommonWL["commonwl<br/>CWL parsing + execution engine"]
+    Rocrate["ro-crate-lib<br/>RO-Crate read/write"]
+    Reana["reana-cwl-client<br/>REANA client"]
+    Registry["sciwin-container-registry<br/>package → image digest index"]
+    Containers["sciwin-containers<br/>built images"]
+
+    Studio --> Sciwin
+    Studio --> CommonWL
+    Sciwin --> CommonWL
+    Sciwin --> Rocrate
+    Sciwin --> Reana
+    Reana --> CommonWL
+    Sciwin -.->|"--auto-container resolves via HTTP"| Registry
+    Registry -.-> Containers
+`} />
+
+If you want to be part of SciWIn's development, feel free to check out any of these repositories on GitHub.
+
+## Feature requests and bug reports
+
+We use GitHub issues to track progress and work on feature requests and bug reports. If there's an improvement to be made, please consider opening a new issue on the relevant repository, `sciwin` for the CLI, `sciwin_studio` for the GUI.
+
+<a href="https://github.com/fairagro/sciwin/issues/new" class="button">Open Issue on sciwin</a>
+<a href="https://github.com/fairagro/sciwin_studio/issues/new" class="button">Open Issue on sciwin_studio</a>
+
+## Building from source
+
+<CardGrid>
+	<LinkCard title="SciWIn Client (s4n)" href="s4n" description="Build and test the CLI locally with cargo." />
+	<LinkCard title="SciWIn-Studio" href="studio" description="Build and run the Tauri + SvelteKit desktop GUI." />
+</CardGrid>

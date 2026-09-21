@@ -2,13 +2,13 @@ use crate::authoring::{AuthoringError, AuthoringResult, paths};
 use anyhow::Context;
 use commonwl::{
     OneOrMany,
-    documents::{CWLDocument, ScatterMethod, Workflow},
+    documents::{CWLDocument, Workflow},
     format::format_cwl,
-    inputs::{InputSchema, InputType, WorkflowStepInput},
+    inputs::{InputArraySchema, InputSchema, InputType, WorkflowStepInput},
     load_cwl_file,
     outputs::{
-        CommandOutputParameterType, CommandOutputSchema, CommandOutputType, LinkMergeMethod,
-        PickValueMethod,
+        CommandOutputArraySchema, CommandOutputParameterType, CommandOutputSchema,
+        CommandOutputType,
     },
     requirements::{MultipleInputFeatureRequirement, WorkflowRequirements},
     types::CWLType,
@@ -17,6 +17,16 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+mod link_merge;
+mod pick_value;
+mod scatter;
+mod when;
+
+pub use link_merge::*;
+pub use pick_value::*;
+pub use scatter::*;
+pub use when::*;
 
 /// Creates a blank workflow document named `name`.
 ///
@@ -152,7 +162,15 @@ pub fn add_workflow_input_connection(
             }
         }
     } else {
+        // The slot's declared type is what the tool receives per iteration; a
+        // fresh input feeding a slot the step already scatters over must
+        // itself be array-shaped, one element per iteration. A scalar
+        // default from the slot no longer fits that array type, so it's
+        // dropped rather than carried over mismatched.
         let (input_type, default) = match to_slot {
+            Some(slot) if step_scatters_over(workflow, to.name, to.slot_id) => {
+                (wrap_type_as_array(slot.r#type.clone()), None)
+            }
             Some(slot) => (slot.r#type.clone(), slot.default.clone()),
             None => (OneOrMany::One(InputType::CWLType(CWLType::Any)), None),
         };
@@ -202,6 +220,15 @@ pub fn add_workflow_output_connection(
             .map(|i| i.r#type.clone()),
     }
     .expect("No slot");
+
+    // The slot's declared type is what the tool produces per iteration; once
+    // the step scatters (over any of its inputs) every one of its outputs
+    // becomes array-shaped, one element per iteration.
+    let from_type = if step_is_scattered(workflow, from.name) {
+        wrap_output_type_as_array(from_type)
+    } else {
+        from_type
+    };
 
     // Checked before any mutation, refusing here must not leave a step
     // registered with nothing wired to it, the way checking after
@@ -424,93 +451,32 @@ pub fn check_slot_compatibility_scattered(
     })
 }
 
-/// Whether `step_id` scatters over `port` specifically.
-pub fn step_scatters_over(workflow: &Workflow, step_id: &str, port: &str) -> bool {
-    workflow
-        .steps
-        .iter()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .and_then(|s| s.scatter.as_ref())
-        .is_some_and(|scatter| scatter.as_many().iter().any(|p| p == port))
+/// Wraps `t` as a single-element array schema -- the shape a fresh workflow
+/// input must take when the step port it feeds scatters over it: the tool
+/// declares (and receives) `t` per iteration, but the source has to supply
+/// one array element per iteration.
+pub fn wrap_type_as_array(t: OneOrMany<InputType>) -> OneOrMany<InputType> {
+    OneOrMany::One(InputType::InputSchema(Box::new(InputSchema::Array(
+        InputArraySchema::builder().items(t).build(),
+    ))))
 }
 
-pub fn step_is_scattered(workflow: &Workflow, step_id: &str) -> bool {
-    workflow
-        .steps
-        .iter()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .is_some_and(|s| {
-            s.scatter
-                .as_ref()
-                .is_some_and(|sc| !sc.as_many().is_empty())
-        })
-}
-
-/// Whether `array_type` is an array whose item type is exactly
-/// `scalar_type` -- the shape a source (a workflow input, or another step's
-/// output already handled via [`check_slot_compatibility_scattered`]) takes
-/// when the step it feeds scatters over that slot.
-pub fn is_scattered_array_of(
-    array_type: &OneOrMany<InputType>,
-    scalar_type: &OneOrMany<InputType>,
-) -> bool {
-    array_type.as_many().iter().all(|t| match t {
-        InputType::InputSchema(schema) => match schema.as_ref() {
-            InputSchema::Array(arr) => arr.items == *scalar_type,
-            _ => false,
-        },
-        _ => false,
-    })
-}
-
-#[derive(Debug)]
-pub enum ScatterProducerFit {
-    Exact,
-    NeedsPickValueToDropNulls,
-    Incompatible,
-}
-
-/// Whether a scattered step's per-iteration `output` can feed an array-typed
-/// `input`.
-pub fn check_slot_compatibility_scattered_producer(
-    input: &OneOrMany<InputType>,
-    output: &CommandOutputParameterType,
-) -> ScatterProducerFit {
-    let produced = match output {
+/// Wraps `t` as a single-element array schema -- the shape a scattered
+/// step's own output takes: scatter runs the step once per element and
+/// collects the results, so every output becomes an array regardless of
+/// which input(s) are being scattered over.
+pub fn wrap_output_type_as_array(t: CommandOutputParameterType) -> CommandOutputParameterType {
+    let items = match t {
         CommandOutputParameterType::Stdout | CommandOutputParameterType::Stderr => {
-            vec![CommandOutputType::CWLType(CWLType::File)]
+            OneOrMany::One(CommandOutputType::CWLType(CWLType::File))
         }
-        CommandOutputParameterType::CommandOutputType(types) => types.as_many(),
+        CommandOutputParameterType::CommandOutputType(types) => types,
     };
-    let non_null: Vec<&CommandOutputType> = produced
-        .iter()
-        .filter(|p| !matches!(p, CommandOutputType::CWLType(CWLType::Null)))
-        .collect();
-    let accepted: Vec<InputType> = input.as_many();
-
-    let fits = |items: &[&CommandOutputType]| {
-        accepted.iter().any(|a| match a {
-            InputType::InputSchema(schema) => match schema.as_ref() {
-                InputSchema::Array(arr) => {
-                    let item_types = arr.items.as_many();
-                    items
-                        .iter()
-                        .all(|p| item_types.iter().any(|it| single_type_matches(p, it)))
-                }
-                _ => false,
-            },
-            _ => false,
-        })
-    };
-
-    let all: Vec<&CommandOutputType> = produced.iter().collect();
-    if fits(&all) {
-        ScatterProducerFit::Exact
-    } else if non_null.len() != produced.len() && fits(&non_null) {
-        ScatterProducerFit::NeedsPickValueToDropNulls
-    } else {
-        ScatterProducerFit::Incompatible
-    }
+    CommandOutputParameterType::CommandOutputType(OneOrMany::One(
+        CommandOutputType::CommandOutputSchema(Box::new(CommandOutputSchema::Array(
+            CommandOutputArraySchema::builder().items(items).build(),
+        ))),
+    ))
 }
 
 /// Whether every alternative of `input` is itself array-shaped, e.g. a
@@ -520,93 +486,6 @@ pub fn input_type_is_array(input: &OneOrMany<InputType>) -> bool {
         .as_many()
         .iter()
         .all(|i| matches!(i, InputType::InputSchema(schema) if matches!(schema.as_ref(), InputSchema::Array(_))))
-}
-
-/// Marks `step_id`'s `port` input as scattered, adding it to any inputs the
-/// step already scatters over.
-/// # Errors
-/// If no step with `step_id` exists
-pub fn add_step_to_scatter_mut(
-    workflow: &mut Workflow,
-    step_id: &str,
-    port: &str,
-) -> AuthoringResult<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
-            id: step_id.to_string(),
-        })?;
-    let mut ports = step
-        .scatter
-        .take()
-        .map(OneOrMany::into_many)
-        .unwrap_or_default();
-    if !ports.iter().any(|p| p == port) {
-        ports.push(port.to_string());
-    }
-    step.scatter = Some(match ports.len() {
-        1 => OneOrMany::One(ports.into_iter().next().expect("checked len == 1")),
-        _ => OneOrMany::Many(ports),
-    });
-    Ok(())
-}
-
-/// Sets the `pickValue` resolution strategy on `step_id`'s `port` input,
-/// used when it has more than one source feeding it.
-/// # Errors
-/// If no step with `step_id`, or no input `port` on it, exists
-pub fn set_step_pick_value_mut(
-    workflow: &mut Workflow,
-    step_id: &str,
-    port: &str,
-    method: PickValueMethod,
-) -> AuthoringResult<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
-            id: step_id.to_string(),
-        })?;
-    let input = step
-        .r#in
-        .iter_mut()
-        .find(|i| i.id.as_deref() == Some(port))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowInput {
-            id: port.to_string(),
-            path: format!("step {step_id}"),
-        })?;
-    input.pick_value = Some(method);
-    Ok(())
-}
-
-/// Clears a `pickValue` strategy on `step_id`'s `port` input.
-/// # Errors
-/// If no step with `step_id`, or no input `port` on it, exists
-pub fn clear_step_pick_value_mut(
-    workflow: &mut Workflow,
-    step_id: &str,
-    port: &str,
-) -> AuthoringResult<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
-            id: step_id.to_string(),
-        })?;
-    let input = step
-        .r#in
-        .iter_mut()
-        .find(|i| i.id.as_deref() == Some(port))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowInput {
-            id: port.to_string(),
-            path: format!("step {step_id}"),
-        })?;
-    input.pick_value = None;
-    Ok(())
 }
 
 /// Sets or clears the `valueFrom` expression on `step_id`'s `port` input.
@@ -634,76 +513,6 @@ pub fn set_step_input_value_from_mut(
             path: format!("step {step_id}"),
         })?;
     input.value_from = value_from;
-    Ok(())
-}
-
-/// Removes `step_id`'s `port` from its `scatter` list. Collapses `scatter`
-/// to `None` once empty, rather than round-tripping `scatter: []`.
-/// # Errors
-/// If no step with `step_id` exists
-pub fn remove_step_from_scatter_mut(
-    workflow: &mut Workflow,
-    step_id: &str,
-    port: &str,
-) -> AuthoringResult<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
-            id: step_id.to_string(),
-        })?;
-    let remaining: Vec<String> = step
-        .scatter
-        .take()
-        .map(OneOrMany::into_many)
-        .unwrap_or_default()
-        .into_iter()
-        .filter(|p| p != port)
-        .collect();
-    step.scatter = match remaining.len() {
-        0 => None,
-        1 => Some(OneOrMany::One(remaining.into_iter().next().unwrap())),
-        _ => Some(OneOrMany::Many(remaining)),
-    };
-    Ok(())
-}
-
-/// Sets or clears `step_id`'s `scatterMethod`.
-/// # Errors
-/// If no step with `step_id` exists
-pub fn set_step_scatter_method_mut(
-    workflow: &mut Workflow,
-    step_id: &str,
-    method: Option<ScatterMethod>,
-) -> AuthoringResult<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
-            id: step_id.to_string(),
-        })?;
-    step.scatter_method = method;
-    Ok(())
-}
-
-/// Sets or clears `step_id`'s `when:` guard expression.
-/// # Errors
-/// If no step with `step_id` exists
-pub fn set_step_when_mut(
-    workflow: &mut Workflow,
-    step_id: &str,
-    expression: Option<String>,
-) -> AuthoringResult<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
-            id: step_id.to_string(),
-        })?;
-    step.when = expression;
     Ok(())
 }
 
@@ -776,74 +585,6 @@ pub fn add_step_input_slot_mut(
     }
     step.r#in
         .push(WorkflowStepInput::builder().id(port.to_owned()).build());
-    Ok(())
-}
-
-/// Sets or clears the `linkMerge` method on `step_id`'s `port` input.
-/// # Errors
-/// If no step with `step_id`, or no input `port` on it, exists
-pub fn set_step_input_link_merge_mut(
-    workflow: &mut Workflow,
-    step_id: &str,
-    port: &str,
-    method: Option<LinkMergeMethod>,
-) -> AuthoringResult<()> {
-    let step = workflow
-        .steps
-        .iter_mut()
-        .find(|s| s.id.as_deref() == Some(step_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowStep {
-            id: step_id.to_string(),
-        })?;
-    let input = step
-        .r#in
-        .iter_mut()
-        .find(|i| i.id.as_deref() == Some(port))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowInput {
-            id: port.to_string(),
-            path: format!("step {step_id}"),
-        })?;
-    input.link_merge = method;
-    Ok(())
-}
-
-/// Sets or clears `pickValue` on a workflow output.
-/// # Errors
-/// If no output with `output_id` exists
-pub fn set_output_pick_value_mut(
-    workflow: &mut Workflow,
-    output_id: &str,
-    method: Option<PickValueMethod>,
-) -> AuthoringResult<()> {
-    let output = workflow
-        .outputs
-        .iter_mut()
-        .find(|o| o.id.as_deref() == Some(output_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowOutput {
-            id: output_id.to_string(),
-            path: "workflow".to_string(),
-        })?;
-    output.pick_value = method;
-    Ok(())
-}
-
-/// Sets or clears `linkMerge` on a workflow output.
-/// # Errors
-/// If no output with `output_id` exists
-pub fn set_output_link_merge_mut(
-    workflow: &mut Workflow,
-    output_id: &str,
-    method: Option<LinkMergeMethod>,
-) -> AuthoringResult<()> {
-    let output = workflow
-        .outputs
-        .iter_mut()
-        .find(|o| o.id.as_deref() == Some(output_id))
-        .ok_or_else(|| AuthoringError::InvalidWorkflowOutput {
-            id: output_id.to_string(),
-            path: "workflow".to_string(),
-        })?;
-    output.link_merge = method;
     Ok(())
 }
 
@@ -926,18 +667,16 @@ fn local_name(name: &str) -> &str {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub(super) mod test_support {
     use commonwl::{
-        documents::{CWLDocument, CommandLineTool, StringOrDocument, Workflow},
+        documents::{CWLDocument, CommandLineTool},
         inputs::CommandInputParameter,
         outputs::CommandOutputParameter,
         types::CWLType,
     };
     use std::{fs, path::Path};
-    use tempfile::tempdir;
 
-    fn os_path(path: &str) -> String {
+    pub(super) fn os_path(path: &str) -> String {
         if cfg!(target_os = "windows") {
             Path::new(path).to_string_lossy().replace('/', "\\")
         } else {
@@ -945,11 +684,11 @@ mod tests {
         }
     }
 
-    fn write_tool(path: &Path, input: &str, output: &str) {
+    pub(super) fn write_tool(path: &Path, input: &str, output: &str) {
         write_tool_typed(path, input, output, CWLType::String);
     }
 
-    fn write_tool_typed(path: &Path, input: &str, output: &str, ty: CWLType) {
+    pub(super) fn write_tool_typed(path: &Path, input: &str, output: &str, ty: CWLType) {
         let tool = CommandLineTool::builder()
             .cwl_version("v1.2")
             .inputs(vec![
@@ -969,6 +708,14 @@ mod tests {
         let yaml = serde_saphyr::to_string(&CWLDocument::CommandLineTool(tool)).unwrap();
         fs::write(path, yaml).unwrap();
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_support::*;
+    use super::*;
+    use commonwl::documents::StringOrDocument;
+    use tempfile::tempdir;
 
     #[test]
     fn create_workflow_creates_file_in_given_project_folder() {
@@ -1104,6 +851,44 @@ mod tests {
     }
 
     #[test]
+    fn connect_workflow_input_to_a_scattered_slot_gets_array_type() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+        write_tool(&tool_path, "message", "out"); // message: string, scalar
+
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            &workflow_path,
+            "tool",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+        add_step_to_scatter_mut(&mut wf, "tool", "message").unwrap();
+
+        add_workflow_input_connection(
+            &mut wf,
+            &workflow_path,
+            "messages",
+            WorkflowSlot::new(&tool_path, "tool", "message"),
+        )
+        .unwrap();
+
+        let input = wf
+            .inputs
+            .iter()
+            .find(|i| i.id.as_deref() == Some("messages"))
+            .expect("a new workflow input must be registered");
+        assert_eq!(
+            input.r#type,
+            wrap_type_as_array(OneOrMany::One(InputType::CWLType(CWLType::String))),
+            "a fresh input feeding a scattered slot must be array-shaped, not the tool's per-iteration scalar type"
+        );
+    }
+
+    #[test]
     fn connect_workflow_input_reuses_existing_input_with_matching_type() {
         let dir = tempdir().unwrap();
         let tool_a = dir.path().join("a.cwl");
@@ -1204,6 +989,47 @@ mod tests {
         assert_eq!(
             output.output_source.as_ref().unwrap().as_many(),
             vec!["tool/result".to_string()]
+        );
+    }
+
+    #[test]
+    fn connect_workflow_output_from_a_scattered_step_gets_array_type() {
+        let dir = tempdir().unwrap();
+        let tool_path = dir.path().join("tool.cwl");
+        let workflow_path = dir.path().join("workflow.cwl");
+
+        write_tool(&tool_path, "in", "result"); // result: string, scalar per iteration
+
+        let mut wf = Workflow::default();
+        add_workflow_step(
+            &mut wf,
+            &workflow_path,
+            "tool",
+            &tool_path,
+            &load_cwl_file(&tool_path, true).unwrap(),
+        )
+        .unwrap();
+        add_step_to_scatter_mut(&mut wf, "tool", "in").unwrap();
+
+        add_workflow_output_connection(
+            &mut wf,
+            &workflow_path,
+            WorkflowSlot::new(&tool_path, "tool", "result"),
+            "final_result",
+        )
+        .unwrap();
+
+        let output = wf
+            .outputs
+            .iter()
+            .find(|o| o.id.as_deref() == Some("final_result"))
+            .unwrap();
+        assert_eq!(
+            output.r#type,
+            wrap_output_type_as_array(CommandOutputParameterType::CommandOutputType(
+                OneOrMany::One(CommandOutputType::CWLType(CWLType::String))
+            )),
+            "a fresh output from a scattered step must be array-shaped -- scatter runs the step once per element"
         );
     }
 
@@ -1441,53 +1267,6 @@ mod tests {
     }
 
     #[test]
-    fn scatter_add_then_remove_collapses_to_none() {
-        let dir = tempdir().unwrap();
-        let tool_path = dir.path().join("tool.cwl");
-        write_tool(&tool_path, "in", "out");
-        let mut wf = Workflow::default();
-        add_workflow_step(
-            &mut wf,
-            dir.path().join("workflow.cwl"),
-            "step",
-            &tool_path,
-            &load_cwl_file(&tool_path, true).unwrap(),
-        )
-        .unwrap();
-
-        add_step_to_scatter_mut(&mut wf, "step", "in").unwrap();
-        assert!(step_scatters_over(&wf, "step", "in"));
-
-        remove_step_from_scatter_mut(&mut wf, "step", "in").unwrap();
-        assert_eq!(wf.get_step("step").unwrap().scatter, None);
-    }
-
-    #[test]
-    fn set_and_clear_when() {
-        let dir = tempdir().unwrap();
-        let tool_path = dir.path().join("tool.cwl");
-        write_tool(&tool_path, "in", "out");
-        let mut wf = Workflow::default();
-        add_workflow_step(
-            &mut wf,
-            dir.path().join("workflow.cwl"),
-            "step",
-            &tool_path,
-            &load_cwl_file(&tool_path, true).unwrap(),
-        )
-        .unwrap();
-
-        set_step_when_mut(&mut wf, "step", Some("$(inputs.x != null)".to_string())).unwrap();
-        assert_eq!(
-            wf.get_step("step").unwrap().when.as_deref(),
-            Some("$(inputs.x != null)")
-        );
-
-        set_step_when_mut(&mut wf, "step", None).unwrap();
-        assert_eq!(wf.get_step("step").unwrap().when, None);
-    }
-
-    #[test]
     fn add_step_input_slot_refuses_duplicate_name() {
         let dir = tempdir().unwrap();
         let tool_path = dir.path().join("tool.cwl");
@@ -1510,7 +1289,7 @@ mod tests {
     }
 
     #[test]
-    fn value_from_and_pick_value_set_and_clear() {
+    fn value_from_set_and_clear() {
         let dir = tempdir().unwrap();
         let producer = dir.path().join("producer.cwl");
         let consumer = dir.path().join("consumer.cwl");
@@ -1537,81 +1316,6 @@ mod tests {
         );
         set_step_input_value_from_mut(&mut wf, "consumer", "value", None).unwrap();
         assert_eq!(wf.get_step("consumer").unwrap().r#in[0].value_from, None);
-
-        set_step_pick_value_mut(&mut wf, "consumer", "value", PickValueMethod::AllNonNull).unwrap();
-        assert_eq!(
-            wf.get_step("consumer").unwrap().r#in[0].pick_value,
-            Some(PickValueMethod::AllNonNull)
-        );
-        clear_step_pick_value_mut(&mut wf, "consumer", "value").unwrap();
-        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].pick_value, None);
-    }
-
-    #[test]
-    fn link_merge_set_and_clear() {
-        let dir = tempdir().unwrap();
-        let producer = dir.path().join("producer.cwl");
-        let consumer = dir.path().join("consumer.cwl");
-        let workflow_path = dir.path().join("workflow.cwl");
-        write_tool(&producer, "dummy", "value");
-        write_tool(&consumer, "value", "result");
-        let mut wf = Workflow::default();
-        add_workflow_step_connection(
-            &mut wf,
-            &workflow_path,
-            WorkflowSlot::new(&producer, "producer", "value"),
-            WorkflowSlot::new(&consumer, "consumer", "value"),
-        )
-        .unwrap();
-
-        set_step_input_link_merge_mut(
-            &mut wf,
-            "consumer",
-            "value",
-            Some(LinkMergeMethod::MergeFlattened),
-        )
-        .unwrap();
-        assert_eq!(
-            wf.get_step("consumer").unwrap().r#in[0].link_merge,
-            Some(LinkMergeMethod::MergeFlattened)
-        );
-        set_step_input_link_merge_mut(&mut wf, "consumer", "value", None).unwrap();
-        assert_eq!(wf.get_step("consumer").unwrap().r#in[0].link_merge, None);
-    }
-
-    #[test]
-    fn output_pick_value_and_link_merge_set_and_clear() {
-        let dir = tempdir().unwrap();
-        let tool_path = dir.path().join("tool.cwl");
-        write_tool(&tool_path, "in", "out");
-        let mut wf = Workflow::default();
-        add_workflow_output_connection(
-            &mut wf,
-            dir.path().join("workflow.cwl"),
-            WorkflowSlot::new(&tool_path, "tool", "out"),
-            "final",
-        )
-        .unwrap();
-
-        set_output_pick_value_mut(&mut wf, "final", Some(PickValueMethod::FirstNonNull)).unwrap();
-        set_output_link_merge_mut(&mut wf, "final", Some(LinkMergeMethod::MergeFlattened)).unwrap();
-        let output = wf
-            .outputs
-            .iter()
-            .find(|o| o.id.as_deref() == Some("final"))
-            .unwrap();
-        assert_eq!(output.pick_value, Some(PickValueMethod::FirstNonNull));
-        assert_eq!(output.link_merge, Some(LinkMergeMethod::MergeFlattened));
-
-        set_output_pick_value_mut(&mut wf, "final", None).unwrap();
-        set_output_link_merge_mut(&mut wf, "final", None).unwrap();
-        let output = wf
-            .outputs
-            .iter()
-            .find(|o| o.id.as_deref() == Some("final"))
-            .unwrap();
-        assert_eq!(output.pick_value, None);
-        assert_eq!(output.link_merge, None);
     }
 
     #[test]

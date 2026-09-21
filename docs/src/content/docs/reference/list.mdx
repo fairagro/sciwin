@@ -6,7 +6,7 @@ sidebar:
 
 ## `list`
 
-`list` or `ls` can be used to list all existing CWL Workflows and Tools. Using the command without the `-a` flag just ouputs the names of all existing CWL files in the project. Using the `-all` (or `-a`) flag will also output the tools in- and outputs which than can easily be used for the `connect` command.
+`list` or `ls` can be used to list all existing CWL Workflows and Tools. Using the command without the `-a` flag just ouputs the names of all existing CWL files in the project. Using the `--all` (or `-a`) flag will also output the tools in- and outputs which than can easily be used for the `connect` command.
 
     ```txt frame="terminal" title="Usage"
     Lists either all CWL Files or details to a given file
@@ -17,8 +17,10 @@ sidebar:
       [FILE]  
 
     Options:
-      -a, --all   Outputs the tools with inputs and outputs
-      -h, --help  Print help
+      -a, --all    Outputs the tools with inputs and outputs
+      -q, --quiet  Only print errors
+          --debug  Explain in high detail what the CLI is doing internally
+      -h, --help   Print help
     ```
 :::tip[Example]
     Simple Usage:

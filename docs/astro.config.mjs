@@ -23,7 +23,7 @@ export default defineConfig({
   base: '/sciwin/',
 
   integrations: [starlight({
-    title: 'SciWIn Client',
+    title: 'SciWIn',
     favicon: '/favicon.png',
     logo: {
       src: './src/assets/logo.svg',
@@ -36,6 +36,8 @@ export default defineConfig({
       '@fontsource/fira-sans/400-italic.css',
       '@fontsource/fira-sans/700-italic.css',
       '@fontsource/fira-sans/900-italic.css',
+      '@fontsource/fira-code/400.css',
+      '@fontsource/fira-code/500.css',
       './src/styles/global.css'
     ],
     social: [
@@ -49,8 +51,11 @@ export default defineConfig({
     },
     sidebar: [
       { label: 'Getting Started', items: [{ autogenerate: { directory: 'getting-started' } }] },
+      { label: 'Concepts', items: [{ autogenerate: { directory: 'concepts' } }] },
+      { label: 'SciWIn-Studio', items: [{ autogenerate: { directory: 'sciwin-studio' } }] },
       { label: 'Examples', items: [{ autogenerate: { directory: 'examples' } }] },
       { label: 'Reference', items: [{ autogenerate: { directory: 'reference' } }] },
+      { label: 'Development', items: [{ autogenerate: { directory: 'development' } }] },
     ],
     plugins: [
       starlightLinksValidator({

@@ -12,23 +12,25 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 
 <div class="page sl-flex">
     <header class="header"><slot name="header" /></header>
-    {
-        hasSidebar && (
-            <nav
-                class="sidebar print:hidden"
-                aria-label={Astro.locals.t("sidebarNav.accessibleLabel")}
-            >
-                <MobileMenuToggle />
-                <div id="starlight__sidebar" class="sidebar-pane">
-                    <div class="sidebar-content sl-flex">
-                        <slot name="sidebar" />
+    <div class="content-shell">
+        {
+            hasSidebar && (
+                <nav
+                    class="sidebar print:hidden"
+                    aria-label={Astro.locals.t("sidebarNav.accessibleLabel")}
+                >
+                    <MobileMenuToggle />
+                    <div id="starlight__sidebar" class="sidebar-pane">
+                        <div class="sidebar-content sl-flex">
+                            <slot name="sidebar" />
+                        </div>
                     </div>
-                </div>
-            </nav>
-        )
-    }
-    <div class="main-frame"><slot /></div>
-    <footer class="footer bg-[#20312e] text-white">
+                </nav>
+            )
+        }
+        <div class="main-frame"><slot /></div>
+    </div>
+    <footer class="footer bg-dark-green text-white">
         <div class="sl-container py-6 px-8 lg:px-0">
             <div class="lg:grid lg:grid-cols-3">
                 <div>
@@ -139,6 +141,13 @@ const { hasSidebar } = Astro.locals.starlightRoute;
             background: linear-gradient(30deg, #0f9884, #9acb4e 35%);
         }
 
+        /* Wraps the sidebar and main content only, so the sidebar's sticky/fixed
+           positioning below never extends past this content area into the footer. */
+        .content-shell {
+            display: flex;
+            flex: 1;
+        }
+
         .sidebar-pane {
             visibility: var(--sl-sidebar-visibility, hidden);
             position: fixed;
@@ -170,6 +179,8 @@ const { hasSidebar } = Astro.locals.starlightRoute;
         }
 
         .main-frame {
+            flex: 1;
+            min-width: 0;
             padding-top: calc(
                 var(--sl-nav-height) + var(--sl-mobile-toc-height)
             );
@@ -180,11 +191,25 @@ const { hasSidebar } = Astro.locals.starlightRoute;
             :global([data-has-sidebar]) .header {
                 padding-inline-end: var(--sl-nav-pad-x);
             }
+            .content-shell {
+                padding-top: var(--sl-nav-height);
+                min-height: 100vh;
+            }
             .sidebar-pane {
                 --sl-sidebar-visibility: visible;
+                position: sticky;
+                inset-block-start: var(--sl-nav-height);
+                inset-block-end: auto;
+                inset-inline-start: auto;
+                flex-shrink: 0;
+                height: calc(100vh - var(--sl-nav-height));
                 width: var(--sl-sidebar-width);
                 background-color: var(--sl-color-bg-sidebar);
                 border-inline-end: 1px solid var(--sl-color-hairline-shade);
+            }
+            .main-frame {
+                padding-top: 0;
+                padding-inline-start: 0;
             }
         }
     }

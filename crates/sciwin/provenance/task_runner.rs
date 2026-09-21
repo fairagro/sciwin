@@ -468,7 +468,7 @@ mod tests {
         assert_eq!(calculation.run, "../calculation/calculation.cwl");
         assert_eq!(
             calculation.container_image.as_deref(),
-            Some("pandas/pandas:pip-all")
+            Some("sciwin/python-datascience:latest")
         );
 
         let plot = graph.steps.iter().find(|s| s.id == "plot").unwrap();

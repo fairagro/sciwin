@@ -340,7 +340,6 @@ async fn execute_run_reana(
     let runner = reana_runner()?;
 
     debug!("submitting remote run for {}", cwl_path.display());
-    // `execution::reana_compat::compatibility_adjustments` isn't wired in here, yet
     let run_id = runner.submit(cwl_path, inputs, None).await?;
     info!("submitted workflow run '{run_id}'");
 

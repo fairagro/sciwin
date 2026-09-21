@@ -1,0 +1,25 @@
+---
+title: GA4GH TES
+sidebar:
+  order: 4
+---
+
+The [GA4GH Task Execution Service](https://github.com/ga4gh/task-execution-schemas) (TES) is a standardized HTTP API for submitting a single computational task, a command, its inputs and outputs, and the resources it needs, to a compute backend and getting back its status and results. It doesn't care what scheduler is behind it: the same TES request can run on Kubernetes, HTCondor, Slurm, or a cloud batch service, as long as something on the other end speaks the TES API.
+
+## Where TES fits
+
+[CWL](cwl) describes what a tool or workflow does; TES is one of several places `s4n execute` can send that work to actually run it, alongside running [locally](container) or on a remote [REANA](https://reanahub.io) instance. Picking `--engine tes` swaps out only the compute backend, submitting each step as a TES task, without changing the CWL document, the project layout, or anything else about how the workflow was authored.
+
+## Where it makes sense
+
+TES sits between running locally and standing up a full workflow platform like REANA: a shared cluster already speaks TES (many HPC and cloud setups do), and you want `s4n execute` to hand work off to it directly, without owning the scheduling yourself. If nothing in your environment exposes a TES endpoint, `local`, `docker`, or `reana` are the other execution engines to reach for.
+
+## Running against a TES server
+
+Selecting the engine is one flag, `s4n execute run --engine tes`, but a TES server also needs somewhere to read a task's input files from and write its output files to, since a task may run on a completely different machine than the one that submitted it. That's configured through three environment variables (or a `.env` file, loaded automatically):
+
+- `TES_URL` — the TES server's endpoint.
+- `TES_STORAGE` — a remote data store both the client and the TES server can reach, e.g. `s3://my-bucket`.
+- `TES_TOKEN` — an optional bearer token, if the server requires authentication.
+
+Reaching the storage bucket itself is a separate concern from reaching the TES server, and typically needs its own credentials, e.g. `S3_ENDPOINT_URL`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` for an S3-compatible store.

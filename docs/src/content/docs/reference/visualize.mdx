@@ -8,14 +8,17 @@ sidebar:
 Enables to publishing visual representation of workflows using either the GraphViz (dot) or mermaid format.
 
     ```txt frame="terminal" title="Usage"
-    Creates a visual representation of a workflow
+    Visualizes a workflow
 
-    Usage: s4n visualize [OPTIONS] <FILENME>
+    Usage: s4n visualize [OPTIONS] <FILENAME>
     
     Arguments:
-      <FILENME>  Path to a workflow
+      <FILENAME>  Path to a workflow
     
     Options:
       -r, --renderer <RENDERER>  Select a flavor [default: mermaid] [possible values: mermaid, dot]
+          --no-defaults          Do not print default values
+      -q, --quiet                Only print errors
+          --debug                Explain in high detail what the CLI is doing internally
       -h, --help                 Print help
     ```

@@ -3,10 +3,12 @@
 //!
 //! Paths handed to the staging functions may be absolute or relative to the work tree.
 
+mod branch;
 mod commit;
 mod ini;
 pub mod submodule;
 
+pub use branch::*;
 pub use commit::*;
 // Re-export git2::Repository for external use
 pub use git2::Config;

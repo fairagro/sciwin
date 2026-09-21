@@ -9,7 +9,7 @@
 [![🦀 Continuous Integration](https://github.com/fairagro/sciwin/actions/workflows/ci.yml/badge.svg)](https://github.com/fairagro/sciwin/actions/workflows/ci.yml)
 ![GitHub License](https://img.shields.io/badge/license-Apache--2.0_OR_MIT-green)
 [![GitHub Release](https://img.shields.io/github/v/release/fairagro/sciwin)](https://github.com/fairagro/sciwin/releases/latest)
-[![GitHub Downloads](https://raw.githubusercontent.com/fairagro/m4.4_metrics/refs/heads/master/badge.svg)]([https](https://github.com/fairagro/sciwin/releases/latest))
+[![GitHub Downloads](https://raw.githubusercontent.com/fairagro/m4.4_metrics/refs/heads/master/sciwin_badge.svg)]([https](https://github.com/fairagro/sciwin/releases/latest))
 
 
 ⭐ **Star this Repo** to say "Thank you!" ⭐
@@ -103,7 +103,11 @@ reana = { path = "../reana-cwl-client/crates/reana" }
 rocrate = { path = "../ro-crate-lib" }
 ```
 Building from a directory where such a patch is in scope will then use the local sources instead of the published versions, and all affected repositories should be updated together.
+## 💚 SciWIn-Studio
+> [!NOTE]
+> SciWIn-Studio moved to its own repo: https://github.com/fairagro/sciwin_studio
 
+![](https://github.com/fairagro/sciwin_studio/raw/main/.github/studio.png)
 ## 💻 SciWIn-Client
 **SciWIn-Client** is a command-line tool designed to simplify the creation, recording, annotation, and execution of computational workflows. 
 

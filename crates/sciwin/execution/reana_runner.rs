@@ -1,5 +1,6 @@
 use crate::execution::{
-    LogCursor, LogStream, RunId, RunStatus, RunnerError, RunnerResult, WorkflowRunner, tail_lines,
+    LogCursor, LogStream, RunId, RunStatus, RunnerError, RunnerResult, StepEventCursor,
+    StepEventStream, WorkflowRunner, reana_compat::compatibility_adjustments, tail_lines,
 };
 use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::future::try_join_all;
@@ -121,11 +122,14 @@ impl WorkflowRunner for ReanaRunner {
     ) -> RunnerResult<RunId> {
         let name = "workflow"; //todo: set
 
+        let (doc, mut graph) = reana::client::pack_workflow_graph(cwlfile)?;
+        compatibility_adjustments(&mut graph).await?;
+
         let CreatedWorkspace {
             workflow_id,
             specification,
             local_workspace,
-        } = reana::client::create2(self.client.clone(), name, cwlfile, &inputs).await?;
+        } = reana::client::create_from_packed(self.client.clone(), name, cwlfile, &doc, graph, &inputs).await?;
 
         let mut files: HashSet<PathBuf> = specification.inputs.files.into_iter().collect();
         for item in specification.inputs.directories {
@@ -203,6 +207,43 @@ impl WorkflowRunner for ReanaRunner {
         };
 
         Ok(LogStream::new(stream))
+    }
+
+    async fn step_events(&self, id: &RunId) -> RunnerResult<StepEventStream> {
+        let client = self.client.clone();
+        let id = id.clone();
+
+        let stream = async_stream::stream! {
+            let mut cursor = StepEventCursor::default();
+
+            loop {
+                let logs_resp = match reana::client::logs(client.clone(), &id).await {
+                    Ok(r) => r,
+                    Err(e) => { yield Err(RunnerError::from(e)); return; }
+                };
+
+                let parsed: ReanaLogMessage = match serde_json::from_str(&logs_resp.logs) {
+                    Ok(p) => p,
+                    Err(e) => { yield Err(RunnerError::from(e)); return; }
+                };
+
+                for event in cursor.diff(&parsed) {
+                    yield Ok(event);
+                }
+
+                let status = reana::client::status(client.clone(), &id).await
+                    .map(|s| s.into())
+                    .unwrap_or(RunStatus::Running);
+
+                if status.is_terminal() {
+                    break;
+                }
+
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+        };
+
+        Ok(StepEventStream::new(stream))
     }
 
     async fn cancel(&self, id: &RunId) -> RunnerResult<()> {

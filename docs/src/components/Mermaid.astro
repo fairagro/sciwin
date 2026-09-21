@@ -1,0 +1,115 @@
+---
+// Renders a Mermaid diagram client-side.
+//
+// Deliberately not a ```mermaid fenced code block: Starlight's Expressive Code
+// integration intercepts every fenced code block before any rehype plugin
+// (e.g. rehype-mermaid) sees it, so a fence never reaches Mermaid unrendered.
+// A literal `not-content` element like this one skips that pipeline entirely.
+// Rendering client-side (instead of at build time) also means the diagram can
+// track the site's live light/dark toggle, which a build-time render can't,
+// and can be themed from the site's own CSS custom properties instead of one
+// of Mermaid's generic built-in palettes.
+interface Props {
+    code: string;
+    /** Node IDs to draw as the diagram's focal point (solid accent fill). */
+    highlight?: string[];
+}
+const { code, highlight = [] } = Astro.props;
+---
+
+<pre class="mermaid not-content" data-highlight={highlight.join(",")}
+>{code}</pre>
+
+<script>
+    import mermaid from "mermaid";
+
+    function cssVar(name: string, fallback: string) {
+        const value = getComputedStyle(document.documentElement)
+            .getPropertyValue(name)
+            .trim();
+        return value || fallback;
+    }
+
+    function themeVariables() {
+        return {
+            fontFamily: "'Fira Sans', sans-serif",
+            background: cssVar("--sl-color-bg", "#181818"),
+            // Node fill sits one step lighter/darker than the page background
+            // (the same contrast .ex-card's thumb uses against its own body),
+            // so nodes read as distinct boxes rather than blending into the page.
+            primaryColor: cssVar("--sl-color-gray-6", "#272727"),
+            primaryTextColor: cssVar("--sl-color-white", "#eeeeee"),
+            primaryBorderColor: cssVar("--color-accent-600", "#6abf5c"),
+            secondaryColor: cssVar("--sl-color-gray-6", "#272727"),
+            secondaryBorderColor: cssVar("--sl-color-hairline", "#383838"),
+            tertiaryColor: cssVar("--sl-color-gray-6", "#272727"),
+            lineColor: cssVar("--color-accent-600", "#6abf5c"),
+            textColor: cssVar("--sl-color-white", "#eeeeee"),
+        };
+    }
+
+    function withHighlight(source: string, ids: string[]) {
+        if (ids.length === 0) return source;
+        const teal = cssVar("--color-teal", "#06947a");
+        const white = cssVar("--sl-color-white", "#fff");
+        return `${source}\n    classDef __focal fill:${teal},stroke:${teal},color:${white},font-weight:600;\n    class ${ids.join(",")} __focal;\n`;
+    }
+
+    async function renderAll() {
+        const nodes = document.querySelectorAll<HTMLElement>("pre.mermaid");
+        if (nodes.length === 0) return;
+
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: "base",
+            themeVariables: themeVariables(),
+            securityLevel: "strict",
+            flowchart: { curve: "basis", padding: 14 },
+        });
+
+        for (const node of nodes) {
+            if (node.dataset.source === undefined) {
+                node.dataset.source = node.textContent ?? "";
+            }
+            const ids = (node.dataset.highlight ?? "")
+                .split(",")
+                .map((id) => id.trim())
+                .filter(Boolean);
+            const id = `mermaid-${Math.random().toString(36).slice(2)}`;
+            const { svg } = await mermaid.render(
+                id,
+                withHighlight(node.dataset.source, ids),
+            );
+            node.innerHTML = svg;
+        }
+    }
+
+    renderAll();
+
+    new MutationObserver(renderAll).observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ["data-theme"],
+    });
+</script>
+
+<style>
+    pre.mermaid {
+        background: var(--sl-color-gray-6);
+        border: 1px solid var(--sl-color-hairline);
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin: 1.5rem 0;
+        display: flex;
+        justify-content: center;
+        overflow-x: auto;
+    }
+    pre.mermaid :global(svg) {
+        max-width: 100%;
+    }
+    /* Soften Mermaid's default sharp-cornered flowchart nodes to match the
+       rounded-corner language used everywhere else on the site. */
+    pre.mermaid :global(svg .node rect) {
+        rx: 8;
+        ry: 8;
+    }
+</style>
