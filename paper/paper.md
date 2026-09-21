@@ -73,7 +73,7 @@ Once individual CWL CommandLineTools have been created, the next step is to comb
 In order to expand the possible sources for connecting complex workflows, there is the option to `install` existing workflows using SciWIn-Client which internally uses Git's submodule feature. 
 
 ## Workflow Execution
-SciWIn-Client supports worklow execution on multiple backends through the `s4n execute` command. The desired backend can be selected using the `--engine` flag. When performing high demanding calculations, workflows often need to be dispatched to large compute clusters. Besides local execution on the researcher's machine, it is possible to use execute workflows on Reana instances[@Simko2019Reana] or GA4GH TES servers[@ref]. Reana is a reproducible research data analysis platform provided by CERN. FAIRagro operates their own Reana Installation in de.NBI Cloud.
+SciWIn-Client supports worklow execution on multiple backends through the `s4n execute` command. The desired backend can be selected using the `--engine` flag. When performing high demanding calculations, workflows often need to be dispatched to large compute clusters. Besides local execution on the researcher's machine, it is possible to use execute workflows on Reana instances[@Simko2019Reana] or GA4GH TES servers[@TES1]. Reana is a reproducible research data analysis platform provided by CERN. FAIRagro operates their own Reana Installation in de.NBI Cloud.
 Workflows can be executed either directly by using CWL files or by using Workflow RO-Crates [@ref] or Workflow Run RO-Crates[@Leo2024WRRC]. Structured execution results in form of Workflow Run RO-Crates using the Provenance Run Crate profile can be exported for each execution run.
 
 # Research impact statement
