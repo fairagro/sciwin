@@ -60,4 +60,4 @@ keywords:
   - common-workflow-language
   - cwl
   - rdm
-license: MIT
+license: MIT OR Apache-2.0
