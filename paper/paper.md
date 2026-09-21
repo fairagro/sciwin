@@ -96,6 +96,7 @@ The source code is openly available at https://github.com/fairagro/sciwin under 
 We gratefully acknowledge the financial support of the German Research Foundation (DFG) – project number 501899475.
 
 # AI usage disclosure
-All paper content was written manually and reflects the careful thought and input of the authors. SciWIn is an open source project, and as such contributors are free to use any tools, AI or otherwise, to generate code contained in pull requests or commits. All commits and pull requests are reviewed by the core developers and often iterated on multiple times; therefore, all content in the repository represents the effort and judgment of the authors.
+All paper content was written manually and reflects the careful thought and input of the authors. 
+SciWIn is an open source project, and as such contributors are free to use any tools, AI or otherwise, to generate code contained in pull requests or commits. Claude Code was used as assistant to help with implementation of individual parts. All commits and pull requests are reviewed by the core developers and often iterated on multiple times; therefore, all content in the repository represents the effort and judgment of the authors.
 
 # References
