@@ -62,8 +62,9 @@ The CWL ecosystem further compounds this problem. While a number of great runner
 
 # Software design
 SciWIn-Client (short: `s4n`) is implemented in the Rust programming language, chosen for its high performance, strong type safety, and robust error handling - qualities essential in scientific software. `s4n` builts on a reusable `sciwin` library which itself combines the `commonwl`, `reana` and `rocrate` rust libraries.
-
 Git integration provides built-in version control and interoperability with research data management frameworks such as  DataPLANTs ARC [@dataplant2025ARCSpec][@Weil2023PLANTdataHUB] format which can be viewed as a Git-based implementation of the RO-Crate standard[@SoilandReyes2022ROCrate].
+
+![Overview of Scientific Workflow Infrastructure](assets/overview.png)
 
 ## Managing CWL Files
 A central concept of the tool is the automation of CWL generation. When users invoke a command or script using the `s4n create` prefix SciWIn-Client analyzes the command-line inputs and execution to identify `inputs`, `baseCommand` and `requirements` metadata and creates a CWL CommandLineTool. SciWIn-Client uses Git in background a version-controlled environment for tracking changes and support this process. However most importantly Git serves information of changed files to create the  `outputs`-Section of the CWL CommandLineTool. While the system can automatically infer inputs and outputs, users also have the option to define them explicitly. Users can specify a container image pulled from Docker Hub or provide paths to local Dockerfiles to ensure consistent, reproducible execution environments across different systems.
