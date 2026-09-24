@@ -94,7 +94,7 @@ Within FAIRagro, SciWIn-Client is being used in concrete research workflows. A p
 
 SciWIn-Client is also integrated into the FAIRagro software infrastructure. Its core functionality is provided as a shared crate used by SciWIn-Studio, a graphical application for workflow authoring that is outside the scope of this publication. Workflows created with SciWIn can also be executed on the FAIRagro REANA instance operated through de.NBI. Through its support for the Task Execution Service (TES) API, SciWIn can also execute workflows on any compatible TES server, including the upcoming v3.x release of ARUNA [@Dieckmann_Beyvers_Hochmuth_Rehm_Förster_Goesmann_2023;@aruna_engine_2026].
 
-Recent community engagement has included presentations and demonstrations at CoRDI 2025 [@krumsieck_2025_1711908;krumsieck_2025_16735806], the FDM Niedersachsen DataDays 2025 [@krumsieck_2025_17651648], the FAIRagro Talk series [@krumsieck_fairagro_talk], and the FAIRagro Community Summit 2026 [@krumsieck_2026_19060805].
+Recent community engagement has included presentations and demonstrations at CoRDI 2025 [@krumsieck_2025_1711908;krumsieck_2025_16735806], the FDM Niedersachsen DataDays 2025 [@krumsieck_2025_17651648], the NFDI4LS Conference [@ref_poster], the FAIRagro Talk series [@krumsieck_fairagro_talk], and the FAIRagro Community Summit 2026 [@krumsieck_2026_19060805].
 
 SciWin-Client has accumulated 1700 downloads across its published releases as of September 2026.
 The source code is openly available at https://github.com/fairagro/sciwin under the MIT or Apache-2.0 license, and the project welcomes community contributions.
