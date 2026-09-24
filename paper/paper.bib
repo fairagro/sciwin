@@ -1,68 +1,56 @@
 ﻿% This file was created with Citavi 7.1.0.1
-@misc{ArunaObjectStorageTeam.2026,
-    author        = {{Aruna Object Storage Team}},
+@proceedings{.2016,
+    year          = {2016},
+    title         = {Biocomputing 2017},
+    publisher     = {{World Scientific}}
+}
+@misc{Krumsieck.2025d,
+    author        = {Krumsieck, Jens},
+    year          = {2025},
+    title         = {SciWIn -- making your workflows work for you},
+    url           = {https://fairagro.net/event/fairagro-talk-sciwin-making-your-workflows-work-for-you/},
+    urldate       = {2026-09-24}
+}
+@misc{Krumsieck.2025,
+    author        = {Krumsieck, Jens and Leidel, Antonia and K{\"o}nig, Patrick and von Waldow, Harald},
+    year          = {2025},
+    title         = {Easy creation of reproducible computational workflows with SciWIn-Client},
+    publisher     = {Zenodo},
+    doi           = {10.5281/zenodo.16735806}
+}
+@misc{Krumsieck.2025b,
+    abstract      = {Computational workflows are used in many different disciplines to automate complex, multi-step data analysis procedures. To ensure reproducibility, scalability and efficiency in scientific research, lots of effort has been put into domain specific languages that formalize and standardize computational scientific work. The Common Workflow Language (CWL) is among the most powerful and established workflow languages. While CWL is an extremely flexible language, is also quite verbose. To facilitate the creation of CWL files, SciWIn-Client, which is written in the Rust programming language, offers a simple command line interface. SciWIn-Client is the first building block of the Scientific Workflow Infrastructure which is a key part of the FAIRagro consortium's service portfolio. CWL workflows are structured as directed acyclic graphs where individual steps are connected through their inputs and outputs. A CWL CommandLineTool represents a single executable step in a workflow. A CWL Workflow acts as a container for multiple steps, connects multiple tools and manages dependencies between steps. SciWIn-Client creates CWL CommandLineTools by capturing and analyzing the CLI command-line used by the researcher in their usual routine to carry out computational tasks. Steps represented by CWL CommandLineTools can be connected into complex workflows by using simple commands to build the directed acyclic graph edge by edge. Designed as an unobtrusive lean CLI program, SciWIn-Client integrates seamlessly into the researcher's toolbox providing for provenance management what Git delivers for version control. SciWIn-Client thus helps to implement FAIR data- and code handling practices right at the digital workbench. Next to the reproducibility and traceability of computational processes, scientists gain the ability package their intermediate and final results into FAIR Digital Objects (FDOs). We develop multiple export options, including Workflow RO-Crates that can be published on workflowhub.eu, ARCs that are compatible with DataPLANT's PLANTdataHUB, and Provenance Run Crate as the most advanced FDO type. Furthermore, the CWL workflows created by SciWIn-Client can be executed by remote execution engines such as Reana and thus provide easy access to high performance compute infrastructure.},
+    author        = {Krumsieck, Jens and Leidel, Antonia and K{\"o}nig, Patrick and von Waldow, Harald},
+    year          = {2025},
+    title         = {Easy creation of reproducible computational workflows with SciWIn-Client},
+    publisher     = {Zenodo},
+    doi           = {10.5281/zenodo.17119086}
+}
+@misc{Krumsieck.2025c,
+    abstract      = {
+        Reproducible computational research increasingly relies on formal workflow descriptions, yet researchers still spend significant time writing boilerplate code and navigating a fragmented ecosystem of more than 300 workflow management systems. The Common Workflow Language (CWL) provides a portable, machine- and human-readable standard, but its manual creation remains a barrier to adoption.
+
+        SciWIn addresses this gap by enabling fast, automated generation of CWL CommandLineTools and the seamless construction of complete CWL workflows. With a lightweight command-line interface, SciWIn captures tool execution metadata, links workflow steps, and integrates directly with execution backends such as REANA---reducing friction and lowering the threshold for FAIR, shareable, and reproducible computational analyses.
+
+        This poster introduces the SciWIn client, illustrates its workflow-building capabilities, and demonstrates how it supports researchers in producing transparent and reusable workflow definitions without writing CWL by hand.
+    },
+    author        = {Krumsieck, Jens and Leidel, Antonia and Stiensmeier, Xaver and von Waldow, Harald},
+    year          = {2025},
+    title         = {FAIR, fast, and frictionless -- computational  workflows with SciWIn},
+    publisher     = {Zenodo},
+    doi           = {10.5281/zenodo.17651648}
+}
+@misc{Krumsieck.2026,
+    abstract      = {
+        The ability to create FAIR computational workflows is increasingly critical for ensuring transparency, reproducibility, and reusability in data-driven research. By using computational workflows, researchers can automate long sequences of scripts and combine tools from different programming languages into fully managed, reproducible pipelines, making FAIR practices easier to implement without sacrificing flexibility. To support this, the Scientific Workflow Infrastructure (SciWIn) provides complementary clients: SciWIn-Client and SciWIn-Studio. Those applications are designed to support efficient interaction with computational workflows based on the Common Workflow Language (CWL).
+
+        Both applications address the same core requirement: the easy, fast, and frictionless creation of FAIR computational workflows, while targeting different user groups. The command-line application SciWIn-Client (s4n) is aimed at users who are comfortable working at the command line and seek automation and scripting capabilities. In contrast, the upcoming SciWIn-Studio provides a graphical user interface for users who prefer visual interaction and guided workflow construction.
+    },
+    author        = {Krumsieck, Jens and Leidel, Antonia and Stiensmeier, Xaver and von Waldow, Harald},
     year          = {2026},
-    title         = {ARUNA Object Storage},
-    url           = {https://github.com/arunaengine/aruna},
-    publisher     = {GitHub}
-}
-@article{Vivian.2017,
-    author        = {Vivian, John and Rao, Arjun Arkal and Nothaft, Frank Austin and Ketchum, Christopher and Armstrong, Joel and Novak, Adam and Pfeil, Jacob and Narkizian, Jake and Deran, Alden D. and Musselman-Brown, Audrey and Schmidt, Hannes and Amstutz, Peter and Craft, Brian and Goldman, Mary and Rosenbloom, Kate and Cline, Melissa and O'Connor, Brian and Hanna, Megan and Birger, Chet and Kent, W. James and Patterson, David A. and Joseph, Anthony D. and Zhu, Jingchun and Zaranek, Sasha and Getz, Gad and Haussler, David and Paten, Benedict},
-    year          = {2017},
-    title         = {Toil enables reproducible, open source, big biomedical data analyses},
-    pages         = {314--316},
-    volume        = {35},
-    number        = {4},
-    issn          = {1546-1696},
-    journal       = {Nature Biotechnology},
-    doi           = {10.1038/nbt.3772}
-}
-@article{TheGalaxyCommunity.2024,
-    abstract      = {Galaxy (https://galaxyproject.org) is deployed globally, predominantly through free-to-use services, supporting user-driven research that broadens in scope each year. Users are attracted to public Galaxy services by platform stability, tool and reference dataset diversity, training, support~and integration, which enables complex, reproducible, shareable data analysis. Applying the principles of user experience design (UXD), has driven improvements in accessibility, tool discoverability through Galaxy Labs/subdomains, and a redesigned Galaxy ToolShed. Galaxy tool capabilities are progressing in two strategic directions: integrating general purpose graphical processing units (GPGPU) access for cutting-edge methods, and licensed tool support. Engagement with global research consortia is being increased by developing more workflows in Galaxy and by resourcing the public Galaxy services to run them. The Galaxy Training Network (GTN) portfolio has grown in both size, and accessibility, through learning paths and direct integration with Galaxy tools that feature in training courses. Code development continues in line with the Galaxy Project roadmap, with improvements to job scheduling and the user interface. Environmental impact assessment is also helping engage users and developers, reminding them of their role in sustainability, by displaying estimated CO2 emissions generated by each Galaxy job.},
-    author        = {{The Galaxy Community}},
-    year          = {2024},
-    title         = {The Galaxy platform for accessible, reproducible, and collaborative data analyses: 2024 update},
-    pages         = {W83-W94},
-    volume        = {52},
-    number        = {W1},
-    issn          = {0305-1048},
-    journal       = {Nucleic Acids Research},
-    doi           = {10.1093/nar/gkae410}
-}
-@article{SoilandReyes.2022,
-    author        = {Soiland-Reyes, Stian and Sefton, Peter and Crosas, Merc{\`e} and Castro, Leyla Jael and Coppens, Frederik and Fern{\'a}ndez, Jos{\'e} M. and Garijo, Daniel and Gr{\"u}ning, Bj{\"o}rn and {La Rosa}, Marco and Leo, Simone and {{\'O} Carrag{\'a}in}, Eoghan and Portier, Marc and Trisovic, Ana and Community, RO-Crate and Groth, Paul and Goble, Carole},
-    year          = {2022},
-    title         = {Packaging research artefacts with RO-Crate},
-    url           = {https://www.medra.org/servlet/aliasResolver?alias=iospress&doi=10.3233/DS-210053},
-    urldate       = {2024-10-19},
-    pages         = {97--138},
-    volume        = {5},
-    number        = {2},
-    issn          = {24518492},
-    journal       = {24518492},
-    doi           = {10.3233/DS-210053}
-}
-@article{Simko.2019,
-    abstract      = {The revalidation, reinterpretation and reuse of research data analyses requires having access to the original computing environment, the experimental datasets, the analysis software, and the computational workflow steps which were used by researchers to produce the original scientific results in the first place.REANA (Reusable Analyses) is a nascent platform enabling researchers to structure their research data analyses in view of enabling future reuse. The analysis is described by means of a YAML file that captures sufficient information about the analysis assets, parameters and processes. The REANA platform consists of a set of micro-services allowing to launch and monitor container-based computational workflow jobs on the cloud. The REANA user interface and the command-line client enables researchers to easily rerun analysis workflows with new input parameters. The REANA platform aims at supporting several container technologies (Docker), workflow engines (CWL, Yadage), shared storage systems (Ceph, EOS) and compute cloud infrastructures (Ku-bernetes/OpenStack, HTCondor) used by the community.REANA was developed with the particle physics use case in mind and profits from synergies with general reusable research data analysis patterns in other scientific disciplines, such as bioinformatics and life sciences.},
-    author        = {{\v{S}}imko, Tibor and Heinrich, Lukas and Hirvonsalo, Harri and Kousidis, Dinos and Rodr{\'i}guez, Diego},
-    year          = {2019},
-    title         = {REANA: A System for Reusable Research Data Analyses},
-    urldate       = {2025-07-07},
-    pages         = {06034},
-    volume        = {214},
-    issn          = {2100-014X},
-    journal       = {2100-014X},
-    doi           = {10.1051/epjconf/201921406034}
-}
-@article{Molder.2021,
-    abstract      = {Data analysis often entails a multitude of heterogeneous steps, from the application of various command line tools to the usage of scripting languages like R or Python for the generation of plots and tables. It is widely recognized that data analyses should ideally be conducted in a reproducible way. Reproducibility enables technical validation and regeneration of results on the original or even new data. However, reproducibility alone is by no means sufficient to deliver an analysis that is of lasting impact (i.e., sustainable) for the field, or even just one research group. We postulate that it is equally important to ensure adaptability and transparency. The former describes the ability to modify the analysis to answer extended or slightly different research questions. The latter describes the ability to understand the analysis in order to judge whether it is not only technically, but methodologically valid. Here, we analyze the properties needed for data analysis to become reproducible, adaptable, and transparent. We show how the popular workflow management system Snakemake can be used to guarantee this, and how it enables an ergonomic, combined, unified representation of all steps involved in data analysis, ranging from raw data processing, to quality control and fine-grained, interactive exploration and plotting of final results.},
-    author        = {M{\"o}lder, Felix and Jablonski, Kim Philipp and Letcher, Brice and Hall, Michael B. and {van Dyken}, Peter C. and Tomkins-Tinch, Christopher H. and Sochat, Vanessa and Forster, Jan and Vieira, Filipe G. and Meesters, Christian and Lee, Soohyun and Twardziok, Sven O. and Kanitz, Alexander and VanCampen, Jake and Malladi, Venkat and Wilm, Andreas and Holtgrewe, Manuel and Rahmann, Sven and Nahnsen, Sven and K{\"o}ster, Johannes},
-    year          = {2021},
-    title         = {Sustainable data analysis with Snakemake},
-    pages         = {33},
-    volume        = {10},
-    journal       = {F1000Research},
-    doi           = {10.12688/f1000research.29032.3}
+    title         = {SciWIn-Client and SciWIn-Studio: Simplifying FAIR Computational Workflows},
+    publisher     = {Zenodo},
+    doi           = {10.5281/zenodo.19060805}
 }
 @article{Leo.2024,
     abstract      = {Recording the provenance of scientific computation results is key to the support of traceability, reproducibility and quality assessment of data products. Several data models have been explored to address this need, providing representations of workflow plans and their executions as well as means of packaging the resulting information for archiving and sharing. However, existing approaches tend to lack interoperable adoption across workflow management systems. In this work we present Workflow Run RO-Crate, an extension of RO-Crate (Research Object Crate) and Schema.org to capture the provenance of the execution of computational workflows at different levels of granularity and bundle together all their associated objects (inputs, outputs, code, etc.). The model is supported by a diverse, open community that runs regular meetings, discussing development, maintenance and adoption aspects. Workflow Run RO-Crate is already implemented by several workflow management systems, allowing interoperable comparisons between workflow runs from heterogeneous systems. We describe the model, its alignment to standards such as W3C PROV, and its implementation in six workflow systems. Finally, we illustrate the application of Workflow Run RO-Crate in two use cases of machine learning in the digital image analysis domain.},
@@ -79,53 +67,6 @@
     journal       = {1932-6203},
     doi           = {10.1371/journal.pone.0309210}
 }
-@misc{Krumsieck.2026,
-    abstract      = {
-        The ability to create FAIR computational workflows is increasingly critical for ensuring transparency, reproducibility, and reusability in data-driven research. By using computational workflows, researchers can automate long sequences of scripts and combine tools from different programming languages into fully managed, reproducible pipelines, making FAIR practices easier to implement without sacrificing flexibility. To support this, the Scientific Workflow Infrastructure (SciWIn) provides complementary clients: SciWIn-Client and SciWIn-Studio. Those applications are designed to support efficient interaction with computational workflows based on the Common Workflow Language (CWL).
-
-        Both applications address the same core requirement: the easy, fast, and frictionless creation of FAIR computational workflows, while targeting different user groups. The command-line application SciWIn-Client (s4n) is aimed at users who are comfortable working at the command line and seek automation and scripting capabilities. In contrast, the upcoming SciWIn-Studio provides a graphical user interface for users who prefer visual interaction and guided workflow construction.
-    },
-    author        = {Krumsieck, Jens and Leidel, Antonia and Stiensmeier, Xaver and von Waldow, Harald},
-    year          = {2026},
-    title         = {SciWIn-Client and SciWIn-Studio: Simplifying FAIR Computational Workflows},
-    publisher     = {Zenodo},
-    doi           = {10.5281/zenodo.19060805}
-}
-@misc{Krumsieck.2025,
-    abstract      = {
-        Reproducible computational research increasingly relies on formal workflow descriptions, yet researchers still spend significant time writing boilerplate code and navigating a fragmented ecosystem of more than 300 workflow management systems. The Common Workflow Language (CWL) provides a portable, machine- and human-readable standard, but its manual creation remains a barrier to adoption.
-
-        SciWIn addresses this gap by enabling fast, automated generation of CWL CommandLineTools and the seamless construction of complete CWL workflows. With a lightweight command-line interface, SciWIn captures tool execution metadata, links workflow steps, and integrates directly with execution backends such as REANA---reducing friction and lowering the threshold for FAIR, shareable, and reproducible computational analyses.
-
-        This poster introduces the SciWIn client, illustrates its workflow-building capabilities, and demonstrates how it supports researchers in producing transparent and reusable workflow definitions without writing CWL by hand.
-    },
-    author        = {Krumsieck, Jens and Leidel, Antonia and Stiensmeier, Xaver and von Waldow, Harald},
-    year          = {2025},
-    title         = {FAIR, fast, and frictionless -- computational  workflows with SciWIn},
-    publisher     = {Zenodo},
-    doi           = {10.5281/zenodo.17651648}
-}
-@misc{Krumsieck.2025b,
-    author        = {Krumsieck, Jens and Leidel, Antonia and K{\"o}nig, Patrick and von Waldow, Harald},
-    year          = {2025},
-    title         = {Easy creation of reproducible computational workflows with SciWIn-Client},
-    publisher     = {Zenodo},
-    doi           = {10.5281/zenodo.16735806}
-}
-@misc{Krumsieck.2025c,
-    abstract      = {Computational workflows are used in many different disciplines to automate complex, multi-step data analysis procedures. To ensure reproducibility, scalability and efficiency in scientific research, lots of effort has been put into domain specific languages that formalize and standardize computational scientific work. The Common Workflow Language (CWL) is among the most powerful and established workflow languages. While CWL is an extremely flexible language, is also quite verbose. To facilitate the creation of CWL files, SciWIn-Client, which is written in the Rust programming language, offers a simple command line interface. SciWIn-Client is the first building block of the Scientific Workflow Infrastructure which is a key part of the FAIRagro consortium's service portfolio. CWL workflows are structured as directed acyclic graphs where individual steps are connected through their inputs and outputs. A CWL CommandLineTool represents a single executable step in a workflow. A CWL Workflow acts as a container for multiple steps, connects multiple tools and manages dependencies between steps. SciWIn-Client creates CWL CommandLineTools by capturing and analyzing the CLI command-line used by the researcher in their usual routine to carry out computational tasks. Steps represented by CWL CommandLineTools can be connected into complex workflows by using simple commands to build the directed acyclic graph edge by edge. Designed as an unobtrusive lean CLI program, SciWIn-Client integrates seamlessly into the researcher's toolbox providing for provenance management what Git delivers for version control. SciWIn-Client thus helps to implement FAIR data- and code handling practices right at the digital workbench. Next to the reproducibility and traceability of computational processes, scientists gain the ability package their intermediate and final results into FAIR Digital Objects (FDOs). We develop multiple export options, including Workflow RO-Crates that can be published on workflowhub.eu, ARCs that are compatible with DataPLANT's PLANTdataHUB, and Provenance Run Crate as the most advanced FDO type. Furthermore, the CWL workflows created by SciWIn-Client can be executed by remote execution engines such as Reana and thus provide easy access to high performance compute infrastructure.},
-    author        = {Krumsieck, Jens and Leidel, Antonia and K{\"o}nig, Patrick and von Waldow, Harald},
-    year          = {2025},
-    title         = {Easy creation of reproducible computational workflows with SciWIn-Client},
-    publisher     = {Zenodo},
-    doi           = {10.5281/zenodo.17119086}
-}
-@misc{Krumsieck.,
-    author        = {Krumsieck, Jens},
-    title         = {SciWIn -- making your workflows work for you},
-    url           = {https://fairagro.net/event/fairagro-talk-sciwin-making-your-workflows-work-for-you/},
-    urldate       = {2026-09-24}
-}
 @inproceedings{Kaushik.2016,
     abstract      = {As biomedical data has become increasingly easy to generate in large quantities, the methods used to analyze it have proliferated rapidly. Reproducible and reusable methods are required to learn from large volumes of data reliably. To address this issue, numerous groups have developed workflow specifications or execution engines, which provide a framework with which to perform a sequence of analyses. One such specification is the Common Workflow Language, an emerging standard which provides a robust and flexible framework for describing data analysis tools and workflows. In addition, reproducibility can be furthered by executors or workflow engines which interpret the specification and enable additional features, such as error logging, file organization, optim1izations to computation and job scheduling, and allow for easy computing on large volumes of data. To this end, we have developed the Rabix Executor, an open-source workflow engine for the purposes of improving reproducibility through reusability and interoperability of workflow descriptions.},
     author        = {Kaushik, Gaurav and Ivkovic, Sinisa and Simonovic, Janko and Tijanic, Nebojsa and Davis-Dusenbery, Brandi and Kural, Deniz},
@@ -136,6 +77,117 @@
     booktitle     = {Biocomputing 2017},
     year          = {2016},
     doi           = {10.1142/9789813207813{\textunderscore }0016}
+}
+@article{Molder.2021,
+    abstract      = {Data analysis often entails a multitude of heterogeneous steps, from the application of various command line tools to the usage of scripting languages like R or Python for the generation of plots and tables. It is widely recognized that data analyses should ideally be conducted in a reproducible way. Reproducibility enables technical validation and regeneration of results on the original or even new data. However, reproducibility alone is by no means sufficient to deliver an analysis that is of lasting impact (i.e., sustainable) for the field, or even just one research group. We postulate that it is equally important to ensure adaptability and transparency. The former describes the ability to modify the analysis to answer extended or slightly different research questions. The latter describes the ability to understand the analysis in order to judge whether it is not only technically, but methodologically valid. Here, we analyze the properties needed for data analysis to become reproducible, adaptable, and transparent. We show how the popular workflow management system Snakemake can be used to guarantee this, and how it enables an ergonomic, combined, unified representation of all steps involved in data analysis, ranging from raw data processing, to quality control and fine-grained, interactive exploration and plotting of final results.},
+    author        = {M{\"o}lder, Felix and Jablonski, Kim Philipp and Letcher, Brice and Hall, Michael B. and {van Dyken}, Peter C. and Tomkins-Tinch, Christopher H. and Sochat, Vanessa and Forster, Jan and Vieira, Filipe G. and Meesters, Christian and Lee, Soohyun and Twardziok, Sven O. and Kanitz, Alexander and VanCampen, Jake and Malladi, Venkat and Wilm, Andreas and Holtgrewe, Manuel and Rahmann, Sven and Nahnsen, Sven and K{\"o}ster, Johannes},
+    year          = {2021},
+    title         = {Sustainable data analysis with Snakemake},
+    pages         = {33},
+    volume        = {10},
+    journal       = {F1000Research},
+    doi           = {10.12688/f1000research.29032.3}
+}
+@article{Pimentel.2017,
+    author        = {Pimentel, Jo{\~a}o Felipe and Murta, Leonardo and Braganholo, Vanessa and Freire, Juliana},
+    year          = {2017},
+    title         = {noWorkflow},
+    pages         = {1841--1844},
+    volume        = {10},
+    number        = {12},
+    issn          = {2150-8097},
+    journal       = {Proceedings of the VLDB Endowment},
+    doi           = {10.14778/3137765.3137789}
+}
+@misc{Soranzo.2021,
+    author        = {Soranzo, Nicola},
+    year          = {2021},
+    title         = {Pull-Request: Implement a subset of the Common Workflow Language},
+    url           = {https://github.com/galaxyproject/galaxy/pull/12909},
+    urldate       = {24.09.2026}
+}
+@article{Piccolo.2021,
+    abstract      = {Command-line software plays a critical role in biology research. However, processes for installing and executing software differ widely. The Common Workflow Language (CWL) is a community standard that addresses this problem. Using CWL, tool developers can formally describe a tool's inputs, outputs, and other execution details. CWL documents can include instructions for executing tools inside software containers. Accordingly, CWL tools are portable-they can be executed on diverse computers-including personal workstations, high-performance clusters, or the cloud. CWL also supports workflows, which describe dependencies among tools and using outputs from one tool as inputs to others. To date, CWL has been used primarily for batch processing of large datasets, especially in genomics. But it can also be used for analytical steps of a study. This article explains key concepts about CWL and software containers and provides examples for using CWL in biology research. CWL documents are text-based, so they can be created manually, without computer programming. However, ensuring that these documents conform to the CWL specification may prevent some users from adopting it. To address this gap, we created ToolJig, a Web application that enables researchers to create CWL documents interactively. ToolJig validates information provided by the user to ensure it is complete and valid. After creating a CWL tool or workflow, the user can create 'input-object' files, which store values for a particular invocation of a tool or workflow. In addition, ToolJig provides examples of how to execute the tool or workflow via a workflow engine. ToolJig and our examples are available at https://github.com/srp33/ToolJig.},
+    author        = {Piccolo, Stephen R. and Ence, Zachary E. and Anderson, Elizabeth C. and Chang, Jeffrey T. and Bild, Andrea H.},
+    year          = {2021},
+    title         = {Simplifying the development of portable, scalable, and reproducible workflows},
+    volume        = {10},
+    journal       = {eLife},
+    doi           = {10.7554/eLife.71069}
+}
+@misc{RabixComposercontributors.2021,
+    author        = {{Rabix Composer contributors}},
+    year          = {2021},
+    title         = {Rabix Composer},
+    url           = {https://github.com/rabix/composer},
+    urldate       = {24.09.2026}
+}
+@article{Simko.2019,
+    abstract      = {The revalidation, reinterpretation and reuse of research data analyses requires having access to the original computing environment, the experimental datasets, the analysis software, and the computational workflow steps which were used by researchers to produce the original scientific results in the first place.REANA (Reusable Analyses) is a nascent platform enabling researchers to structure their research data analyses in view of enabling future reuse. The analysis is described by means of a YAML file that captures sufficient information about the analysis assets, parameters and processes. The REANA platform consists of a set of micro-services allowing to launch and monitor container-based computational workflow jobs on the cloud. The REANA user interface and the command-line client enables researchers to easily rerun analysis workflows with new input parameters. The REANA platform aims at supporting several container technologies (Docker), workflow engines (CWL, Yadage), shared storage systems (Ceph, EOS) and compute cloud infrastructures (Ku-bernetes/OpenStack, HTCondor) used by the community.REANA was developed with the particle physics use case in mind and profits from synergies with general reusable research data analysis patterns in other scientific disciplines, such as bioinformatics and life sciences.},
+    author        = {{\v{S}}imko, Tibor and Heinrich, Lukas and Hirvonsalo, Harri and Kousidis, Dinos and Rodr{\'i}guez, Diego},
+    year          = {2019},
+    title         = {REANA: A System for Reusable Research Data Analyses},
+    urldate       = {2025-07-07},
+    pages         = {06034},
+    volume        = {214},
+    issn          = {2100-014X},
+    journal       = {2100-014X},
+    doi           = {10.1051/epjconf/201921406034}
+}
+@article{SoilandReyes.2022,
+    author        = {Soiland-Reyes, Stian and Sefton, Peter and Crosas, Merc{\`e} and Castro, Leyla Jael and Coppens, Frederik and Fern{\'a}ndez, Jos{\'e} M. and Garijo, Daniel and Gr{\"u}ning, Bj{\"o}rn and {La Rosa}, Marco and Leo, Simone and {{\'O} Carrag{\'a}in}, Eoghan and Portier, Marc and Trisovic, Ana and Community, RO-Crate and Groth, Paul and Goble, Carole},
+    year          = {2022},
+    title         = {Packaging research artefacts with RO-Crate},
+    url           = {https://www.medra.org/servlet/aliasResolver?alias=iospress&doi=10.3233/DS-210053},
+    urldate       = {2024-10-19},
+    pages         = {97--138},
+    volume        = {5},
+    number        = {2},
+    issn          = {24518492},
+    journal       = {24518492},
+    doi           = {10.3233/DS-210053}
+}
+@article{TheGalaxyCommunity.2024,
+    abstract      = {Galaxy (https://galaxyproject.org) is deployed globally, predominantly through free-to-use services, supporting user-driven research that broadens in scope each year. Users are attracted to public Galaxy services by platform stability, tool and reference dataset diversity, training, support~and integration, which enables complex, reproducible, shareable data analysis. Applying the principles of user experience design (UXD), has driven improvements in accessibility, tool discoverability through Galaxy Labs/subdomains, and a redesigned Galaxy ToolShed. Galaxy tool capabilities are progressing in two strategic directions: integrating general purpose graphical processing units (GPGPU) access for cutting-edge methods, and licensed tool support. Engagement with global research consortia is being increased by developing more workflows in Galaxy and by resourcing the public Galaxy services to run them. The Galaxy Training Network (GTN) portfolio has grown in both size, and accessibility, through learning paths and direct integration with Galaxy tools that feature in training courses. Code development continues in line with the Galaxy Project roadmap, with improvements to job scheduling and the user interface. Environmental impact assessment is also helping engage users and developers, reminding them of their role in sustainability, by displaying estimated CO2 emissions generated by each Galaxy job.},
+    author        = {{The Galaxy Community}},
+    year          = {2024},
+    title         = {The Galaxy platform for accessible, reproducible, and collaborative data analyses: 2024 update},
+    pages         = {W83-W94},
+    volume        = {52},
+    number        = {W1},
+    issn          = {0305-1048},
+    journal       = {Nucleic Acids Research},
+    doi           = {10.1093/nar/gkae410}
+}
+@inproceedings{TonThat.2017,
+    author        = {{Ton That}, Dai Hai and Fils, Gabriel and Yuan, Zhihao and Malik, Tanu},
+    title         = {Sciunits: Reusable Research Objects},
+    pages         = {374--383},
+    publisher     = {IEEE},
+    isbn          = {978-1-5386-2686-3},
+    booktitle     = {2017 IEEE 13th International Conference on e-Science (e-Science)},
+    year          = {2017},
+    doi           = {10.1109/eScience.2017.51}
+}
+@article{Vivian.2017,
+    author        = {Vivian, John and Rao, Arjun Arkal and Nothaft, Frank Austin and Ketchum, Christopher and Armstrong, Joel and Novak, Adam and Pfeil, Jacob and Narkizian, Jake and Deran, Alden D. and Musselman-Brown, Audrey and Schmidt, Hannes and Amstutz, Peter and Craft, Brian and Goldman, Mary and Rosenbloom, Kate and Cline, Melissa and O'Connor, Brian and Hanna, Megan and Birger, Chet and Kent, W. James and Patterson, David A. and Joseph, Anthony D. and Zhu, Jingchun and Zaranek, Sasha and Getz, Gad and Haussler, David and Paten, Benedict},
+    year          = {2017},
+    title         = {Toil enables reproducible, open source, big biomedical data analyses},
+    pages         = {314--316},
+    volume        = {35},
+    number        = {4},
+    issn          = {1546-1696},
+    journal       = {Nature Biotechnology},
+    doi           = {10.1038/nbt.3772}
+}
+@proceedings{Ozcan.2016,
+    year          = {2016},
+    title         = {Proceedings of the 2016 International Conference on Management of Data},
+    address       = {New York, NY, USA},
+    publisher     = {ACM},
+    isbn          = {9781450335317},
+    editor        = {{\"O}zcan, Fatma and Koutrika, Georgia and Madden, Sam},
+    doi           = {10.1145/2882903}
 }
 @article{Kanitz.2024,
     abstract      = {The Global Alliance for Genomics and Health (GA4GH) Task Execution Service (TES) application programming interface (API) is a standardized schema and API for describing and executing batch execution tasks. It provides a common way to submit and manage tasks to a variety of compute environments, including on-premises high-performance computing and high-throughput computing systems, cloud computing platforms, and hybrid environments. The TES API is designed to be flexible and extensible, allowing it to be adapted to a wide range of use cases, such as {\textquotedbl}bringing compute to the data{\textquotedbl} solutions for federated and distributed data analysis, or load balancing across multicloud infrastructures. This API has been adopted by numerous different service providers and is utilized by several workflow engines, yielding a single abstracted interface for developers and researchers. Using its capabilities, genome research institutes are building extensible hybrid compute systems to study life science.},
@@ -148,20 +200,6 @@
     number        = {3},
     journal       = {Computing in Science {\&} Engineering},
     doi           = {10.1109/MCSE.2024.3414994}
-}
-@article{Weil.2023,
-    abstract      = {In modern reproducible, hypothesis-driven plant research, scientists are increasingly relying on research data management (RDM) services and infrastructures to streamline the processes of collecting, processing, sharing, and archiving research data. FAIR (i.e., findable, accessible, interoperable, and reusable) research data play a pivotal role in enabling the integration of interdisciplinary knowledge and facilitating the comparison and synthesis of a wide range of analytical findings. The PLANTdataHUB offers a solution that realizes RDM of scientific (meta)data as evolving collections of files in a directory - yielding FAIR digital objects called ARCs - with tools that enable scientists to plan, communicate, collaborate, publish, and reuse data on the same platform while gaining continuous quality control insights. The centralized platform is scalable from personal use to global communities and provides advanced federation capabilities for institutions that prefer to host their own satellite instances. This approach borrows many concepts from software development and adapts them to fit the challenges of the field of modern plant science undergoing digital transformation. The PLANTdataHUB supports researchers in each stage of a scientific project with adaptable continuous quality control insights, from the early planning phase to data publication. The central live instance of PLANTdataHUB is accessible at (https://git.nfdi4plants.org), and it will continue to evolve as a community-driven and dynamic resource that serves the needs of contemporary plant science.},
-    author        = {Weil, Heinrich Lukas and Schneider, Kevin and Tsch{\"o}pe, Marcel and Bauer, Jonathan and Maus, Oliver and Frey, Kevin and Brilhaus, Dominik and {Martins Rodrigues}, Cristina and Doniparthi, Gajendra and Wetzels, Florian and Lukasczyk, Jonas and Kranz, Angela and Gr{\"u}ning, Bj{\"o}rn and Zimmer, David and De{\ss}loch, Stefan and von Suchodoletz, Dirk and Usadel, Bj{\"o}rn and Garth, Christoph and M{\"u}hlhaus, Timo},
-    year          = {2023},
-    title         = {PLANTdataHUB: a collaborative platform for continuous FAIR data sharing in plant research},
-    keywords      = {ARC Annotated research context;DataHUB;FAIR;FAIR digital object;research data management},
-    urldate       = {2024-05-29},
-    pages         = {974--988},
-    volume        = {116},
-    number        = {4},
-    issn          = {1365-313X},
-    journal       = {1365-313X},
-    doi           = {10.1111/tpj.16474}
 }
 @article{Gustafsson.2025,
     abstract      = {The rising popularity of computational workflows is driven by the need for repetitive and scalable data processing, sharing of processing know-how, and transparent methods. As both combined records of analysis and descriptions of processing steps, workflows should be reproducible, reusable, adaptable, and available. Workflow sharing presents opportunities to reduce unnecessary reinvention, promote reuse, increase access to best practice analyses for non-experts, and increase productivity. In reality, workflows are scattered and difficult to find, in part due to the diversity of available workflow engines and ecosystems, and because workflow sharing is not yet part of research practice. WorkflowHub provides a unified registry for all computational workflows that links to community repositories, and supports both the workflow lifecycle and making workflows findable, accessible, interoperable, and reusable (FAIR). By interoperating with diverse platforms, services, and external registries, WorkflowHub adds value by supporting workflow sharing, explicitly assigning credit, enhancing FAIRness, and promoting workflows as scholarly artefacts. The registry has a global reach, with hundreds of research organisations involved, and more than 800 workflows registered.},
@@ -179,81 +217,68 @@
     doi           = {10.1038/s41597-025-04786-3}
 }
 @misc{Gitahi.2026,
-    abstract      = {The modular workflow automates the entire data pipeline, processing diverse input sources, including UAV-derived vegetation indices, sensor observations, field metadata, and weather data. It generates standardised crop model inputs and simulation-ready datasets, for example, for DSSAT. The workflow integrates specialised tools for vegetation index processing, phenology analysis, and data transformation, supporting reproducible, portable, and scalable high-throughput crop simulations.},
-    author        = {Gitahi, Joseph},
+    abstract      = {Crop simulation models are inherently complex, requiring multiple steps and integrating numerous variables. This presentation demonstrates the development of standardised, modular crop modelling simulation workflows using the FAIRagro Scientific Workflow Infrastructure (SciWIn) tool. The SciWIn tool enables the creation of portable, reproducible, and shareable workflows},
+    author        = {Gitahi, Joseph and Leroy, Benjamin M. and Burkhart, Sebastian and Knezevic, Marija and Donaubauer, Andreas and Muhammad, Arslan and Asseng, Senthold and Kolbe, Thomas H. and Noack, Patrick},
     year          = {2026},
-    title         = {UC6 - Automated Data Flows for Crop Simulation Models},
-    publisher     = {WorkflowHub},
-    doi           = {10.48546/WORKFLOWHUB.WORKFLOW.2236.1}
-}
-@article{Giardine.2005,
-    abstract      = {Accessing and analyzing the exponentially expanding genomic sequence and functional data pose a challenge for biomedical researchers. Here we describe an interactive system, Galaxy, that combines the power of existing genome annotation databases with a simple Web portal to enable users to search remote resources, combine data from independent queries, and visualize the results. The heart of Galaxy is a flexible history system that stores the queries from each user; performs operations such as intersections, unions, and subtractions; and links to other computational tools. Galaxy can be accessed at http://g2.bx.psu.edu.},
-    author        = {Giardine, Belinda and Riemer, Cathy and Hardison, Ross C. and Burhans, Richard and Elnitski, Laura and Shah, Prachi and Zhang, Yi and Blankenberg, Daniel and Albert, Istvan and Taylor, James and Miller, Webb and Kent, W. James and Nekrutenko, Anton},
-    year          = {2005},
-    title         = {Galaxy: a platform for interactive large-scale genome analysis},
-    keywords      = {Biological Evolution;Databases;Genetic;Genome;Internet;Promoter Regions},
-    pages         = {1451--1455},
-    volume        = {15},
-    number        = {10},
-    issn          = {1088-9051},
-    journal       = {Genome Research},
-    doi           = {10.1101/gr.4086505}
-}
-@misc{Ewert.2023,
-    abstract      = {
-        This document is the proposal for the consortium FAIRagro in the framework of the National Research Data Infrastructure (NFDI) in Germany. The proposal was submitted to the German Research Foundation (DFG) in Nov 2021. The proposal was finally accepted~ with a revised working program~in Feb 2023.
-
-        All financial resources (personnel, material, direct project costs, in-kind contributions) were removed from the public version.n
-    },
-    author        = {Ewert, Frank and Specka, Xenia and Anderson, James M. and Arend, Daniel and Asseng, Senthold and Boehm, Franziska and Feike, Til and Fluck, Juliane and Gackstetter, David and Gonzales-Mellado, Aida and Hartmann, Thomas and Haunert, Jan-Henrik and Hoedt, Florian and Hoffmann, Carsten and K{\"o}nig, Patrick and Lesch, Stephan and Lindst{\"a}dt, Birte and Lischeid, Gunnar and Martini, Daniel and M{\"o}ller, Markus and Rascher, Uwe and Reif, Jochen and Senft, Matthias and Stahl, Ulrike and Svoboda, Nikolai and Usadel, Bj{\"o}rn and Webber, Heidi and Weiland, Claus},
-    year          = {2023},
-    title         = {FAIRagro - A FAIR Data Infrastructure for Agrosystems (proposal)},
-    url           = {https://zenodo.org/doi/10.5281/zenodo.8366884},
-    keywords      = {agrosystems;NFDI;research data infrastructures;research data management},
-    urldate       = {2024-04-15},
+    title         = {Enabling High-throughput Crop Growth Simulation with SciWIn},
     publisher     = {Zenodo},
-    doi           = {10.5281/ZENODO.8366884}
+    doi           = {10.5281/zenodo.21099598}
 }
-@article{Ewels.2020,
-    author        = {Ewels, Philip A. and Peltzer, Alexander and Fillinger, Sven and Patel, Harshil and Alneberg, Johannes and Wilm, Andreas and Garcia, Maxime Ulysse and {Di Tommaso}, Paolo and Nahnsen, Sven},
-    year          = {2020},
-    title         = {The nf-core framework for community-curated bioinformatics pipelines},
-    pages         = {276--278},
-    volume        = {38},
-    number        = {3},
-    issn          = {1546-1696},
-    journal       = {Nature Biotechnology},
-    doi           = {10.1038/s41587-020-0439-x}
-}
-@article{Dieckmann.2023,
-    author        = {Dieckmann, Marius Alfred and Beyvers, Sebastian and Hochmuth, Jannis and Rehm, Anna and F{\"o}rster, Frank and Goesmann, Alexander},
-    year          = {2023},
-    title         = {Aruna Object Storage},
-    url           = {https://www.tib-op.org/ojs/index.php/CoRDI/article/view/404},
-    volume        = {1},
-    journal       = {Proceedings of the Conference on Research Data Infrastructure},
-    doi           = {10.52825/cordi.v1i.404}
-}
-@misc{DiTommaso.2018,
-    author        = {{Di Tommaso}, Paolo and Sayers, Kevin},
-    year          = {2018},
-    title         = {cwl2nxf},
-    url           = {https://github.com/nextflow-io/cwl2nxf},
-    urldate       = {2026-09-24}
-}
-@article{DiTommaso.2017,
-    author        = {{Di Tommaso}, Paolo and Chatzou, Maria and Floden, Evan W. and Barja, Pablo Prieto and Palumbo, Emilio and Notredame, Cedric},
+@proceedings{.2017,
     year          = {2017},
-    title         = {Nextflow enables reproducible computational workflows},
-    url           = {https://www.nature.com/articles/nbt.3820},
-    keywords      = {archiving;bioinformatics;Computational biology;Data publication},
-    urldate       = {2026-04-22},
-    pages         = {316--319},
-    volume        = {35},
-    number        = {4},
-    issn          = {1546-1696},
-    journal       = {Nature Biotechnology},
-    doi           = {10.1038/nbt.3820}
+    title         = {2017 IEEE 13th International Conference on e-Science (e-Science)},
+    publisher     = {IEEE},
+    isbn          = {978-1-5386-2686-3},
+    doi           = {10.1109/e-Science40896.2017}
+}
+@misc{ArunaObjectStorageTeam.2026,
+    author        = {{Aruna Object Storage Team}},
+    year          = {2026},
+    title         = {ARUNA Object Storage},
+    url           = {https://github.com/arunaengine/aruna},
+    publisher     = {GitHub}
+}
+@misc{Bacall.,
+    author        = {Bacall, Finn and Williams, Alan R. and Owen, Stuart and Soiland-Reyes, Stian and Chadwick, Eli and Leo, Simone},
+    title         = {Workflow RO-Crate Profile 1.1},
+    url           = {https://w3id.org/workflowhub/workflow-ro-crate/1.1},
+    urldate       = {2026-09-21},
+    institution   = {WorkflowHub}
+}
+@inproceedings{Chirigati.2016,
+    author        = {Chirigati, Fernando and Rampin, R{\'e}mi and Shasha, Dennis and Freire, Juliana},
+    title         = {ReproZip},
+    pages         = {2085--2088},
+    publisher     = {ACM},
+    isbn          = {9781450335317},
+    editor        = {{\"O}zcan, Fatma and Koutrika, Georgia and Madden, Sam},
+    booktitle     = {Proceedings of the 2016 International Conference on Management of Data},
+    year          = {2016},
+    address       = {New York, NY, USA},
+    doi           = {10.1145/2882903.2899401}
+}
+@misc{CommonWorkflowLanguage.,
+    author        = {{Common Workflow Language}},
+    title         = {Development Tools},
+    url           = {https://www.commonwl.org/tools/},
+    urldate       = {2026-09-21}
+}
+@misc{CommonWorkflowLanguage.b,
+    author        = {{Common Workflow Language}},
+    title         = {Implementations},
+    url           = {https://www.commonwl.org/implementations/},
+    urldate       = {2026-09-21}
+}
+@article{Crusoe.2022,
+    author        = {Crusoe, Michael R. and Abeln, Sanne and Iosup, Alexandru and Amstutz, Peter and Chilton, John and Tijani{\'c}, Neboj{\v{s}}a and M{\'e}nager, Herv{\'e} and Soiland-Reyes, Stian and Gavrilovi{\'c}, Bogdan and Goble, Carole and Community, The CWL},
+    year          = {2022},
+    title         = {Methods included},
+    pages         = {54--63},
+    volume        = {65},
+    number        = {6},
+    issn          = {0001-0782},
+    journal       = {0001-0782},
+    doi           = {10.1145/3486897}
 }
 @misc{DataPLANT.2025,
     abstract      = {
@@ -313,48 +338,96 @@
     institution   = {Zenodo},
     doi           = {10.5281/ZENODO.8302661}
 }
-@article{Crusoe.2022,
-    author        = {Crusoe, Michael R. and Abeln, Sanne and Iosup, Alexandru and Amstutz, Peter and Chilton, John and Tijani{\'c}, Neboj{\v{s}}a and M{\'e}nager, Herv{\'e} and Soiland-Reyes, Stian and Gavrilovi{\'c}, Bogdan and Goble, Carole and Community, The CWL},
-    year          = {2022},
-    title         = {Methods included},
-    pages         = {54--63},
-    volume        = {65},
-    number        = {6},
-    issn          = {0001-0782},
-    journal       = {0001-0782},
-    doi           = {10.1145/3486897}
+@article{DiTommaso.2017,
+    author        = {{Di Tommaso}, Paolo and Chatzou, Maria and Floden, Evan W. and Barja, Pablo Prieto and Palumbo, Emilio and Notredame, Cedric},
+    year          = {2017},
+    title         = {Nextflow enables reproducible computational workflows},
+    url           = {https://www.nature.com/articles/nbt.3820},
+    keywords      = {archiving;bioinformatics;Computational biology;Data publication},
+    urldate       = {2026-04-22},
+    pages         = {316--319},
+    volume        = {35},
+    number        = {4},
+    issn          = {1546-1696},
+    journal       = {Nature Biotechnology},
+    doi           = {10.1038/nbt.3820}
 }
-@misc{CommonWorkflowLanguage.,
-    author        = {{Common Workflow Language}},
-    title         = {Implementations},
-    url           = {https://www.commonwl.org/implementations/},
-    urldate       = {2026-09-21}
+@misc{DiTommaso.2018,
+    author        = {{Di Tommaso}, Paolo and Sayers, Kevin},
+    year          = {2018},
+    title         = {cwl2nxf},
+    url           = {https://github.com/nextflow-io/cwl2nxf},
+    urldate       = {2026-09-24}
 }
-@misc{CommonWorkflowLanguage.b,
-    author        = {{Common Workflow Language}},
-    title         = {Development Tools},
-    url           = {https://www.commonwl.org/tools/},
-    urldate       = {2026-09-21}
+@article{Dieckmann.2023,
+    author        = {Dieckmann, Marius Alfred and Beyvers, Sebastian and Hochmuth, Jannis and Rehm, Anna and F{\"o}rster, Frank and Goesmann, Alexander},
+    year          = {2023},
+    title         = {Aruna Object Storage},
+    url           = {https://www.tib-op.org/ojs/index.php/CoRDI/article/view/404},
+    volume        = {1},
+    journal       = {Proceedings of the Conference on Research Data Infrastructure},
+    doi           = {10.52825/cordi.v1i.404}
 }
-@proceedings{.2016,
-    year          = {2016},
-    title         = {Biocomputing 2017},
-    publisher     = {{World Scientific}}
+@article{Ewels.2020,
+    author        = {Ewels, Philip A. and Peltzer, Alexander and Fillinger, Sven and Patel, Harshil and Alneberg, Johannes and Wilm, Andreas and Garcia, Maxime Ulysse and {Di Tommaso}, Paolo and Nahnsen, Sven},
+    year          = {2020},
+    title         = {The nf-core framework for community-curated bioinformatics pipelines},
+    pages         = {276--278},
+    volume        = {38},
+    number        = {3},
+    issn          = {1546-1696},
+    journal       = {Nature Biotechnology},
+    doi           = {10.1038/s41587-020-0439-x}
 }
-@misc{Bacall.,
-    author        = {Bacall, Finn and Williams, Alan R. and Owen, Stuart and Soiland-Reyes, Stian and Chadwick, Eli and Leo, Simone},
-    title         = {Workflow RO-Crate Profile 1.1},
-    url           = {https://w3id.org/workflowhub/workflow-ro-crate/1.1},
-    urldate       = {2026-09-21},
-    institution   = {WorkflowHub}
+@misc{Ewert.2023,
+    abstract      = {
+        This document is the proposal for the consortium FAIRagro in the framework of the National Research Data Infrastructure (NFDI) in Germany. The proposal was submitted to the German Research Foundation (DFG) in Nov 2021. The proposal was finally accepted~ with a revised working program~in Feb 2023.
+
+        All financial resources (personnel, material, direct project costs, in-kind contributions) were removed from the public version.n
+    },
+    author        = {Ewert, Frank and Specka, Xenia and Anderson, James M. and Arend, Daniel and Asseng, Senthold and Boehm, Franziska and Feike, Til and Fluck, Juliane and Gackstetter, David and Gonzales-Mellado, Aida and Hartmann, Thomas and Haunert, Jan-Henrik and Hoedt, Florian and Hoffmann, Carsten and K{\"o}nig, Patrick and Lesch, Stephan and Lindst{\"a}dt, Birte and Lischeid, Gunnar and Martini, Daniel and M{\"o}ller, Markus and Rascher, Uwe and Reif, Jochen and Senft, Matthias and Stahl, Ulrike and Svoboda, Nikolai and Usadel, Bj{\"o}rn and Webber, Heidi and Weiland, Claus},
+    year          = {2023},
+    title         = {FAIRagro - A FAIR Data Infrastructure for Agrosystems (proposal)},
+    url           = {https://zenodo.org/doi/10.5281/zenodo.8366884},
+    keywords      = {agrosystems;NFDI;research data infrastructures;research data management},
+    urldate       = {2024-04-15},
+    publisher     = {Zenodo},
+    doi           = {10.5281/ZENODO.8366884}
+}
+@article{Giardine.2005,
+    abstract      = {Accessing and analyzing the exponentially expanding genomic sequence and functional data pose a challenge for biomedical researchers. Here we describe an interactive system, Galaxy, that combines the power of existing genome annotation databases with a simple Web portal to enable users to search remote resources, combine data from independent queries, and visualize the results. The heart of Galaxy is a flexible history system that stores the queries from each user; performs operations such as intersections, unions, and subtractions; and links to other computational tools. Galaxy can be accessed at http://g2.bx.psu.edu.},
+    author        = {Giardine, Belinda and Riemer, Cathy and Hardison, Ross C. and Burhans, Richard and Elnitski, Laura and Shah, Prachi and Zhang, Yi and Blankenberg, Daniel and Albert, Istvan and Taylor, James and Miller, Webb and Kent, W. James and Nekrutenko, Anton},
+    year          = {2005},
+    title         = {Galaxy: a platform for interactive large-scale genome analysis},
+    keywords      = {Biological Evolution;Databases;Genetic;Genome;Internet;Promoter Regions},
+    pages         = {1451--1455},
+    volume        = {15},
+    number        = {10},
+    issn          = {1088-9051},
+    journal       = {Genome Research},
+    doi           = {10.1101/gr.4086505}
 }
 @misc{Gitahi.2026b,
-    abstract      = {Crop simulation models are inherently complex, requiring multiple steps and integrating numerous variables. This presentation demonstrates the development of standardised, modular crop modelling simulation workflows using the FAIRagro Scientific Workflow Infrastructure (SciWIn) tool. The SciWIn tool enables the creation of portable, reproducible, and shareable workflows},
-    author        = {Gitahi, Joseph and Leroy, Benjamin M. and Burkhart, Sebastian and Knezevic, Marija and Donaubauer, Andreas and Muhammad, Arslan and Asseng, Senthold and Kolbe, Thomas H. and Noack, Patrick},
+    abstract      = {The modular workflow automates the entire data pipeline, processing diverse input sources, including UAV-derived vegetation indices, sensor observations, field metadata, and weather data. It generates standardised crop model inputs and simulation-ready datasets, for example, for DSSAT. The workflow integrates specialised tools for vegetation index processing, phenology analysis, and data transformation, supporting reproducible, portable, and scalable high-throughput crop simulations.},
+    author        = {Gitahi, Joseph},
     year          = {2026},
-    title         = {Enabling High-throughput Crop Growth Simulation with SciWIn},
-    publisher     = {Zenodo},
-    doi           = {10.5281/zenodo.21099598}
+    title         = {UC6 - Automated Data Flows for Crop Simulation Models},
+    publisher     = {WorkflowHub},
+    doi           = {10.48546/WORKFLOWHUB.WORKFLOW.2236.1}
+}
+@article{Weil.2023,
+    abstract      = {In modern reproducible, hypothesis-driven plant research, scientists are increasingly relying on research data management (RDM) services and infrastructures to streamline the processes of collecting, processing, sharing, and archiving research data. FAIR (i.e., findable, accessible, interoperable, and reusable) research data play a pivotal role in enabling the integration of interdisciplinary knowledge and facilitating the comparison and synthesis of a wide range of analytical findings. The PLANTdataHUB offers a solution that realizes RDM of scientific (meta)data as evolving collections of files in a directory - yielding FAIR digital objects called ARCs - with tools that enable scientists to plan, communicate, collaborate, publish, and reuse data on the same platform while gaining continuous quality control insights. The centralized platform is scalable from personal use to global communities and provides advanced federation capabilities for institutions that prefer to host their own satellite instances. This approach borrows many concepts from software development and adapts them to fit the challenges of the field of modern plant science undergoing digital transformation. The PLANTdataHUB supports researchers in each stage of a scientific project with adaptable continuous quality control insights, from the early planning phase to data publication. The central live instance of PLANTdataHUB is accessible at (https://git.nfdi4plants.org), and it will continue to evolve as a community-driven and dynamic resource that serves the needs of contemporary plant science.},
+    author        = {Weil, Heinrich Lukas and Schneider, Kevin and Tsch{\"o}pe, Marcel and Bauer, Jonathan and Maus, Oliver and Frey, Kevin and Brilhaus, Dominik and {Martins Rodrigues}, Cristina and Doniparthi, Gajendra and Wetzels, Florian and Lukasczyk, Jonas and Kranz, Angela and Gr{\"u}ning, Bj{\"o}rn and Zimmer, David and De{\ss}loch, Stefan and von Suchodoletz, Dirk and Usadel, Bj{\"o}rn and Garth, Christoph and M{\"u}hlhaus, Timo},
+    year          = {2023},
+    title         = {PLANTdataHUB: a collaborative platform for continuous FAIR data sharing in plant research},
+    keywords      = {ARC Annotated research context;DataHUB;FAIR;FAIR digital object;research data management},
+    urldate       = {2024-05-29},
+    pages         = {974--988},
+    volume        = {116},
+    number        = {4},
+    issn          = {1365-313X},
+    journal       = {1365-313X},
+    doi           = {10.1111/tpj.16474}
 }
 @misc{Zimmer.2022,
     author        = {Zimmer, Adrian},
