@@ -6141,6 +6141,7 @@ dependencies = [
  "fstest",
  "futures",
  "git2 0.21.0",
+ "glob",
  "miette",
  "pathdiff",
  "r-description",

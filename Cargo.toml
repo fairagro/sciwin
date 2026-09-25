@@ -96,6 +96,7 @@ syntect = { version = "5.2.0", default-features = false, features = [
     "default-themes",
     "default-syntaxes",
 ] }
+glob = "0.3.4"
 
 
 # dev dependencies

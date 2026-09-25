@@ -93,6 +93,15 @@ pub struct CreatedTool {
     pub yaml: String,
 }
 
+// Create a Draft of the tool first
+#[derive(Debug, Clone)]
+pub struct DraftTool {
+    /// Tool that is parsed from commandline call
+    pub document: CommandLineTool,
+    /// Relative paths of files that were created or modified
+    pub files: Vec<String>,
+}
+
 /// Creates a blank tool document named `name`.
 ///
 /// Follows the same path scheme as [`crate::authoring::tool::create_tool`]: `output_dir` is
@@ -134,19 +143,23 @@ pub fn create_blank_command_line_tool(
 ///
 /// `project_root` is the git repository the tool belongs to: paths are resolved against it,
 /// the trial run executes there, and it is what gets checked for uncommitted changes.
+/// Create a draft first and ask the user if he wants to create the tool.
 pub async fn create_tool(
     project_root: &Path,
     options: &ToolCreationOptions,
 ) -> AuthoringResult<CreatedTool> {
-    let mut cwl = create_tool_base(project_root, options).await?;
+    let cwl_draft = create_tool_base_draft(project_root, options).await?;
+    accept_tool(project_root, options, cwl_draft)
+}
 
+fn finalize(options: &ToolCreationOptions, cwl: &mut CommandLineTool) -> AuthoringResult<(PathBuf, String)>{
     if options.run_container.is_some()
         && let Some(container) = &options.container
         && requirements::is_sif_image(&container.image)
     {
         //requirements are already set in create_tool_base()
         //just the docker requirements needs to be altered in case of sif file
-        requirements::rewrite_sif_container_mut(&mut cwl, container);
+        requirements::rewrite_sif_container_mut(cwl, container);
     }
 
     // Finalize CWL
@@ -163,30 +176,17 @@ pub async fn create_tool(
             format!("CWL File already exists at {path:?}"),
         )));
     }
-    let yaml = save::finalize_tool(&mut cwl, &path)?;
+    let yaml = save::finalize_tool(cwl, &path)?;
 
-    if options.save {
-        let repo =
-            Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
-                path: project_root.to_path_buf(),
-                source,
-            })?;
-        save::save_tool_to_disk(&yaml, project_root, &path, &repo, options.commit)?;
-    }
-
-    Ok(CreatedTool {
-        path,
-        document: cwl,
-        yaml,
-    })
+    Ok((path, yaml))
 }
 
 /// Parses the command line into a tool and, unless `options.no_run` is set, runs it once to
 /// discover its outputs.
-async fn create_tool_base(
+pub async fn create_tool_base_draft(
     project_root: &Path,
     options: &ToolCreationOptions,
-) -> AuthoringResult<CommandLineTool> {
+) -> AuthoringResult<DraftTool> {
     let command = options
         .command
         .iter()
@@ -229,12 +229,14 @@ async fn create_tool_base(
         requirements::add_tool_requirements(&mut cwl, options, project_root).await?;
     }
 
+    let mut created_files = Vec::new();
     if !options.no_run {
         let files =
             probe::run_and_collect_files(&mut cwl, project_root, options, &repo, &modified).await?;
         if options.outputs.is_empty() {
             cwl.outputs = parser::outputs::get_outputs(&files).await?;
         }
+        created_files = files;
     }
 
     if !options.run_container.is_some() {
@@ -247,7 +249,7 @@ async fn create_tool_base(
             input.default = None;
         }
     }
-    Ok(cwl)
+    Ok(DraftTool{document: cwl, files: created_files})
 }
 
 fn command_available(cmd: &str) -> bool {
@@ -277,6 +279,53 @@ pub fn auto_container_engine() -> Option<ContainerEngine> {
     } else {
         None
     }
+}
+
+pub fn preview_tool_draft( options: &ToolCreationOptions,
+    draft: &DraftTool,
+) -> AuthoringResult<(PathBuf, String)> {
+    let mut document = draft.document.clone();
+    finalize(options, &mut document)
+}
+
+/// Accepts the CWL CommandLineTool draft and write it 
+pub fn accept_tool(project_root: &Path, options: &ToolCreationOptions, draft: DraftTool) -> AuthoringResult<CreatedTool> {
+    let mut document = draft.document; 
+    let (path, yaml) = finalize(options, &mut document)?;
+
+    if options.save {
+        let repo =
+            Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
+                path: project_root.to_path_buf(),
+                source,
+            })?;
+        save::save_tool_to_disk(&yaml, project_root, &path, &repo, options.commit)?;
+    }
+    
+    Ok(CreatedTool {
+        path,
+        document,
+        yaml,
+    })
+}
+
+/// Remove a draft of tool and restore the original working environment
+pub fn reject_tool(project_root: &Path, draft: &DraftTool) -> AuthoringResult<()> {
+    let files = &draft.files; 
+    if files.is_empty(){
+        return Ok(());
+    }
+    let repo = Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
+        path: project_root.to_path_buf(),
+        source,
+    })?;
+    for file in files {
+        if !project_root.join(file).exists(){
+            continue;
+        }
+        probe::remove_produced_files(&repo, project_root, file)?;
+    }
+    Ok(())
 }
 
 // Integration coverage of `create_tool` (this module's entry point) lives in

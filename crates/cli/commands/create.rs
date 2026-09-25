@@ -4,10 +4,12 @@ use colored::Colorize;
 use miette::{IntoDiagnostic, bail, miette};
 use sciwin::authoring::tool::CreatedTool;
 use sciwin::authoring::tool::ToolCreationOptions;
+use sciwin::authoring::tool::{accept_tool, reject_tool, create_tool_base_draft};
 use sciwin::cwl::engine::ContainerEngine;
 use std::env;
 use std::{path::PathBuf, str::FromStr};
 use tracing::{debug, info, warn};
+use dialoguer::Confirm;
 
 pub async fn handle_create_command(args: &CreateArgs) -> miette::Result<()> {
     if args.command.is_empty() && args.name.is_some() {
@@ -89,6 +91,8 @@ pub struct CreateArgs {
     pub env: Option<PathBuf>,
     #[arg(short = 'f', long = "force", help = "Overwrites existing CWL File")]
     pub force: bool,
+    #[arg(short = 'y', long = "yes", help="Skip confirmation and record tool as recorded")]
+    pub yes: bool,
     #[arg(
         long = "auto-container",
         help = "Automatically adds a Docker Requirement based on dependencies (Python and R supported)"
@@ -175,14 +179,11 @@ pub async fn create_tool(args: &CreateArgs) -> miette::Result<()> {
         "running `{}` in {cwd:?} to observe its outputs",
         args.command.join(" ")
     );
-    let CreatedTool {
-        document,
-        path,
-        yaml,
-    } = sciwin::authoring::tool::create_tool(&cwd, &args.into()).await?;
+    let options = args.into();
+    let draft = create_tool_base_draft(&cwd, &options).await?;
 
     info!("Found outputs:");
-    let string_outputs: Vec<String> = document
+    let string_outputs: Vec<String> = draft.document
         .outputs
         .iter()
         .filter_map(|o| o.output_binding.as_ref()?.glob.clone().map(|g| g.as_many()))
@@ -194,6 +195,25 @@ pub async fn create_tool(args: &CreateArgs) -> miette::Result<()> {
     );
 
     print_list(&string_outputs);
+
+    let keep_tool = args.no_run || args.is_raw || args.yes || {
+        if Confirm::new().with_prompt("Show the generated CWL before deciding?")
+            .default(false).interact().into_diagnostic()?
+        {
+            let (_,yaml) = sciwin::authoring::tool::preview_tool_draft(&options, &draft)?;
+            print_diff("", &yaml);
+        }
+        Confirm::new().with_prompt("Keep this tool?").default(true)
+            .interact().into_diagnostic()?
+    };
+
+    if !keep_tool {
+        reject_tool(&cwd, &draft)?;
+        info!("Discarded tool, nothing was created.");
+        return Ok(());
+    }
+    
+    let CreatedTool {path, yaml, ..} = accept_tool(&cwd, &options, draft)?;
 
     //save tool
     if args.is_raw {

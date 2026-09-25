@@ -158,3 +158,15 @@ fn root_path(p: impl AsRef<Path>) -> String {
         .map(|c| c.as_os_str().to_string_lossy().into_owned())
         .unwrap_or_default()
 }
+
+/// Removes files, used in tool create if a user rejects the darft of a tool
+pub(super) fn remove_produced_files(repo: &Repository, project_root: &Path, file: &str) 
+-> AuthoringResult<()> {
+    let file_path = project_root.join(file);
+    if file_path.is_dir() {
+        std::fs::remove_dir_all(&file_path).with_context(|| format!("Failed to remove {file}"))?;
+    } else{
+        repository::discard_file(repo, file)?;
+    }
+    Ok(())
+}

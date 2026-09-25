@@ -26,6 +26,7 @@ dunce.workspace = true
 futures.workspace = true
 git2.workspace = true
 miette.workspace = true
+glob.workspace = true
 pathdiff.workspace = true
 rand.workspace = true
 reana.workspace = true
