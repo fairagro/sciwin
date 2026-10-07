@@ -69,22 +69,51 @@ SciWIn-Client addresses this authoring gap by allowing researchers to create CWL
 A related but distinct line of work concerns tools that capture computational environments or provenance by observing program execution. Examples include ReproZip [@Chirigati.2016], noWorkflow [@Pimentel.2017], and Sciunit [@TonThat.2017]. These systems demonstrate that execution traces and runtime information can be used to support reproducibility and provenance capture. They are therefore conceptually close to the execution-based workflow creation approach implemented by SciWIn-Client. However, their primary objective is to capture, package, or reproduce information about an execution, rather than to transform an existing command-line execution into an explicit, reusable workflow specification. SciWIn-Client builds on the information available from execution while using it to generate a machine-actionable workflow description, including the workflow specification and its associated inputs and execution requirements.
 
 # Software design
-SciWIn-Client (short: `s4n`) is implemented in the Rust programming language, chosen for its strong type safety, and robust error handling - qualities essential in scientific software. `s4n` builts on a reusable `sciwin` library which itself combines the `commonwl`, `reana` and `rocrate` rust libraries. Those are created as such functionality did not exist prior for the Rust programming language. 
-Git integration provides built-in version control and interoperability with research data management frameworks such as  DataPLANT's ARC [@DataPLANT.2025;@Weil.2023] format which can be viewed as a Git-based implementation of the RO-Crate standard[@SoilandReyes.2022].
-A over
+SciWIn-Client (short: `s4n`) was built around one simple design decision. A CWL `CommandLineTool` document is created from observing a command's actual execution,rather than by parsing the command line or asking the user to fill in a form. A command line alone provides no information about which files are written, so a purely static approach (such as `zatsu-cwl-generator`) cannot produce the `outputs` of a tool. Everything else follows from this decision and the goal of seemlessly integrating into the researcher's existing mode of operation: using a terminal, scripts and Git. Git integration also provides built-in version control and interoperability with research data management frameworks such as  DataPLANT's ARC [@DataPLANT.2025;@Weil.2023] format which can be viewed as a Git-based implementation of the RO-Crate standard[@SoilandReyes.2022].
 
-![Overview of SciWIn-Client design](assets/overview.png)
+![Overview of SciWIn-Client design. The `s4n` binary and SciWIn-Studio are thin front ends over the shared `sciwin` library, which builds on the `commonwl`, `reana` and `rocrate` libraries. Tools are authored by observing a command inside a Git repository, are connected into workflows, and are executed on a local, Docker, TES or REANA backend. Each run can be exported as a Workflow Run RO-Crate.](assets/overview.png)
 
-## Managing CWL Files
-A central concept of the tool is the automation of CWL generation. When users invoke a command or script using the `s4n create` prefix SciWIn-Client analyzes the command-line inputs and execution to identify `inputs`, `baseCommand` and `requirements` metadata and creates a CWL CommandLineTool. SciWIn-Client uses Git in background a version-controlled environment for tracking changes and support this process. However most importantly Git serves information of changed files to create the  `outputs`-Section of the CWL CommandLineTool. While the system can automatically infer inputs and outputs, users also have the option to define them explicitly. Users can specify a container image pulled from Docker Hub or provide paths to local Dockerfiles to ensure consistent, reproducible execution environments across different systems.
+## Architecture
+`s4n` is a thin command-line layer around the `sciwin` library (which is also the core of SciWIn-Studio which is not part of this publication), so that multiple frontends can be supported. 
+`sciwin` is organized into authoring (tool and workflow generation), execution, provenance, container resolution and repository handling. It combines three further libraries that were developed alongside it because no promising equivalent existed in the Rust ecosystem: `commonwl` (CWL parsing and an execution engine), `reana` (a client for the REANA API) and `rocrate` (reading and building RO-Crates). They are published on `crates.io` separately, so they can be reused independently of SciWIn.
 
+Rust was chosen for practical reasons beyond type safety. It produces a single self-contained binary without a language runtime, which lowers the installation and configuration barrier for researchers, and it runs natively on Windows, Linux and macOS. This fills a gap the reference CWL runner has, as it requires WSL on windows. The price is a smaller pool of potential scientific contributors compared to Python, and the need to implement a CWL engine instead of reusing an existing one.
+
+
+## Authoring tools
+When users invoke a command or script using the `s4n create` prefix SciWIn-Client automatically generates a tool. It follows a simple 4 step process:
+1. The command-line is used to parse `inputs` and `baseCommand` to construct a preliminary `CommandLineTool`.
+2. The  preliminary `CommandLineTool` is executed locally ("probe"). Git is used in background to determine changes in the file system. Changed files and directories are added as `outputs`. 
+3. Requirement metadata such as containers, network access, environment variables are added to the preliminary `CommandLineTool` by `s4n create`'s command options. 
+4. The preliminary `CommandLineTool` is finalized by prost processing steps such as EDAM format annotation, path relativation and array input detection.
+
+As Git is used to determine changes, a Git repository is a hard requirement. However we accept this cost because version control is already best practice for the intended users and gives versioning of the generated files for free. A `.gitignore` File is accepted, if present giving flexibility to ignore temporary directories or files may be created by the command.
+
+While the system can automatically infer `inputs` and `outputs`, it also has inherent limits. Therefore users also have the option to define them explicitly `inputs` and `outputs`.
 Once individual CWL CommandLineTools have been created, the next step is to combine them into a CWL Workflow. This is achieved using the `s4n connect` command, which allows the user to specify a source (starting tool or node) and a target (a subsequent tool or node). By linking the output of one tool to the input of another, the user defines the workflow's execution sequence. 
 
-In order to expand the possible sources for connecting complex workflows, there is the option to `install` existing workflows using SciWIn-Client which internally uses Git's submodule feature. 
+### Containers
+A tool recorded from a local run depends on the researcher's environment. To make the resulting CWL portable, a container can be attached either as an image reference or as a path to a local Dockerfile that is built on execution. For Python and R scripts, SciWIn-Client is able to resolve a container automatically from the project's dependency files (`requirements.txt`, `pyproject.toml`, `DESCRIPTION`) using a curated SBOM-based registry maintained by the project.
+
+## Connecting tools
+`s4n connect` links the output of one tool to the input of another by name or adds new workflow-wide `inputs` and `outputs`. The workflow is therefore built incrementally from tools that already exist, and the generated CWL Workflow stays a plain, editable document. Aforementioned SciWIn-Studio can furthermore help with workflow connection.
 
 ## Workflow Execution
-SciWIn-Client supports worklow execution on multiple backends through the `s4n execute` command. The desired backend can be selected using the `--engine` flag. When performing high demanding calculations, workflows often need to be dispatched to large compute clusters. Besides local execution on the researcher's machine, it is possible to use execute workflows on REANA instances[@Simko.2019] or GA4GH TES servers[@Kanitz.2024]. REANA is a reproducible research data analysis platform provided by CERN. FAIRagro operates their own REANA installation in de.NBI Cloud.
-Workflows can be executed either directly by using CWL files or by using Workflow RO-Crates [@Bacall.] or Workflow Run RO-Crates [@Leo.2024]. Structured execution results in form of Workflow Run RO-Crates using the Provenance Run Crate profile can be exported for each execution run.
+SciWIn-Client supports worklow execution on multiple backends through the `s4n execute` command. The desired backend can be selected using the `--engine` flag. `s4n execute` accepts a CWL document or a Workflow RO-Crate [@{Bacall.}] or Workflow Run RO-Crate [@Leo.2024] for every backend.
+
+| Backend | Purpose |
+| --- | --- |
+| `local` | Runs on the researcher's machine. Steps with a `DockerRequirement` run in Docker, Singularity or Podman. |
+| `docker` | Runs every step in a container through the local Docker daemon. |
+| `tes` | Submits tasks to a GA4GH Task Execution Service (TES) 1.1 server. |
+| `reana` | Submits the workflow to a REANA instance. (Not part of `commonwl`) |
+
+When performing high demanding calculations, workflows often need to be dispatched to large compute clusters. Besides local execution on the researcher's machine, it is possible to use execute workflows on REANA instances[@Simko.2019] or GA4GH TES servers[@Kanitz.2024]. REANA is a reproducible research data analysis platform provided by CERN. FAIRagro operates their own REANA installation in de.NBI Cloud. The conformance with the CWL conformance test suite of `commonwl`'s backends is tracked using continuous integration and is 99% (97% required) across all current backends. 
+
+## Trade-offs and limitations
+- A Git repository is required, and observation only captures effects visible in the working tree.
+- Authored tools are only as portable as their container definition. Without a container, a tool depends on the local environment.
+- The tool targets command-line driven workflows. Interactive or graphical programs cannot be recorded.
 
 # Research impact statement
 SciWIn-Client addresses a critical gap in open and reproducible science: The gap between the complexity of formal workflow standards and the practical capabilities of researchers. By automating CWL generation directly from command-line interactions, it enables scientists, regardless of their software engineering background, to produce structured, version-controlled, and portable workflow definitions without manual authoring of verbose specifications.
@@ -97,7 +126,7 @@ Within FAIRagro, SciWIn-Client is being used in concrete research workflows. For
 
 SciWIn-Client is also integrated into the FAIRagro software infrastructure. Its core functionality is provided as a shared crate used by SciWIn-Studio, a graphical application for workflow authoring that is outside the scope of this publication. Workflows created with SciWIn can also be executed on the FAIRagro REANA instance operated through de.NBI. Through its support for the Task Execution Service (TES) API, SciWIn can also execute workflows on any compatible TES server, including the upcoming v3.x release of ARUNA [@Dieckmann.2023;@ArunaObjectStorageTeam.2026].
 
-SciWIn-Client has accumulated over 1700 downloads across its published releases as of September 2026.
+SciWIn-Client has accumulated over 1700 downloads across its published releases as of October 2026.
 The source code is openly available at https://github.com/fairagro/sciwin under the MIT or Apache-2.0 license, and the project welcomes community contributions.
 
 # CRediT authorship contribution statement
