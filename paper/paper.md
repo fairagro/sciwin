@@ -81,7 +81,14 @@ Rust was chosen for practical reasons beyond type safety. It produces a single s
 
 
 ## Authoring tools
-When users invoke a command or script using the `s4n create` prefix SciWIn-Client automatically generates a tool. It follows a simple 4 step process:
+When users invoke a command or script using the `s4n create` prefix SciWIn-Client automatically generates a tool. 
+
+Example:
+```bash
+s4n create -c Dockerfile --container-tag pyplot --enable-network python3 code/plot_election.py --data data.csv --features features.json
+```
+
+It follows a simple 4 step process:
 
 1. The command-line is used to parse `inputs` and `baseCommand` to construct a preliminary `CommandLineTool`.
 2. The  preliminary `CommandLineTool` is executed locally ("probe"). Git is used in background to determine changes in the file system. Changed files and directories are added as `outputs`. 
@@ -116,17 +123,12 @@ When performing high demanding calculations, workflows often need to be dispatch
 - The tool targets command-line driven workflows. Interactive or graphical programs cannot be recorded.
 
 # Research impact statement
-SciWIn-Client addresses a critical gap in open and reproducible science: The gap between the complexity of formal workflow standards and the practical capabilities of researchers. By automating CWL generation directly from command-line interactions, it enables scientists, regardless of their software engineering background, to produce structured, version-controlled, and portable workflow definitions without manual authoring of verbose specifications.
+SciWIn-Client is in use in FAIRagro, where it was used to build the workflow for Use Case 6 (high-throughput crop growth simulation) [@Gitahi.2026;@Gitahi.2026b].  The resulting workflow was published on WorkflowHub [@Gustafsson.2025] and annotated with DataPLANT tooling, which shows that SciWIn-created workflows can be moved into ARC-based research data management [@Brilhaus.2026]. Workflows can be executed on the FAIRagro REANA instance operated in the de.NBI Cloud.
 
-SciWIn-Client was presented at the 2nd Conference on Research Data Infrastructure (CoRDI 2025) in the contribution __Easy creation of reproducible computational workflows with SciWIn-Client__ [@Krumsieck.2025;@Krumsieck.2025b]. A workshop on SciWIn-Client was subsequently held at the Boosting Biodata Bootcamp 2026 [@Leidel.2026].
+The software has been taught and presented to a target community. SciWIn-Client was presented at the 2nd Conference on Research Data Infrastructure (CoRDI 2025) [@Krumsieck.2025;@Krumsieck.2025b]. A hands-on workshop on SciWIn-Client was held at the Boosting Biodata Bootcamp 2026 [@Leidel.2026]. It has also been demonstrated at several further events, including the NFDI4LS Conference and the FAIRagro Community Summit [@Krumsieck.2025c;@Krumsieck.2025d;@Krumsieck.2026b;@Krumsieck.2026].
 
-Further recent community engagement has included presentations and demonstrations the FDM Niedersachsen DataDays 2025 [@Krumsieck.2025c], the NFDI4LS Conference [@Krumsieck.2026b], the FAIRagro Talk series [@Krumsieck.2025d], and the FAIRagro Community Summit 2026 [@Krumsieck.2026].
+The release binaries have been downloaded more than 1700 times as of October 2026 ([Collected download data](https://github.com/fairagro/m4.4_metrics)) The supporting libraries `commonwl`, `reana` and `rocrate` are published separatley on `crates.io`. The `sciwin` library also the core of SciWIn-Studio.
 
-Within FAIRagro, SciWIn-Client is being used in concrete research workflows. For example FAIRagro Use Case 6 on high-throughput crop growth simulation. The work was demonstrated at the FAIRagro Community Summit 2026 [@Gitahi.2026]. Compatibility with DataPLANT's ARC format has been showcased in a WorkflowHub [@Gustafsson.2025] publication using the same FAIRagro Use Case 6 workflow [@Gitahi.2026b] by annotating the SciWIn-created workflow with DataPLANT tooling. The publication was created as a joint effort between FAIRagro and DataPLANT [@Brilhaus.2026].
-
-SciWIn-Client is also integrated into the FAIRagro software infrastructure. Its core functionality is provided as a shared crate used by SciWIn-Studio, a graphical application for workflow authoring that is outside the scope of this publication. Workflows created with SciWIn can also be executed on the FAIRagro REANA instance operated through de.NBI. Through its support for the Task Execution Service (TES) API, SciWIn can also execute workflows on any compatible TES server, including the upcoming v3.x release of ARUNA [@Dieckmann.2023;@ArunaObjectStorageTeam.2026].
-
-SciWIn-Client has accumulated over 1700 downloads across its published releases as of October 2026.
 The source code is openly available at https://github.com/fairagro/sciwin under the MIT or Apache-2.0 license, and the project welcomes community contributions.
 
 # CRediT authorship contribution statement
