@@ -82,6 +82,7 @@ Rust was chosen for practical reasons beyond type safety. It produces a single s
 
 ## Authoring tools
 When users invoke a command or script using the `s4n create` prefix SciWIn-Client automatically generates a tool. It follows a simple 4 step process:
+
 1. The command-line is used to parse `inputs` and `baseCommand` to construct a preliminary `CommandLineTool`.
 2. The  preliminary `CommandLineTool` is executed locally ("probe"). Git is used in background to determine changes in the file system. Changed files and directories are added as `outputs`. 
 3. Requirement metadata such as containers, network access, environment variables are added to the preliminary `CommandLineTool` by `s4n create`'s command options. 
