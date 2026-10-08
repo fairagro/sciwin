@@ -157,6 +157,7 @@ A tool recorded from a local run depends on the researcher's environment. To mak
 SciWIn-Client supports workflow execution on multiple backends (see \autoref{{tbl:backends}}) through the `s4n execute` command. The desired backend can be selected using the `--engine` flag. `s4n execute` accepts a CWL document or a Workflow RO-Crate [@{Bacall.2026}] or Workflow Run RO-Crate [@Leo.2024] for every backend.
 
 : Overview of available backends.\label{tbl:backends}
+
 | Backend | Purpose |
 | --- | --- |
 | `local` | Runs on the researcher's machine. Steps with a `DockerRequirement` run in Docker, Singularity or Podman. |
