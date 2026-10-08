@@ -88,7 +88,7 @@ Example:
 s4n create -c Dockerfile --container-tag pyplot --enable-network \
 python3 code/plot_election.py --data data.csv --features features.json
 ```
-would produce:
+would produce a `CommandLineTool` with two prefixed inputs as well as Docker- and Network-Requirements:
 ```yaml
 #!/usr/bin/env cwl-runner
 
