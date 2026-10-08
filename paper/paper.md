@@ -135,7 +135,7 @@ baseCommand:
 - code/plot_election.py
 ```
 
-It follows a simple 4 step process:
+The tool generation procedure follows a simple 4 step process:
 
 1. The command-line is used to parse `inputs` and `baseCommand` to construct a preliminary `CommandLineTool`.
 2. The preliminary `CommandLineTool` is executed locally ("probe"). Git is used in background to determine changes in the file system. Changed files and directories are added as `outputs`. 
