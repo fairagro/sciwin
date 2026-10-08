@@ -161,6 +161,7 @@ SciWIn-Client supports workflow execution on multiple backends through the `s4n 
 | `docker` | Runs every step in a container through the local Docker daemon. |
 | `tes` | Submits tasks to a GA4GH Task Execution Service (TES) 1.1 server [@Kanitz.2024]. |
 | `reana` | Submits the workflow to a REANA instance. (Not part of `commonwl`) |
+[]{label="floatlabel"}
 
 The conformance with the CWL conformance test suite of `commonwl`'s backends is tracked using continuous integration and is 99% (97% required) across all current backends. 
 
