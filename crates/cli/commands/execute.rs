@@ -389,8 +389,12 @@ async fn wait_and_report(
             Ok(())
         }
         _ => match runner.failure_detail(run_id).await? {
-            Some(detail) => miette::bail!("workflow ended with status {status:?}: {detail}"),
-            None => miette::bail!("workflow ended with status {status:?}"),
+            Some(detail) => {
+                miette::bail!("workflow ended with status {status:?}: {detail}");
+            }
+            None => {
+                miette::bail!("workflow ended with status {status:?}");
+            }
         },
     }
 }
@@ -398,10 +402,12 @@ async fn wait_and_report(
 /// Builds a `ReanaRunner` from `REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` env vars (settable directly, or via a
 /// `.env` file -- see `dotenvy::dotenv()` in `main.rs`).
 fn reana_runner() -> miette::Result<ReanaRunner> {
-    let url = env::var("REANA_SERVER_URL")
-        .map_err(|_| miette::miette!("REANA_SERVER_URL is not set (see `s4n execute run --help`)"))?;
-    let token = env::var("REANA_ACCESS_TOKEN")
-        .map_err(|_| miette::miette!("REANA_ACCESS_TOKEN is not set (see `s4n execute run --help`)"))?;
+    let url = env::var("REANA_SERVER_URL").map_err(|_| {
+        miette::miette!("REANA_SERVER_URL is not set (see `s4n execute run --help`)")
+    })?;
+    let token = env::var("REANA_ACCESS_TOKEN").map_err(|_| {
+        miette::miette!("REANA_ACCESS_TOKEN is not set (see `s4n execute run --help`)")
+    })?;
 
     let server_url = Url::parse(&url).into_diagnostic()?;
     debug!("connecting to REANA at {server_url}");

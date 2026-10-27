@@ -66,7 +66,9 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
         let input = match from_parts.as_slice() {
             ["@inputs", input] => input,
             [input] => input,
-            _ => miette::bail!("Invalid input path"),
+            _ => {
+                miette::bail!("Invalid input path");
+            }
         };
 
         let to_filename = resolve(to_parts[0])?;
@@ -92,7 +94,9 @@ pub fn connect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<()> 
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
             [output] => output,
-            _ => miette::bail!("Invalid output path"),
+            _ => {
+                miette::bail!("Invalid output path");
+            }
         };
 
         let from_filename = resolve(from_parts[0])?;
@@ -163,7 +167,9 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
         let input = match from_parts.as_slice() {
             ["@inputs", input] => input,
             [input] => input,
-            _ => miette::bail!("Invalid input path"),
+            _ => {
+                miette::bail!("Invalid input path");
+            }
         };
         if to_parts.len() != 2 {
             miette::bail!(
@@ -194,7 +200,9 @@ pub fn disconnect_workflow_nodes(args: &ConnectWorkflowArgs) -> miette::Result<(
         let output = match to_parts.as_slice() {
             ["@outputs", output] => output,
             [output] => output,
-            _ => miette::bail!("Invalid output path"),
+            _ => {
+                miette::bail!("Invalid output path");
+            }
         };
 
         workflow::remove_workflow_output_connection(
