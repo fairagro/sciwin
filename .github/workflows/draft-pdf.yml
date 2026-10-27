@@ -6,7 +6,7 @@ on:
     paths:
       - '*.github/workflows/draft-pdf.yml'
       - 'paper/**'
-      - '!paper/*.pdf''
+      - '!paper/*.pdf'
 
 jobs:
   paperdraft:
