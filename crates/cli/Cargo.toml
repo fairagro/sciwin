@@ -42,6 +42,7 @@ tracing-subscriber.workspace = true
 similar.workspace = true
 ignore.workspace = true
 prettytable-rs.workspace = true
+merman.workspace = true
 
 [dev-dependencies]
 shlex = { workspace = true }

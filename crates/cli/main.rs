@@ -153,7 +153,12 @@ async fn run() -> miette::Result<()> {
         Commands::Create(args) => handle_create_command(args).await,
         Commands::Connect(args) => connect_workflow_nodes(args),
         Commands::Disconnect(args) => disconnect_workflow_nodes(args),
-        Commands::Visualize(args) => visualize(&args.filename, &args.renderer, args.no_defaults),
+        Commands::Visualize(args) => visualize(
+            &args.filename,
+            &args.renderer,
+            args.no_defaults,
+            args.render,
+        ),
         Commands::Save(name) => stage_and_commit_workflow(name),
     }
 }

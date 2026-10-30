@@ -42,6 +42,7 @@ slugify = "0.1.0"
 ignore = "0.4.23"
 similar = "3.1.1"
 file_type = { version = "0.9.0", features = ["httpd"] }
+merman = "0.9.3"
 
 # Networking
 url = "2.5.8"
