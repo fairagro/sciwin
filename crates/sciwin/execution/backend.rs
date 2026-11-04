@@ -67,13 +67,12 @@ pub async fn tes_backend_from_config(
     storage: Arc<StorageBackend>,
 ) -> miette::Result<Arc<dyn TaskBackend>> {
     let data_store = StoragePath::from_url(config.storage_url);
-    let http = match config.token {
-        Some(token) => tes::http::Config {
-            auth: Some(tes::http::HttpAuthConfig::Bearer { token }),
-            ..Default::default()
-        },
-        None => tes::http::Config::default(),
+
+    let http = tes::http::Config {
+        auth: config.auth,
+        ..Default::default()
     };
+    
     let tes_config = tes::Config::builder().url(config.url).http(http).build();
     let backend = TesBackend::new(tes_config, storage, data_store)
         .await
@@ -87,7 +86,7 @@ pub struct TesBackendConfig {
     pub url: Url,
     /// Where TES uploads/downloads through, e.g. `s3://my-bucket` -- cannot be local.
     pub storage_url: Url,
-    pub token: Option<String>,
+    pub auth: Option<tes::http::HttpAuthConfig>,
 }
 
 fn tes_config_from_env() -> miette::Result<TesBackendConfig> {
@@ -96,11 +95,39 @@ fn tes_config_from_env() -> miette::Result<TesBackendConfig> {
     let url = Url::parse(&url).into_diagnostic()?;
     let storage_url = tes_storage_url_from_env()?;
     let token = env::var("TES_TOKEN").ok();
-    Ok(TesBackendConfig {
-        url,
-        storage_url,
-        token,
-    })
+    let username = env::var("TES_USERNAME").ok();
+    if let Some(user) = username {
+        if token.is_some() {
+            return Err(miette::miette!(
+                "TES_USERNAME and TES_TOKEN are mutually exclusive; use only one"
+            ));
+        }
+        let password = env::var("TES_PASSWORD").map_err(|_| {
+            miette::miette!("TES_PASSWORD is not set (needed for --engine tes with TES_USERNAME)")
+        })?;
+        let auth = tes::http::HttpAuthConfig::Basic {
+            username: user,
+            password,
+        };
+        Ok(TesBackendConfig {
+            url,
+            storage_url,
+            auth: Some(auth),
+        })
+    } else if let Some(token) = token {
+        let auth = tes::http::HttpAuthConfig::Bearer { token };
+        Ok(TesBackendConfig {
+            url,
+            storage_url,
+            auth: Some(auth),
+        })
+    } else {
+        Ok(TesBackendConfig {
+            url,
+            storage_url,
+            auth: None,
+        })
+    }
 }
 
 fn tes_storage_url_from_env() -> miette::Result<Url> {
