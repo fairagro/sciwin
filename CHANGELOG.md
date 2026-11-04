@@ -1,3 +1,8 @@
+# Unreleased
+## 🚀 Features
+- `s4n visualize` can render mermaid diagrams directly now.
+- TES backend can use http basic auth using username & password.
+
 # v2.0.1
 ## 🐛 Bugfixes
 - Fixed critical but making auto-container resolved images unexecutable. fix generated CWL with with appending the algorithm after the @-sign sha256:{uuid}
