@@ -1,9 +1,10 @@
 use clap::{Args, ValueEnum};
-use miette::miette;
-use tracing::debug;
+use merman::{OperationControl, RenderOutput, RenderRequest, SvgRequest};
+use miette::{IntoDiagnostic, miette};
 use sciwin::cwl::{documents::CWLDocument, load_cwl_file};
 use sciwin::visualize::{DotRenderer, MermaidRenderer, render};
 use std::path::PathBuf;
+use tracing::debug;
 
 #[derive(Args, Debug)]
 pub struct VisualizeWorkflowArgs {
@@ -17,9 +18,14 @@ pub struct VisualizeWorkflowArgs {
         default_value_t = false
     )]
     pub no_defaults: bool,
+    #[arg(
+        long = "render",
+        help = "Render diagram as svg. (Only works with mermaid)"
+    )]
+    pub render: bool,
 }
 
-#[derive(Default, Debug, Clone, ValueEnum)]
+#[derive(Default, Debug, Clone, ValueEnum, PartialEq)]
 pub enum Renderer {
     #[default]
     Mermaid,
@@ -27,7 +33,12 @@ pub enum Renderer {
 }
 
 #[allow(clippy::disallowed_macros)]
-pub fn visualize(filename: &PathBuf, renderer: &Renderer, no_defaults: bool) -> miette::Result<()> {
+pub fn visualize(
+    filename: &PathBuf,
+    renderer: &Renderer,
+    no_defaults: bool,
+    render_svg: bool,
+) -> miette::Result<()> {
     debug!("rendering {filename:?} with {renderer:?} (no_defaults={no_defaults})");
     let cwl = load_cwl_file(filename, true)
         .map_err(|e| miette!("Could mot load Workflow {filename:?}: {e}"))?;
@@ -45,6 +56,21 @@ pub fn visualize(filename: &PathBuf, renderer: &Renderer, no_defaults: bool) -> 
         miette!("Could not render visualization for {filename:?} using {renderer:?}: {e}")
     })?;
 
-    println!("{code}");
+    if render_svg && renderer == &Renderer::Mermaid {
+        let output = merman::Renderer::new()
+            .render(RenderRequest::svg(
+                &code,
+                OperationControl::new(),
+                SvgRequest::default(),
+            ))
+            .into_diagnostic()?;
+
+        let RenderOutput::Svg(Some(svg)) = output else {
+            miette::bail!("no Mermaid diagram detected");
+        };
+        println!("{}", svg.svg());
+    } else {
+        println!("{code}");
+    }
     Ok(())
 }

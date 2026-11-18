@@ -12,7 +12,8 @@
 // docs/src/content/versions/<slug>.json sidebar config) as real files meant to be committed --
 // released docs never change, so there is no need to regenerate them on every build.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const docsRoot = path.resolve(import.meta.dirname, '..');
@@ -139,6 +140,7 @@ function main() {
 	}
 
 	let overlayRev = 'HEAD';
+	const generated = [];
 
 	for (const [slug, tag] of outdated) {
 		console.log(`Archiving docs version ${slug} from tag ${tag}...`);
@@ -146,14 +148,26 @@ function main() {
 
 		overlayContent(overlayRev, tag);
 		overlayRev = tag;
+		// A tag cut after its own snapshot was committed contains docs/<slug>/ already, which
+		// would make starlight-versions skip archiving and fail on the missing sidebar config.
+		removeArchivedSlug(slug);
 
 		current.set(slug, tag);
 		saveCurrentVersions(current);
 
 		build();
+		generated.push(slug);
 	}
 
+	// Restoring HEAD would overwrite regenerated snapshots with the previously committed ones.
+	const stash = mkdtempSync(path.join(os.tmpdir(), 'docs-versions-'));
+	for (const slug of generated) cpSync(path.join(docsRoot, 'src/content/docs', slug), path.join(stash, slug), { recursive: true });
 	overlayContent(overlayRev, 'HEAD');
+	for (const slug of generated) {
+		rmSync(path.join(docsRoot, 'src/content/docs', slug), { recursive: true, force: true });
+		cpSync(path.join(stash, slug), path.join(docsRoot, 'src/content/docs', slug), { recursive: true });
+	}
+	rmSync(stash, { recursive: true, force: true });
 	console.log('Version sync complete:', Object.fromEntries(current));
 }
 

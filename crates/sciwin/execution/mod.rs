@@ -414,8 +414,12 @@ pub trait WorkflowRunner {
             Ok(())
         } else {
             match self.failure_detail(&run_id).await.ok().flatten() {
-                Some(detail) => miette::bail!("workflow ended with status {status:?}: {detail}"),
-                None => miette::bail!("workflow ended with status {status:?}"),
+                Some(detail) => {
+                    miette::bail!("workflow ended with status {status:?}: {detail}");
+                }
+                None => {
+                    miette::bail!("workflow ended with status {status:?}");
+                }
             }
         }
     }
