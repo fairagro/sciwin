@@ -6,6 +6,7 @@
 - `--json` output for `list`, `connect`, `disconnect` and `execute reana status`. `list --json` includes port types and, for a single workflow, its connection status.
 - `sciwin::authoring::workflow::connection_status` exposes a workflow's wiring to library users.
 - `connect` and `disconnect` accept paths to `.cwl` files for the workflow and the tools. In `--from workflows/calc/calc.cwl#results` (or `.../calc.cwl/results`) the tool is `workflows/calc/calc.cwl` and `results` is its output. `#` separates the two if present, else the last `/`. Names keep working as before.
+- `save` accepts a path to the workflow's `.cwl` file too, and fails clearly if the file does not exist.
 
 - `create` finds outputs from the trial run itself instead of `git status`: the project no longer has to be committed first, and outputs that overwrite uncommitted files are found too. A git repository is only needed with `--commit`.
 - git `user.name`/`user.email` are only required by commands that commit.

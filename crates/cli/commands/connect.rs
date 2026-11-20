@@ -1,10 +1,11 @@
-use crate::{cwl::resolve_filename, print_diff, print_json};
+use crate::{
+    cwl::{has_cwl_extension, resolve_filename, workflow_filename},
+    print_diff, print_json,
+};
 use clap::Args;
 use miette::{IntoDiagnostic, miette};
-use sciwin::authoring::workflow::{self, WorkflowSlot, find_step_by_run, step_id_for_tool};
-use sciwin::authoring::{
-    paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name},
-    workflow::save_workflow,
+use sciwin::authoring::workflow::{
+    self, WorkflowSlot, find_step_by_run, save_workflow, step_id_for_tool,
 };
 use sciwin::cwl::{
     documents::{CWLDocument, Workflow},
@@ -61,26 +62,9 @@ impl<'a> Endpoint<'a> {
     }
 }
 
-fn has_cwl_extension(name: &str) -> bool {
-    Path::new(name)
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("cwl"))
-}
-
 /// True when `tool` is a file path rather than a name to look up in the workflows folder.
 fn is_path(tool: &str) -> bool {
     tool.contains(['/', '\\']) || (has_cwl_extension(tool) && Path::new(tool).is_file())
-}
-
-/// The workflow file `name` refers to: itself if it ends in `.cwl`, else
-/// `workflows/<name>/<name>.cwl`.
-fn workflow_filename(name: &str) -> String {
-    if has_cwl_extension(name) {
-        return name.to_string();
-    }
-    get_qualified_filename_by_name(name, Path::new(WORKFLOWS_FOLDER).join(name))
-        .to_string_lossy()
-        .into_owned()
 }
 
 fn create_workflow_file(name: &str, filename: &str) -> miette::Result<(PathBuf, String)> {
