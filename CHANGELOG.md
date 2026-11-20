@@ -7,6 +7,12 @@
 - `sciwin::authoring::workflow::connection_status` exposes a workflow's wiring to library users.
 - `connect` and `disconnect` accept paths to `.cwl` files for the workflow and the tools. In `--from workflows/calc/calc.cwl#results` (or `.../calc.cwl/results`) the tool is `workflows/calc/calc.cwl` and `results` is its output. `#` separates the two if present, else the last `/`. Names keep working as before.
 
+- `create` finds outputs from the trial run itself instead of `git status`: the project no longer has to be committed first, and outputs that overwrite uncommitted files are found too. A git repository is only needed with `--commit`.
+- git `user.name`/`user.email` are only required by commands that commit.
+
+> [!IMPORTANT]
+> `create` no longer commits by default (**Breaking Change**). Pass `--commit` to commit the tool and its outputs. `--no-commit` was removed.
+
 ## 🐛 Bugfixes
 - `list` showed a workflow input as unconnected when it fed a step input of a different name.
 - `list` failed on workflows whose steps are not CommandLineTools.

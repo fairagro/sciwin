@@ -162,7 +162,7 @@ Options:
   -c, --container-image <CONTAINER_IMAGE>  An image to pull from e.g. docker hub or path to a Dockerfile
   -t, --container-tag <CONTAINER_TAG>      The tag for the container when using a Dockerfile
   -r, --raw                                Outputs the raw CWL contents to terminal
-      --no-commit                          Do not commit at the end of tool creation
+      --commit                             Commit the tool and the files its run produced (needs a git repository)
       --no-run                             Do not run given command
       --clean                              Deletes created outputs after usage
       --no-defaults                        Removes default values from inputs

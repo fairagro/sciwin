@@ -85,13 +85,6 @@ if __name__ == "__main__":
     main()
 ```
 
-To run the tool creation command the changes need to be committed beforehand, e.g. via
-
-```bash
-git add .
-git commit -m "add python script"
-```
-
 The python script usually would be called with the command `python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv > results.csv`. To create a CommandLineTool this only needs to be prefixed with `s4n create` or `s4n run`. However the `>` operator needs to be escaped using a backslash.
 ```bash 
 s4n create python3 workflows/calculation/calculation.py --speakers data/speakers_revised.csv --population data/population.csv \> results.csv
@@ -191,14 +184,6 @@ if __name__ == "__main__":
 ```
 
 To create the tool for this script the following command can be used to create the CWL definition. SciWIn client automatically determines that `figure.png` shall be listed as an output for this tool.
-
-Again, first make sure to commit the changes:
-
-```bash
-git add .
-git commit -m "add python plot script"
-```
-
 
 ```bash
 s4n create python3 workflows/plot/plot.py --data results.csv

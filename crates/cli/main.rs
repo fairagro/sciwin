@@ -122,6 +122,19 @@ fn print_execute_help(short: bool) {
     }
 }
 
+/// Whether `command` creates a git commit, and so needs `user.name` and `user.email`.
+fn commits(command: &Commands) -> bool {
+    match command {
+        Commands::Init(_)
+        | Commands::Remove(_)
+        | Commands::Save(_)
+        | Commands::Install(_)
+        | Commands::Uninstall(_) => true,
+        Commands::Create(args) => args.commit,
+        _ => false,
+    }
+}
+
 async fn run() -> miette::Result<()> {
     // Only --engine reana/tes need REANA_SERVER_URL/REANA_ACCESS_TOKEN or TES_URL/TES_STORAGE/TES_TOKEN; every
     // other command works fine with no `.env` file at all, so a missing file is not an error.
@@ -143,7 +156,9 @@ async fn run() -> miette::Result<()> {
     }
 
     set_assume_yes(args.yes);
-    check_git_config()?;
+    if commits(&args.command) {
+        check_git_config()?;
+    }
     match &args.command {
         Commands::Init(args) => handle_init_command(args),
         Commands::Execute { command } => handle_execute_commands(command).await,
@@ -222,6 +237,17 @@ mod tests {
         let out =
             default_to_execute_run(to_strings(&["s4n", "-y", "execute", "wf.cwl"]).into_iter());
         assert_eq!(out, to_strings(&["s4n", "-y", "execute", "run", "wf.cwl"]));
+    }
+
+    #[test]
+    fn only_committing_commands_need_a_git_identity() {
+        let parse = |args: &[&str]| Cli::parse_from(args).command;
+        assert!(!commits(&parse(&["s4n", "list"])));
+        assert!(!commits(&parse(&["s4n", "create", "echo", "hi"])));
+        assert!(commits(&parse(&[
+            "s4n", "create", "--commit", "echo", "hi"
+        ])));
+        assert!(commits(&parse(&["s4n", "save", "wf"])));
     }
 
     #[test]

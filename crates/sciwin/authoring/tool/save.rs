@@ -30,8 +30,6 @@ pub(super) fn save_tool_to_disk(
     yaml: &str,
     project_root: &Path,
     path: &Path,
-    repo: &Repository,
-    commit: bool,
 ) -> AuthoringResult<()> {
     let target = project_root.join_trusted_unchecked(path)?;
 
@@ -41,12 +39,40 @@ pub(super) fn save_tool_to_disk(
     }
     fs::write(&target, yaml)
         .with_context(|| format!("Creation of file {} failed", target.display()))?;
+    Ok(())
+}
 
-    if commit {
-        repository::stage_file(repo, &target)?;
-        //the message names the tool's place in the project, not on this machine
-        repository::commit(repo, &format!("🪄 Creation of `{}`", path.display()))?;
+/// Stages the files the trial run `produced` and, if `saved`, the tool at `path` (all
+/// relative to `project_root`), then commits everything staged.
+pub(super) fn commit_tool(
+    project_root: &Path,
+    path: &Path,
+    saved: bool,
+    produced: &[&str],
+) -> AuthoringResult<()> {
+    if !saved && produced.is_empty() {
+        return Ok(());
     }
+    let repo = Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
+        path: project_root.to_path_buf(),
+        source,
+    })?;
+    for file in produced {
+        let file = project_root.join_trusted_checked(file)?;
+        if file.is_dir() {
+            repository::stage_dir(&repo, &file)?;
+        } else {
+            repository::stage_file(&repo, &file)?;
+        }
+    }
+    //the message names the tool's place in the project, not on this machine
+    let message = if saved {
+        repository::stage_file(&repo, project_root.join_trusted_unchecked(path)?)?;
+        format!("🪄 Creation of `{}`", path.display())
+    } else {
+        format!("🪄 Outputs of `{}`", path.display())
+    };
+    repository::commit(&repo, &message)?;
     Ok(())
 }
 

@@ -189,11 +189,6 @@ This correct creation of the tool can be tested using
 s4n execute workflows/shp2geojson/shp2geojson.cwl
 ```
 
-The outputted file now needs to be committed to move on
-```bash
-git add . && git commit -m "Execution of shp2geojson"
-```
-
 In the last step the plot tool needs to be created. In this tool `plotly` is used to create a `choropleth` graph based on the outputs of the preceeding steps. The packages installed to the virtual environment are needed here. A Dockerfile to use is already in the repo.
 ```bash
 s4n create -c Dockerfile --container-tag pyplot --enable-network python code/plot_map.py --geojson districts.geojson --csv data.csv --feature F3 --on gebiet-nr:BEZNUM --output_name plot

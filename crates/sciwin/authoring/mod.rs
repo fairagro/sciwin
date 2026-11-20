@@ -12,8 +12,8 @@
 //!            |              and the files it needs staged into its working dir
 //!            |  tool::probe          (skipped when `no_run` is set)
 //!            v
-//!   + discovered outputs  ..... run it once, diff the working tree, and attribute
-//!            |                   whatever appeared to the tool
+//!   + discovered outputs  ..... run it once and attribute whatever appeared in its
+//!            |                   working directory to the tool
 //!            |  tool::requirements
 //!            v
 //!   + container / network / env / mounts
@@ -57,13 +57,6 @@ pub type AuthoringResult<T> = Result<T, AuthoringError>;
 /// `git init` -- so they carry structured data instead of a formatted message.
 #[derive(Error, Diagnostic, Debug)]
 pub enum AuthoringError {
-    #[error("uncommitted changes detected: {}", files.join(", "))]
-    #[diagnostic(
-        code = "authoring::DirtyWorkingTree",
-        help = "commit or stash the listed files, or skip the trial run"
-    )]
-    DirtyWorkingTree { files: Vec<String> },
-
     #[error("could not find a git repository at {}", path.display())]
     #[diagnostic(
         code = "authoring::NoRepository",
