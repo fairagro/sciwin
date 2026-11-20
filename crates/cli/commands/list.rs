@@ -4,15 +4,16 @@ use colored::Colorize;
 use ignore::WalkBuilder;
 use miette::IntoDiagnostic;
 use prettytable::{Cell, Row, Table, row};
-use sciwin::authoring::workflow::{ConnectionStatus, SlotState, SlotStatus, connection_status};
+use sciwin::authoring::{
+    summary::{DocumentSummary, summarize_dir, summarize_file},
+    workflow::{SlotState, SlotStatus, connection_status},
+};
 use sciwin::cwl::{
     Identifiable, docstring,
     documents::{CWLDocument, CommandLineTool, ExpressionTool, Workflow},
     load_cwl_file,
     requirements::DockerRequirement,
 };
-use serde::Serialize;
-use serde_json::Value;
 use std::{
     env,
     fs::FileType,
@@ -52,9 +53,9 @@ pub fn handle_list_command(args: &ListCWLArgs) -> miette::Result<()> {
         }
     };
     match (target.is_file(), target.is_dir(), args.json) {
-        (true, _, true) => print_json(&summarize_file(&target)?),
+        (true, _, true) => print_json(&relative_to_cwd(vec![summarize_file(&target)?])?[0]),
         (true, _, false) => list_single_cwl(&target),
-        (_, true, true) => print_json(&summarize_dir(&target)?),
+        (_, true, true) => print_json(&relative_to_cwd(summarize_dir(&target)?)?),
         (_, true, false) => list_multiple(&target, args.list_all),
         _ => {
             miette::bail!("No such file or directory: {}", target.display());
@@ -62,124 +63,15 @@ pub fn handle_list_command(args: &ListCWLArgs) -> miette::Result<()> {
     }
 }
 
-/// A CWL document as `list --json` reports it.
-#[derive(Debug, Serialize)]
-pub struct DocumentSummary {
-    /// File stem, the name `connect` and `remove` resolve.
-    pub name: String,
-    pub path: PathBuf,
-    pub class: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub doc: Option<String>,
-    pub inputs: Vec<Port>,
-    pub outputs: Vec<Port>,
-    /// Only set when listing a single workflow.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub connections: Option<ConnectionStatus>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Port {
-    pub id: String,
-    /// The CWL type, as it would be written in the document.
-    pub r#type: Value,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub default: Option<Value>,
-}
-
-pub fn summarize_file(path: &Path) -> miette::Result<DocumentSummary> {
-    let doc = load_cwl_file(path, true)
-        .map_err(|e| miette::miette!("Could not load CWL File {}: {e}", path.display()))?;
-    let mut summary = summarize(path, &doc)?;
-    if let CWLDocument::Workflow(wf) = &doc {
-        summary.connections = Some(connection_status(wf, path)?);
-    }
-    Ok(summary)
-}
-
-/// Every parseable CWL file below `dir`, honoring `.gitignore`.
-pub fn summarize_dir(dir: &Path) -> miette::Result<Vec<DocumentSummary>> {
-    let mut summaries = vec![];
-    for entry in cwl_files(dir) {
-        match load_cwl_file(entry.path(), true) {
-            Ok(doc) => summaries.push(summarize(entry.path(), &doc)?),
-            Err(e) => debug!("skipping {}: {e}", entry.path().display()),
+/// Shortens each summary's path to be relative to the working directory where it is below it.
+fn relative_to_cwd(mut summaries: Vec<DocumentSummary>) -> miette::Result<Vec<DocumentSummary>> {
+    let cwd = env::current_dir().into_diagnostic()?;
+    for summary in &mut summaries {
+        if let Ok(relative) = summary.path.strip_prefix(&cwd) {
+            summary.path = relative.to_path_buf();
         }
     }
     Ok(summaries)
-}
-
-fn summarize(path: &Path, doc: &CWLDocument) -> miette::Result<DocumentSummary> {
-    let inputs = doc
-        .get_inputs()
-        .into_iter()
-        .filter_map(|i| Some((i.id?, i.r#type, i.default)))
-        .map(|(id, ty, default)| {
-            Ok(Port {
-                id,
-                r#type: to_json(&ty)?,
-                default: default.as_ref().map(to_json).transpose()?,
-            })
-        })
-        .collect::<miette::Result<_>>()?;
-    // output parameter types differ per class, so there is no generic accessor
-    let outputs = match doc {
-        CWLDocument::CommandLineTool(t) => {
-            output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type)))
-        }
-        CWLDocument::ExpressionTool(t) => {
-            output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type)))
-        }
-        CWLDocument::Operation(t) => output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type))),
-        CWLDocument::Workflow(t) => output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type))),
-    }?;
-    let cwd = env::current_dir().into_diagnostic()?;
-    Ok(DocumentSummary {
-        name: path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default(),
-        path: path.strip_prefix(&cwd).unwrap_or(path).to_path_buf(),
-        class: doc.get_class().to_string(),
-        label: doc.get_label().cloned(),
-        doc: doc.get_doc().map(|d| docstring(d.clone())),
-        inputs,
-        outputs,
-        connections: None,
-    })
-}
-
-fn output_ports<'a, T: Serialize + 'a>(
-    outputs: impl Iterator<Item = (&'a Option<String>, &'a T)>,
-) -> miette::Result<Vec<Port>> {
-    outputs
-        .filter_map(|(id, ty)| Some((id.clone()?, ty)))
-        .map(|(id, ty)| {
-            Ok(Port {
-                id,
-                r#type: to_json(ty)?,
-                default: None,
-            })
-        })
-        .collect()
-}
-
-fn to_json(value: &impl Serialize) -> miette::Result<Value> {
-    serde_json::to_value(value).into_diagnostic()
-}
-
-fn cwl_files(dir: &Path) -> impl Iterator<Item = ignore::DirEntry> {
-    WalkBuilder::new(dir)
-        .hidden(true)
-        .git_ignore(true)
-        .git_exclude(true)
-        .git_global(true)
-        .build()
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_some_and(|ft| ft.is_file()))
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "cwl"))
 }
 
 fn list_single_cwl(filename: impl AsRef<Path>) -> miette::Result<()> {
@@ -523,59 +415,11 @@ fn print_line() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
-
-    fn testdata(path: &str) -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../testdata")
-            .join(path)
-    }
-
-    #[test]
-    fn summarizes_tool_ports_with_types() {
-        let path = testdata("hello_world/workflows/calculation/calculation.cwl");
-        let json = serde_json::to_value(summarize_file(&path).unwrap()).unwrap();
-
-        assert_eq!(json["name"], "calculation");
-        assert_eq!(json["class"], "CommandLineTool");
-        assert_eq!(json["inputs"][0]["id"], "population");
-        assert_eq!(json["inputs"][0]["type"], "File");
-        assert!(json["inputs"][0]["default"].is_object());
-        assert_eq!(json["outputs"][0], json!({"id": "results", "type": "File"}));
-        assert!(json.get("connections").is_none());
-    }
-
-    #[test]
-    fn summarizes_workflow_with_connections() {
-        let path = testdata("hello_world/workflows/main/main.cwl");
-        let json = serde_json::to_value(summarize_file(&path).unwrap()).unwrap();
-
-        assert_eq!(json["class"], "Workflow");
-        let connections = &json["connections"];
-        assert_eq!(
-            connections["inputs"][0],
-            json!({"id": "population", "status": "connected"})
-        );
-        assert_eq!(
-            connections["outputs"][0],
-            json!({"id": "out", "status": "connected"})
-        );
-        assert_eq!(connections["steps"][0]["id"], "plot");
-        assert_eq!(connections["steps"][0]["run"], "../plot/plot.cwl");
-    }
-
-    #[test]
-    fn summarize_dir_finds_every_cwl_file() {
-        let summaries = summarize_dir(&testdata("hello_world")).unwrap();
-        let mut names: Vec<_> = summaries.iter().map(|s| s.name.as_str()).collect();
-        names.sort_unstable();
-        assert_eq!(names, ["calculation", "main", "plot"]);
-    }
 
     #[test]
     fn missing_target_is_an_error() {
         let args = ListCWLArgs {
-            file: Some(testdata("does/not/exist.cwl")),
+            file: Some(PathBuf::from("does/not/exist.cwl")),
             ..Default::default()
         };
         assert!(handle_list_command(&args).is_err());

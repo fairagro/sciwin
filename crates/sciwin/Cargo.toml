@@ -15,10 +15,11 @@ path = "lib.rs"
 
 [dependencies]
 anyhow.workspace = true
+ignore.workspace = true
 async-stream.workspace = true
 async-trait.workspace = true
 bon.workspace = true
-chrono.workspace = true
+chrono = { workspace = true, features = ["serde"] }
 commonwl.workspace = true
 configparser.workspace = true
 crankshaft.workspace = true

@@ -6794,7 +6794,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -6842,6 +6841,7 @@ dependencies = [
  "fstest",
  "futures",
  "git2 0.21.0",
+ "ignore",
  "miette",
  "pathdiff",
  "r-description",

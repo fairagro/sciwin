@@ -3,33 +3,23 @@ use chrono::Utc;
 use clap::{Args, Subcommand};
 use miette::IntoDiagnostic;
 use sciwin::{
-    cwl::{
-        OneOrMany,
-        documents::CWLDocument,
-        engine::{ContainerEngine, InputObject, TaskBackend, load_input_file_from_file},
-        files::{Directory, File, FileOrDirectory},
-        inputs::{DefaultValue, InputSchema, InputType},
-        types::CWLType,
-    },
+    cwl::engine::{ContainerEngine, InputObject, TaskBackend},
     execution::{
-        ReanaRunner, RunId, RunStatus, TaskRunner, WorkflowRunner, docker_backend, local_backend,
-        rocrate as rocrate_input, tes_backend,
+        ReanaRunner, RunId, RunStatus, TaskRunner, WorkflowRunner, docker_backend, input_template,
+        local_backend, prepare_run, tes_backend,
     },
     project,
     provenance::{Written, reana_runner as rocrate_export, task_runner as local_rocrate_export},
-    reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
+    reana::api::client::ReanaClient,
     rocrate::validate::Validation,
 };
 use serde::Serialize;
-use serde_json::{Number, Value};
 use std::{
-    collections::HashMap,
-    env, fs,
+    env,
     path::{Path, PathBuf},
     sync::Arc,
 };
 use tracing::{debug, info, warn};
-use url::Url;
 
 pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> miette::Result<()> {
     match subcommand {
@@ -226,56 +216,13 @@ pub async fn execute_run(args: &RunArgs) -> miette::Result<()> {
         );
     }
 
-    let resolved = rocrate_input::looks_like_crate(&args.file)
-        .then(|| rocrate_input::resolve_target(&args.file))
-        .transpose()?;
-    let (cwl_path, base_path) = match &resolved {
-        // The CWL engine resolves a job file's relative `location:`s against the CWL
-        // document's own directory -- which, for a crate, can be a subdirectory of
-        // `base_dir` (e.g. `workflows/demo/demo.cwl`), not `base_dir` itself. Rebasing
-        // against the wrong directory here silently produces the wrong relative path.
-        Some(resolved) => {
-            let cwl_dir = resolved.cwl_path.parent().unwrap_or(&resolved.base_dir);
-            (
-                resolved.cwl_path.clone(),
-                dunce::canonicalize(cwl_dir).into_diagnostic()?,
-            )
-        }
-        None => {
-            let parent = args
-                .file
-                .parent()
-                .filter(|p| !p.as_os_str().is_empty())
-                .unwrap_or(Path::new("."));
-            (
-                args.file.clone(),
-                dunce::canonicalize(parent).into_diagnostic()?,
-            )
-        }
-    };
-    if resolved.is_some() {
-        info!(
-            "resolved RO-Crate {} to workflow {}",
-            args.file.display(),
-            cwl_path.display()
-        );
-    }
-
-    let mut inputs = resolved
-        .as_ref()
-        .map(|resolved| resolved.default_inputs.clone())
-        .unwrap_or_default();
-    if let Some(input_file) = &args.input_file {
-        let overrides = load_input_file_from_file(input_file.clone(), base_path)?;
-        inputs.inputs.extend(overrides.inputs);
-        inputs.requirements = overrides.requirements;
-        inputs.hints = overrides.hints;
-    }
+    // held until the run ends: a zipped crate's files live in its temp dir
+    let run = prepare_run(&args.file, args.input_file.as_deref())?;
 
     if args.engine == ExecutionEngine::Reana {
-        execute_run_reana(args, &cwl_path, inputs).await
+        execute_run_reana(args, &run.cwl_path, run.inputs).await
     } else {
-        execute_run_task_backend(args, &cwl_path, inputs).await
+        execute_run_task_backend(args, &run.cwl_path, run.inputs).await
     }
 }
 
@@ -342,7 +289,7 @@ async fn execute_run_reana(
     cwl_path: &Path,
     inputs: InputObject,
 ) -> miette::Result<()> {
-    let runner = reana_runner()?;
+    let runner = ReanaRunner::from_env()?;
 
     debug!("submitting remote run for {}", cwl_path.display());
     let run_id = runner.submit(cwl_path, inputs, None).await?;
@@ -370,55 +317,18 @@ async fn execute_run_reana(
     Ok(())
 }
 
-/// Waits for `id` to reach a terminal status, prints its outputs as pretty JSON on success, bails
-/// with `failure_detail()` otherwise. Shared by every engine, since all of them wait by default
-/// now.
-///
-/// Behavior note: a failed REANA run used to just log and return `Ok(())` here (only when
-/// `--watch` was given); this now bails like local/docker/tes always have, for every engine.
-#[allow(clippy::disallowed_macros)]
+/// Waits for `run_id` to end and prints its outputs as pretty JSON, see
+/// [`WorkflowRunner::wait_for_outputs`]. Shared by every engine, since all of them wait by
+/// default.
 async fn wait_and_report(
     runner: &(dyn WorkflowRunner + Sync),
     run_id: &RunId,
     out_dir: Option<&Path>,
 ) -> miette::Result<()> {
-    let status = runner.wait_for_completion(run_id).await?;
-    match status {
-        RunStatus::Finished => {
-            if let Some(outputs) = runner.outputs(run_id, out_dir).await? {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&outputs).into_diagnostic()?
-                );
-            }
-            Ok(())
-        }
-        _ => match runner.failure_detail(run_id).await? {
-            Some(detail) => {
-                miette::bail!("workflow ended with status {status:?}: {detail}");
-            }
-            None => {
-                miette::bail!("workflow ended with status {status:?}");
-            }
-        },
+    if let Some(outputs) = runner.wait_for_outputs(run_id, out_dir).await? {
+        print_json(&outputs)?;
     }
-}
-
-/// Builds a `ReanaRunner` from `REANA_SERVER_URL`/`REANA_ACCESS_TOKEN` env vars (settable directly, or via a
-/// `.env` file -- see `dotenvy::dotenv()` in `main.rs`).
-fn reana_runner() -> miette::Result<ReanaRunner> {
-    let url = env::var("REANA_SERVER_URL").map_err(|_| {
-        miette::miette!("REANA_SERVER_URL is not set (see `s4n execute run --help`)")
-    })?;
-    let token = env::var("REANA_ACCESS_TOKEN").map_err(|_| {
-        miette::miette!("REANA_ACCESS_TOKEN is not set (see `s4n execute run --help`)")
-    })?;
-
-    let server_url = Url::parse(&url).into_diagnostic()?;
-    debug!("connecting to REANA at {server_url}");
-    let token: Arc<ReanaAccessToken> = Arc::new(ReanaAccessToken::new(token));
-    let client = ReanaClient::new(server_url.join("api").into_diagnostic()?, token);
-    Ok(ReanaRunner::new(client))
+    Ok(())
 }
 
 /// What `execute reana status NAME --json` prints.
@@ -431,17 +341,8 @@ struct RunState<'a> {
     failure: Option<String>,
 }
 
-/// One entry of what `execute reana status --json` prints.
-#[derive(Serialize)]
-struct RunListEntry {
-    id: String,
-    name: String,
-    created: chrono::NaiveDateTime,
-    status: RunStatus,
-}
-
 async fn execute_reana_status(workflow_name: Option<&str>, json: bool) -> miette::Result<()> {
-    let runner = reana_runner()?;
+    let runner = ReanaRunner::from_env()?;
 
     if let Some(name) = workflow_name {
         debug!("querying status for workflow '{name}'");
@@ -467,30 +368,15 @@ async fn execute_reana_status(workflow_name: Option<&str>, json: bool) -> miette
     }
 
     debug!("listing all workflows known to this REANA instance");
-    let list = reana_client::list(runner.get_client()).await?;
+    let runs = runner.list_runs().await?;
     if json {
-        let runs: Vec<_> = list
-            .items
-            .into_iter()
-            .map(|w| RunListEntry {
-                id: w.id,
-                name: w.name,
-                created: w.created,
-                status: w.status.unwrap_or_default().into(),
-            })
-            .collect();
         return print_json(&runs);
     }
-    if list.items.is_empty() {
+    if runs.is_empty() {
         info!("no workflows found for this REANA instance");
     }
-    for workflow in list.items {
-        info!(
-            "{} ({}): {:?}",
-            workflow.name,
-            workflow.created,
-            workflow.status.unwrap_or_default()
-        );
+    for run in runs {
+        info!("{} ({}): {:?}", run.name, run.created, run.status);
     }
 
     Ok(())
@@ -500,7 +386,7 @@ async fn execute_reana_rocrate(
     workflow_name: &str,
     output_dir: Option<&str>,
 ) -> miette::Result<()> {
-    let runner = reana_runner()?;
+    let runner = ReanaRunner::from_env()?;
     let out_dir = PathBuf::from(output_dir.unwrap_or("./rocrate"));
     export_rocrate(workflow_name, runner.get_client(), &out_dir).await
 }
@@ -554,21 +440,16 @@ async fn execute_reana_download(
     all: bool,
     output_dir: Option<&str>,
 ) -> miette::Result<()> {
-    let runner = reana_runner()?;
+    let runner = ReanaRunner::from_env()?;
     let out_dir = output_dir
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."));
 
     if all {
         debug!("--all given, downloading every file in the workspace to {out_dir:?}");
-        let client = runner.get_client();
-        let workspace = reana_client::workspace(client.clone(), workflow_name).await?;
-        debug!("workspace has {} item(s)", workspace.items.len());
-        for item in workspace.items {
-            debug!("downloading {}", item.name);
-            reana_client::download_file(client.clone(), workflow_name, &item.name, &out_dir)
-                .await?;
-        }
+        runner
+            .download_workspace(&workflow_name.to_string(), &out_dir)
+            .await?;
     } else {
         debug!("downloading only declared outputs to {out_dir:?}");
         runner
@@ -581,150 +462,10 @@ async fn execute_reana_download(
 
 #[allow(clippy::disallowed_macros)]
 pub fn make_template(filename: &PathBuf) -> miette::Result<()> {
-    let template = make_template_impl(filename)?;
+    debug!("reading CWL document at {filename:?} to derive its inputs");
+    let template = input_template(filename)?;
     let yaml = serde_saphyr::to_string(&template).into_diagnostic()?;
 
     println!("{yaml}");
     Ok(())
-}
-
-fn make_template_impl(filename: &PathBuf) -> miette::Result<HashMap<String, DefaultValue>> {
-    debug!("reading CWL document at {filename:?} to derive its inputs");
-    let contents = fs::read_to_string(filename).into_diagnostic()?;
-    let cwl: CWLDocument = serde_saphyr::from_str(&contents).into_diagnostic()?;
-
-    Ok(cwl
-        .get_inputs() //we assume there is no stdin
-        .iter()
-        .map(|i| {
-            let id = &i.id;
-            let dummy_value = if i.default.is_some() {
-                return (id.clone().unwrap(), i.default.clone().unwrap());
-            } else {
-                get_default(&i.r#type)
-            };
-            (id.clone().unwrap(), dummy_value)
-        })
-        .collect::<HashMap<_, _>>())
-}
-
-fn get_default(r#type: &OneOrMany<InputType>) -> DefaultValue {
-    let input_type = match r#type {
-        OneOrMany::One(t) => t,
-        OneOrMany::Many(ts) => ts.first().unwrap_or(&InputType::CWLType(CWLType::Null)),
-    };
-
-    match input_type {
-        InputType::CWLType(cwltype) => fs_defaults(cwltype),
-        InputType::InputSchema(schema) => match schema.as_ref() {
-            InputSchema::Record(_) => DefaultValue::Any(Value::Object(Default::default())),
-            InputSchema::Enum(e) => DefaultValue::Any(Value::String(
-                e.symbols.first().cloned().unwrap_or_default(),
-            )),
-            InputSchema::Array(a) => DefaultValue::Any(Value::Array(vec![
-                serde_json::to_value(get_default(&a.items)).unwrap_or(Value::Null),
-                serde_json::to_value(get_default(&a.items)).unwrap_or(Value::Null),
-            ])),
-        },
-        InputType::String(_) => DefaultValue::Any(Value::Null),
-    }
-}
-
-fn fs_defaults(cwltype: &CWLType) -> DefaultValue {
-    match cwltype {
-        CWLType::File => DefaultValue::FileOrDirectory(FileOrDirectory::File(
-            File::builder().location("./path/to/file.txt").build(),
-        )),
-        CWLType::Directory => DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
-            Directory::builder().location("./path/to/dir").build(),
-        )),
-        _ => DefaultValue::Any(cwltype_defaults(cwltype)),
-    }
-}
-
-fn cwltype_defaults(cwltype: &CWLType) -> Value {
-    match cwltype {
-        CWLType::Boolean => Value::Bool(true),
-        CWLType::Int | CWLType::Long => Value::Number(Number::from(42)),
-        CWLType::Float | CWLType::Double => Value::Number(Number::from_f64(69.42).unwrap()),
-        CWLType::String => Value::String("Hello World".into()),
-        CWLType::Any => Value::String("Any Value".into()),
-        _ => Value::Null,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_defaults_type() {
-        assert_eq!(
-            cwltype_defaults(&CWLType::Int),
-            Value::Number(Number::from(42))
-        );
-        assert_eq!(cwltype_defaults(&CWLType::Boolean), Value::Bool(true));
-        assert_eq!(
-            cwltype_defaults(&CWLType::Long),
-            Value::Number(Number::from(42))
-        );
-        assert_eq!(
-            cwltype_defaults(&CWLType::Float),
-            Value::Number(Number::from_f64(69.42).unwrap())
-        );
-        assert_eq!(
-            cwltype_defaults(&CWLType::String),
-            Value::String("Hello World".into())
-        );
-        assert_eq!(
-            cwltype_defaults(&CWLType::Any),
-            Value::String("Any Value".into())
-        );
-    }
-
-    #[test]
-    fn test_default_values() {
-        assert_eq!(
-            fs_defaults(&CWLType::File),
-            DefaultValue::FileOrDirectory(FileOrDirectory::File(
-                File::builder().location("./path/to/file.txt").build()
-            ))
-        );
-        assert_eq!(
-            fs_defaults(&CWLType::Directory),
-            DefaultValue::FileOrDirectory(FileOrDirectory::Directory(
-                Directory::builder().location("./path/to/dir").build()
-            ))
-        );
-        assert_eq!(
-            fs_defaults(&CWLType::String),
-            DefaultValue::Any(Value::String("Hello World".into()))
-        );
-    }
-
-    #[test]
-    fn test_make_template_impl() {
-        let path = PathBuf::from("../../testdata/hello_world/workflows/main/main.cwl");
-        let template = make_template_impl(&path).unwrap();
-        let expected = HashMap::from([
-            (
-                "population".to_string(),
-                DefaultValue::FileOrDirectory(FileOrDirectory::File(
-                    File::builder()
-                        .location("../../data/population.csv")
-                        .build(),
-                )),
-            ),
-            (
-                "speakers".to_string(),
-                DefaultValue::FileOrDirectory(FileOrDirectory::File(
-                    File::builder()
-                        .location("../../data/speakers_revised.csv")
-                        .build(),
-                )),
-            ),
-        ]);
-
-        assert_eq!(template, expected);
-    }
 }

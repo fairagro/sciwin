@@ -10,6 +10,9 @@ use miette::IntoDiagnostic;
 use std::{env, sync::Arc};
 use url::Url;
 
+/// How [`TesBackendConfig::auth`] authenticates, re-exported so frontends need no `crankshaft`.
+pub use tes::http::HttpAuthConfig;
+
 /// `Engine::Local`: only containerizes steps with a `DockerRequirement`, via `runtime`.
 #[must_use]
 pub fn local_backend(runtime: ContainerEngine) -> Arc<dyn TaskBackend> {

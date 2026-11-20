@@ -32,6 +32,8 @@
 //! - [`parser`] -- command line to `CommandLineTool`, and the post-processing pass over it
 //! - [`paths`] -- naming tools and deciding where they belong. Pure path arithmetic
 //! - [`tool`] -- the orchestration above, plus the options and result types
+//! - [`workflow`] -- creating workflows and wiring their steps
+//! - [`summary`] -- describing existing documents: ports with CWL types, workflow wiring
 //!
 //! # A note on inference
 //!
@@ -45,6 +47,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 pub mod paths;
+pub mod summary;
 pub mod tool;
 pub mod workflow;
 

@@ -29,7 +29,6 @@ colored = { workspace = true }
 dialoguer = { workspace = true }
 tracing = { workspace = true }
 reqwest = { workspace = true }
-url = { workspace = true }
 serde = { workspace = true }
 serde-saphyr = { workspace = true }
 serde_json = { workspace = true }

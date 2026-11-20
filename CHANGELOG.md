@@ -10,6 +10,9 @@
 
 - `create` finds outputs from the trial run itself instead of `git status`: the project no longer has to be committed first, and outputs that overwrite uncommitted files are found too. A git repository is only needed with `--commit`.
 - git `user.name`/`user.email` are only required by commands that commit.
+- Library: logic the CLI had to itself is now in `sciwin` for other frontends (SciWIn Studio, the upcoming MCP server): `authoring::summary` (document ports and wiring), `execution::prepare_run` (CWL file or RO-Crate plus job file), `execution::input_template`, `WorkflowRunner::wait_for_outputs`, `ReanaRunner::from_env`, `list_runs` and `download_workspace`.
+- Library: `execution::HttpAuthConfig` is re-exported, so frontends can fill `TesBackendConfig::auth` without depending on `crankshaft` (SciWIn Studio: `auth: token.map(|token| HttpAuthConfig::Bearer { token })`).
+- Library: `WorkflowRunner::run_workflow` returns the outputs instead of printing them, a failed run is `RunnerError::RunFailed`.
 
 > [!IMPORTANT]
 > `create` no longer commits by default (**Breaking Change**). Pass `--commit` to commit the tool and its outputs. `--no-commit` was removed.
