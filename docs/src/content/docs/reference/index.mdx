@@ -37,9 +37,23 @@ sidebar:
   Options:
     -q, --quiet    Only print errors
         --debug    Explain in high detail what the CLI is doing internally
+    -y, --yes      Never prompt: confirm all questions and pick default choices
     -h, --help     Print help
     -V, --version  Print version
     ```
+
+## Scripts, CI and AI agents
+`s4n` asks a question in three cases: git `user.name`/`user.email` are not set, a tool name matches more than one CWL file (e.g. one in an installed package), or a tool to remove is still used by a workflow. Without a terminal it never waits for an answer:
+- `-y`/`--yes` confirms the question and picks the default choice.
+- Without `--yes` the command fails and the error says what to do instead.
+
+`list`, `connect`, `disconnect` and `execute reana status` accept `--json` and then print only JSON to stdout. Logs still go to stderr, add `-q` to silence them. `s4n execute` already prints the run's outputs as JSON.
+
+:::tip[Example]
+    ```bash
+    s4n list workflows/main/main.cwl --json -q | jq '.connections.steps[] | {id, inputs}'
+    ```
+:::
 
 
 ## Shell completions

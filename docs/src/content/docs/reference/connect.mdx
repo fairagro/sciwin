@@ -8,21 +8,29 @@ sidebar:
 The `connect` and `disconnect` commands can be used to connect CWL CommandLineTools, workflow inputs and workflow outputs forming a directed acyclic graph. The connect command establishes a connection and adds in-, outputs and steps if they are not present in the current workflow. The names of the steps slots can be copied from the output of `s4n list`. For connections to in- or outputs a `@` has to be used es prefix e.g. `@inputs/my-file`. The name of the node is constructed by using the tool's name and the name of the tool's node separated by a forward slash: `mytool/my-input`. Connections are made using the `--from` and `--to` arguments together with the name of the workflow.
 If the Workflow does not exist when creating the first connection, the workflow will be created automatically.
 
+Instead of names, both the workflow and the tools can be given as paths to their `.cwl` files, e.g. `s4n connect workflows/main/main.cwl --from workflows/calculation/calculation.cwl#results --to workflows/plot/plot.cwl#results`. The slot is separated by `#` if present, else by the last `/`, so `workflows/plot/plot.cwl/results` and `plot#results` work too. A tool given by path becomes a step named after the file (`calculation`), or reuses the step that already runs that file.
+
     ```txt frame="terminal" title="Usage"
     Connects a workflow node
 
-    Usage: s4n connect --from <FROM> --to <TO> <NAME>
+    Usage: s4n connect [OPTIONS] --from <FROM> --to <TO> <NAME>
 
     Arguments:
-      <NAME>  Name of the workflow name to be altered
+      <NAME>  Name of the workflow to be altered, or a path to its .cwl file
 
     Options:
-      -f, --from <FROM>  Starting Node: [tool]/[output]
-      -t, --to <TO>      Ending Node: [tool]/[input]
+      -f, --from <FROM>  Starting Node: [tool]/[output], [tool]#[output] or @inputs/[input]. [tool] is a
+                         name or a path to a .cwl file
+      -t, --to <TO>      Ending Node: [tool]/[input], [tool]#[input] or @outputs/[output]. [tool] is a
+                         name or a path to a .cwl file
+          --json         Print the result as JSON to stdout instead of a diff
       -q, --quiet        Only print errors
           --debug        Explain in high detail what the CLI is doing internally
+      -y, --yes          Never prompt: confirm all questions and pick default choices
       -h, --help         Print help
     ```
+
+With `--json`, both commands print `{"workflow", "from", "to"}` instead of a diff. `connect` adds `"created"`, which is `true` when this call created the workflow file. Use `s4n list <workflow file> --json` to see what is still unconnected.
 
 :::tip[Example: Connect to input socket]
     ```bash
@@ -82,14 +90,18 @@ The same logic applies for the disconnect command.
     ```txt frame="terminal" title="Usage"
     Disconnects a workflow node
 
-    Usage: s4n disconnect --from <FROM> --to <TO> <NAME>
+    Usage: s4n disconnect [OPTIONS] --from <FROM> --to <TO> <NAME>
 
     Arguments:
-      <NAME>  Name of the workflow name to be altered
+      <NAME>  Name of the workflow to be altered, or a path to its .cwl file
 
     Options:
-      -f, --from <FROM>  Starting Node: [tool]/[output]
-      -t, --to <TO>      Ending Node: [tool]/[input]
+      -f, --from <FROM>  Starting Node: [tool]/[output], [tool]#[output] or @inputs/[input]. [tool] is a
+                         name or a path to a .cwl file
+      -t, --to <TO>      Ending Node: [tool]/[input], [tool]#[input] or @outputs/[output]. [tool] is a
+                         name or a path to a .cwl file
+          --json         Print the result as JSON to stdout instead of a diff
       -q, --quiet        Only print errors
           --debug        Explain in high detail what the CLI is doing internally
+      -y, --yes          Never prompt: confirm all questions and pick default choices
       -h, --help         Print help

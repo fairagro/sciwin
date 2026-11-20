@@ -18,5 +18,8 @@ Arguments:
 Options:
   -q, --quiet  Only print errors
       --debug  Explain in high detail what the CLI is doing internally
+  -y, --yes    Never prompt: confirm all questions and pick default choices
   -h, --help   Print help
     ```
+
+If the tool is still used by a workflow, `remove` asks before deleting it. Pass `--yes` to skip the question. Without a terminal and without `--yes` the command fails instead of removing the tool.

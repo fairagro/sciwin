@@ -8,8 +8,8 @@ sidebar:
 The `create` command can be used to easily generate CWL CommandLineTools. It serves as a prefix to the usual command line prompt. Calling `create` with a command attached will execute the command, determine in- and outputs and create a CWL tool definition file in the `workflows` folder. 
 
 :::note
-    Before using this command all changes need to be commited as it uses `git` to determine tool outputs!
-    `git status` can be used to check beforehand.
+    The outputs are the files the command leaves in its working directory. Uncommitted changes in the project do not matter.
+    Existing files are never overwritten: if e.g. `results.txt` already exists, the run's copy is saved as `results_2.txt` and a warning says so.
 :::
 :::tip
     Redirection `>` and pipes `|` can be used, but need to be escaped with a backslash fot the parser to use. Otherwise the console output of `s4n` will be redirected / piped.
@@ -27,7 +27,7 @@ The `create` command can be used to easily generate CWL CommandLineTools. It ser
           -c, --container-image <CONTAINER_IMAGE>  An image to pull from e.g. docker hub or path to a Dockerfile
           -t, --container-tag <CONTAINER_TAG>      The tag for the container when using a Dockerfile
           -r, --raw                                Outputs the raw CWL contents to terminal
-              --no-commit                          Do not commit at the end of tool creation
+              --commit                             Commit the tool and the files its run produced (needs a git repository)
               --no-run                             Do not run given command
               --clean                              Deletes created outputs after usage
               --no-defaults                        Removes default values from inputs
@@ -96,11 +96,11 @@ The two container options `--container-image` and `--container-tag` can be used 
 
 With the `--raw` flag no CWL file will be written to disk. Instead the raw cwl will be outputted to the command prompt (stdout) to process it further.
 
-As `create` needs all changes to be commited beforehand it will create a commit after it completed the tool creation. To prevent that because e.g. manual changes to the CWL file have to be made before committing the `--no-commit` flag can be used.
+`create` does not commit. With `--commit` the tool and the files its run produced are committed together. Like `git commit`, this also commits anything that was already staged.
 
 Some scripts tend to run for a very long time - e.g. quantum chemistry calculations. To prevent the tool from running the `--no-run` flag can be used. If this flag is set the parser will just use information from the command line to create the tool, outputs need to be set manually.
 
-Sometimes it can be beneficial to not commit the created outputs. With the `--clean` flag all outputs will be deleted before commiting the freshly created tool. 
+Sometimes it can be beneficial to not keep the created outputs. With the `--clean` flag all outputs will be deleted once the tool is created. 
 
 Implicit in- and outputs can be added using `-i` or `-o`. ([See Examples](../examples/tool-creation.md#implicit-inputs-hardcoded-files))
 

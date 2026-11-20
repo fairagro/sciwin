@@ -6782,6 +6782,7 @@ dependencies = [
  "prettytable-rs",
  "reqwest",
  "sciwin",
+ "serde",
  "serde-saphyr 1.3.0",
  "serde_json",
  "serial_test 4.0.1",
@@ -6793,7 +6794,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -6841,6 +6841,7 @@ dependencies = [
  "fstest",
  "futures",
  "git2 0.21.0",
+ "ignore",
  "miette",
  "pathdiff",
  "r-description",

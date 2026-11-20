@@ -6,9 +6,11 @@ use commonwl::{engine::InputObject, inputs::DefaultValue};
 use futures::future::try_join_all;
 use reana::{
     api::{client::ReanaClient, response::WorkflowStatus},
+    auth::ReanaAccessToken,
     client::CreatedWorkspace,
     logs::{JobLog, ReanaLogMessage, get_log_message, get_log_outputs},
 };
+use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::{HashMap, HashSet},
@@ -17,10 +19,20 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
+use url::Url;
 
 pub struct ReanaRunner {
     client: Arc<ReanaClient>,
+}
+
+/// A run as REANA lists it.
+#[derive(Debug, Clone, Serialize)]
+pub struct RunSummary {
+    pub id: String,
+    pub name: String,
+    pub created: chrono::NaiveDateTime,
+    pub status: RunStatus,
 }
 
 impl ReanaRunner {
@@ -28,6 +40,47 @@ impl ReanaRunner {
         Self {
             client: Arc::new(client),
         }
+    }
+
+    /// Connects to the instance at `REANA_SERVER_URL` with `REANA_ACCESS_TOKEN`.
+    pub fn from_env() -> RunnerResult<Self> {
+        let url = env::var("REANA_SERVER_URL")
+            .map_err(|_| RunnerError::MissingEnv("REANA_SERVER_URL"))?;
+        let token = env::var("REANA_ACCESS_TOKEN")
+            .map_err(|_| RunnerError::MissingEnv("REANA_ACCESS_TOKEN"))?;
+
+        let api_url = Url::parse(&url)
+            .and_then(|u| u.join("api"))
+            .map_err(|e| anyhow::anyhow!("REANA_SERVER_URL {url} is not a valid URL: {e}"))?;
+        debug!("connecting to REANA at {api_url}");
+        let token = Arc::new(ReanaAccessToken::new(token));
+        Ok(Self::new(ReanaClient::new(api_url, token)))
+    }
+
+    /// Every run this REANA instance knows about.
+    pub async fn list_runs(&self) -> RunnerResult<Vec<RunSummary>> {
+        let list = reana::client::list(self.client.clone()).await?;
+        Ok(list
+            .items
+            .into_iter()
+            .map(|w| RunSummary {
+                id: w.id,
+                name: w.name,
+                created: w.created,
+                status: w.status.unwrap_or_default().into(),
+            })
+            .collect())
+    }
+
+    /// Downloads every file in run `id`'s workspace to `out_dir`, not just its outputs.
+    pub async fn download_workspace(&self, id: &RunId, out_dir: &Path) -> RunnerResult<()> {
+        let workspace = reana::client::workspace(self.client.clone(), id).await?;
+        debug!("workspace has {} item(s)", workspace.items.len());
+        for item in workspace.items {
+            debug!("downloading {}", item.name);
+            reana::client::download_file(self.client.clone(), id, &item.name, out_dir).await?;
+        }
+        Ok(())
     }
 
     pub fn get_client(&self) -> Arc<ReanaClient> {

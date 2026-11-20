@@ -1,3 +1,4 @@
+use crate::interactive::{Prompt, prompt_mode};
 use dialoguer::{Input, theme::ColorfulTheme};
 use miette::IntoDiagnostic;
 use sciwin::repository::Config;
@@ -27,6 +28,12 @@ pub fn check_git_config() -> miette::Result<()> {
     debug!("checking global git config for user.name and user.email");
     let mut config = Config::open_default().into_diagnostic()?;
     if config.get_string("user.name").is_err() || config.get_string("user.email").is_err() {
+        if prompt_mode() != Prompt::Ask {
+            miette::bail!(
+                help = "run `git config --global user.name \"Your Name\"` and `git config --global user.email \"you@example.com\"`",
+                "git user.name or user.email is not set"
+            );
+        }
         warn!("User configuration not found!");
 
         let name: String = Input::with_theme(&ColorfulTheme::default())

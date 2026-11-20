@@ -38,27 +38,60 @@ fn echo_options() -> ToolCreationOptions {
         .build()
 }
 
-/// A dirty working tree is a state a frontend acts on (offer to commit, or to re-run
-/// with `no_run`), so it must arrive as a matchable variant, not a formatted string.
+/// Outputs come from the trial run itself: uncommitted files neither block it nor count as
+/// outputs, and one the run would overwrite is still found. The engine never overwrites, so
+/// the run's copy lands next to it.
 #[tokio::test]
-pub async fn test_dirty_working_tree_is_a_typed_variant() {
-    let dir = workspace(&["../../testdata/input.txt"]);
+pub async fn test_uncommitted_files_are_not_outputs() {
+    let dir = workspace(&["../../testdata/input.txt", "../../testdata/echo.py"]);
     let root = dir.path();
     fs::write(root.join("uncommitted.txt"), "scratch").unwrap();
+    fs::write(root.join("results.txt"), "stale").unwrap();
+    let options = ToolCreationOptions::builder()
+        .command(vec![
+            "python3".to_string(),
+            "echo.py".to_string(),
+            "--test".to_string(),
+            "input.txt".to_string(),
+        ])
+        .build();
 
-    let err = create_tool(root, &echo_options()).await.unwrap_err();
+    let created = create_tool(root, &options).await.unwrap();
 
-    let AuthoringError::DirtyWorkingTree { files } = &err else {
-        panic!("expected DirtyWorkingTree, got {err:?}");
-    };
-    assert!(files.iter().any(|f| f == "uncommitted.txt"));
+    let globs: Vec<String> = created
+        .document
+        .outputs
+        .iter()
+        .filter_map(|o| {
+            o.output_binding
+                .as_ref()?
+                .glob
+                .as_ref()
+                .map(|g| g.as_many())
+        })
+        .flatten()
+        .collect();
+    assert_eq!(globs, ["results.txt"]);
+    assert_eq!(
+        fs::read_to_string(root.join("results.txt")).unwrap(),
+        "stale"
+    );
+    assert!(root.join("results_2.txt").exists());
 }
 
-/// Same reasoning: a missing repository is a state a frontend offers to fix.
+/// A repository is only needed to commit, and a missing one is a state a frontend offers
+/// to fix.
 #[tokio::test]
-pub async fn test_missing_repository_is_a_typed_variant() {
+pub async fn test_missing_repository_only_matters_for_commit() {
     let dir = tempdir().unwrap(); // no repo here
-    let err = create_tool(dir.path(), &echo_options()).await.unwrap_err();
+    assert!(create_tool(dir.path(), &echo_options()).await.is_ok());
+
+    let options = ToolCreationOptions::builder()
+        .command(vec!["echo".to_string(), "hello".to_string()])
+        .save(true)
+        .commit(true)
+        .build();
+    let err = create_tool(dir.path(), &options).await.unwrap_err();
 
     assert!(
         matches!(err, AuthoringError::NoRepository { .. }),

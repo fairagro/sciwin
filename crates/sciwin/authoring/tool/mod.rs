@@ -15,10 +15,7 @@ mod probe;
 mod requirements;
 mod save;
 
-use crate::{
-    authoring::{AuthoringError, AuthoringResult, paths, workflow::save_workflow},
-    repository::{self, Repository},
-};
+use crate::authoring::{AuthoringError, AuthoringResult, paths, workflow::save_workflow};
 use anyhow::Context;
 use bon::Builder;
 use commonwl::{
@@ -132,13 +129,13 @@ pub fn create_blank_command_line_tool(
 
 /// Builds a `CommandLineTool` from `options.command`, run against `project_root`.
 ///
-/// `project_root` is the git repository the tool belongs to: paths are resolved against it,
-/// the trial run executes there, and it is what gets checked for uncommitted changes.
+/// `project_root` is the project the tool belongs to: paths are resolved against it and the
+/// trial run's outputs land there. It only has to be a git repository with `options.commit`.
 pub async fn create_tool(
     project_root: &Path,
     options: &ToolCreationOptions,
 ) -> AuthoringResult<CreatedTool> {
-    let mut cwl = create_tool_base(project_root, options).await?;
+    let (mut cwl, produced) = create_tool_base(project_root, options).await?;
 
     if options.run_container.is_some()
         && let Some(container) = &options.container
@@ -166,12 +163,16 @@ pub async fn create_tool(
     let yaml = save::finalize_tool(&mut cwl, &path)?;
 
     if options.save {
-        let repo =
-            Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
-                path: project_root.to_path_buf(),
-                source,
-            })?;
-        save::save_tool_to_disk(&yaml, project_root, &path, &repo, options.commit)?;
+        save::save_tool_to_disk(&yaml, project_root, &path)?;
+    }
+    if options.commit {
+        // with cleanup the run's files are gone again, nothing to stage
+        let produced: Vec<&str> = if options.cleanup {
+            vec![]
+        } else {
+            produced.iter().map(|p| p.path.as_str()).collect()
+        };
+        save::commit_tool(project_root, &path, options.save, &produced)?;
     }
 
     Ok(CreatedTool {
@@ -182,27 +183,16 @@ pub async fn create_tool(
 }
 
 /// Parses the command line into a tool and, unless `options.no_run` is set, runs it once to
-/// discover its outputs.
+/// discover its outputs. Also returns what that run produced.
 async fn create_tool_base(
     project_root: &Path,
     options: &ToolCreationOptions,
-) -> AuthoringResult<CommandLineTool> {
+) -> AuthoringResult<(CommandLineTool, Vec<probe::Produced>)> {
     let command = options
         .command
         .iter()
         .map(String::as_str)
         .collect::<Vec<_>>();
-
-    //check for modified files and fail if there are any
-    let repo = Repository::open(project_root).map_err(|source| AuthoringError::NoRepository {
-        path: project_root.to_path_buf(),
-        source,
-    })?;
-    let modified = repository::get_modified_files(&repo)?;
-
-    if !options.no_run && !modified.is_empty() {
-        return Err(AuthoringError::DirtyWorkingTree { files: modified });
-    }
 
     //parse command
     let mut cwl = parser::parse_command_line(&command, project_root).await?;
@@ -229,11 +219,12 @@ async fn create_tool_base(
         requirements::add_tool_requirements(&mut cwl, options, project_root).await?;
     }
 
+    let mut produced = vec![];
     if !options.no_run {
-        let files =
-            probe::run_and_collect_files(&mut cwl, project_root, options, &repo, &modified).await?;
+        produced = probe::run_and_collect_files(&mut cwl, project_root, options).await?;
         if options.outputs.is_empty() {
-            cwl.outputs = parser::outputs::get_outputs(&files).await?;
+            let names: Vec<String> = produced.iter().map(|p| p.name.clone()).collect();
+            cwl.outputs = parser::outputs::get_outputs(&names).await?;
         }
     }
 
@@ -247,7 +238,7 @@ async fn create_tool_base(
             input.default = None;
         }
     }
-    Ok(cwl)
+    Ok((cwl, produced))
 }
 
 fn command_available(cmd: &str) -> bool {

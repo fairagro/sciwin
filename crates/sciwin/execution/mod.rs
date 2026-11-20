@@ -17,8 +17,8 @@ use commonwl::{
 };
 use futures::Stream;
 use miette::Diagnostic;
-use miette::IntoDiagnostic;
 use reana::{api::response::WorkflowStatus, logs::ReanaLogMessage};
+use serde::Serialize;
 use std::io;
 use std::{
     collections::{HashMap, HashSet},
@@ -34,13 +34,17 @@ use tracing::{Level, info};
 
 mod backend;
 pub use backend::{
-    TesBackendConfig, docker_backend, docker_backend_with_storage, local_backend,
+    HttpAuthConfig, TesBackendConfig, docker_backend, docker_backend_with_storage, local_backend,
     local_backend_with_storage, tes_backend, tes_backend_from_config,
 };
 mod task_runner;
 pub use task_runner::TaskRunner;
 mod reana_runner;
-pub use reana_runner::{JobFailure, ReanaRunner, find_failures};
+pub use reana_runner::{JobFailure, ReanaRunner, RunSummary, find_failures};
+mod prepare;
+pub use prepare::{PreparedRun, prepare_run};
+mod template;
+pub use template::input_template;
 pub mod reana_compat;
 pub mod rocrate;
 
@@ -94,6 +98,21 @@ pub enum RunnerError {
     #[error(transparent)]
     RoCrateIO(#[from] ::rocrate::io::Error),
 
+    #[diagnostic(code = "sciwin::error::RunnerError::RunFailed")]
+    #[error("workflow ended with status {status:?}{}", .detail.as_ref().map(|d| format!(": {d}")).unwrap_or_default())]
+    RunFailed {
+        status: RunStatus,
+        /// see [`WorkflowRunner::failure_detail`]
+        detail: Option<String>,
+    },
+
+    #[diagnostic(
+        code = "sciwin::error::RunnerError::MissingEnv",
+        help = "set it in the environment or in a .env file"
+    )]
+    #[error("{0} is not set")]
+    MissingEnv(&'static str),
+
     #[diagnostic(code = "anyhow::Error")]
     #[error(transparent)]
     Unknown(#[from] anyhow::Error),
@@ -114,7 +133,8 @@ impl From<commonwl::engine::RunnerError> for RunnerError {
 
 pub type RunId = String;
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum RunStatus {
     Created,
     Running,
@@ -373,12 +393,29 @@ pub trait WorkflowRunner {
         Ok(None)
     }
 
+    /// Waits for `id` to end and returns its outputs. A run that does not finish cleanly is a
+    /// [`RunnerError::RunFailed`] carrying [`Self::failure_detail`].
+    async fn wait_for_outputs(
+        &self,
+        id: &RunId,
+        out_dir: Option<&Path>,
+    ) -> RunnerResult<Option<HashMap<String, DefaultValue>>> {
+        let status = self.wait_for_completion(id).await?;
+        if status == RunStatus::Finished {
+            return self.outputs(id, out_dir).await;
+        }
+        let detail = self.failure_detail(id).await.ok().flatten();
+        Err(RunnerError::RunFailed { status, detail })
+    }
+
+    /// Submits `cwlfile`, logs its progress and returns its outputs, see
+    /// [`Self::wait_for_outputs`].
     async fn run_workflow(
         &self,
         cwlfile: &Path,
         inputs: InputObject,
         out_dir: Option<&Path>,
-    ) -> miette::Result<()> {
+    ) -> RunnerResult<Option<HashMap<String, DefaultValue>>> {
         let run_id = self.submit(cwlfile, inputs, out_dir).await?;
 
         let log_task = match self.logs(&run_id).await {
@@ -395,32 +432,13 @@ pub trait WorkflowRunner {
                 }
             })),
             Err(RunnerError::NotSupported(_)) => None, // backend has no separate log stream — fine
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
-        let status = self.wait_for_completion(&run_id).await?;
+        let outputs = self.wait_for_outputs(&run_id, out_dir).await;
         if let Some(task) = log_task {
             task.abort();
         }
-
-        #[allow(clippy::disallowed_macros)]
-        if matches!(status, RunStatus::Finished)
-            && let Some(outputs) = self.outputs(&run_id, out_dir).await?
-        {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&outputs).into_diagnostic()?
-            );
-            Ok(())
-        } else {
-            match self.failure_detail(&run_id).await.ok().flatten() {
-                Some(detail) => {
-                    miette::bail!("workflow ended with status {status:?}: {detail}");
-                }
-                None => {
-                    miette::bail!("workflow ended with status {status:?}");
-                }
-            }
-        }
+        outputs
     }
 }

@@ -12,8 +12,8 @@
 //!            |              and the files it needs staged into its working dir
 //!            |  tool::probe          (skipped when `no_run` is set)
 //!            v
-//!   + discovered outputs  ..... run it once, diff the working tree, and attribute
-//!            |                   whatever appeared to the tool
+//!   + discovered outputs  ..... run it once and attribute whatever appeared in its
+//!            |                   working directory to the tool
 //!            |  tool::requirements
 //!            v
 //!   + container / network / env / mounts
@@ -32,6 +32,8 @@
 //! - [`parser`] -- command line to `CommandLineTool`, and the post-processing pass over it
 //! - [`paths`] -- naming tools and deciding where they belong. Pure path arithmetic
 //! - [`tool`] -- the orchestration above, plus the options and result types
+//! - [`workflow`] -- creating workflows and wiring their steps
+//! - [`summary`] -- describing existing documents: ports with CWL types, workflow wiring
 //!
 //! # A note on inference
 //!
@@ -45,6 +47,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 pub mod paths;
+pub mod summary;
 pub mod tool;
 pub mod workflow;
 
@@ -57,13 +60,6 @@ pub type AuthoringResult<T> = Result<T, AuthoringError>;
 /// `git init` -- so they carry structured data instead of a formatted message.
 #[derive(Error, Diagnostic, Debug)]
 pub enum AuthoringError {
-    #[error("uncommitted changes detected: {}", files.join(", "))]
-    #[diagnostic(
-        code = "authoring::DirtyWorkingTree",
-        help = "commit or stash the listed files, or skip the trial run"
-    )]
-    DirtyWorkingTree { files: Vec<String> },
-
     #[error("could not find a git repository at {}", path.display())]
     #[diagnostic(
         code = "authoring::NoRepository",
@@ -86,6 +82,13 @@ pub enum AuthoringError {
     #[error("Step {id} not found in workflow")]
     #[diagnostic(code = "authoring::InvalidWorkflowStep")]
     InvalidWorkflowStep { id: String },
+
+    #[error("step {id} already exists and runs a different document than {path}")]
+    #[diagnostic(
+        code = "authoring::StepIdTaken",
+        help = "remove the existing step first, or rename one of the two files"
+    )]
+    StepIdTaken { id: String, path: String },
 
     #[error("{message}")]
     #[diagnostic(

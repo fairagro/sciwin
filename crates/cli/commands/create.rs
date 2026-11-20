@@ -48,8 +48,11 @@ pub struct CreateArgs {
         help = "Outputs the raw CWL contents to terminal"
     )]
     pub is_raw: bool,
-    #[arg(long = "no-commit", help = "Do not commit at the end of tool creation")]
-    pub no_commit: bool,
+    #[arg(
+        long = "commit",
+        help = "Commit the tool and the files its run produced (needs a git repository)"
+    )]
+    pub commit: bool,
     #[arg(long = "no-run", help = "Do not run given command")]
     pub no_run: bool,
     #[arg(long = "clean", help = "Deletes created outputs after usage")]
@@ -109,7 +112,7 @@ impl From<&CreateArgs> for ToolCreationOptions {
             inputs: args.inputs.clone().unwrap_or(vec![]),
             no_run: args.no_run,
             cleanup: args.is_clean,
-            commit: !args.no_commit,
+            commit: args.commit,
             clear_defaults: args.no_defaults,
             container: args.container_image.as_ref().map(|image| {
                 sciwin::authoring::tool::ContainerInfo {

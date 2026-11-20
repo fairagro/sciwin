@@ -18,10 +18,15 @@ sidebar:
 
     Options:
       -a, --all    Outputs the tools with inputs and outputs
+          --json   Print JSON to stdout, always including inputs and outputs (and connection status for
+                   a single workflow)
       -q, --quiet  Only print errors
           --debug  Explain in high detail what the CLI is doing internally
+      -y, --yes    Never prompt: confirm all questions and pick default choices
       -h, --help   Print help
     ```
+
+`--json` prints every document with its `name` (the name `connect` and `remove` resolve), `path`, `class`, `label`, `doc`, and its `inputs` and `outputs` with their CWL `type` (and `default` for inputs). Listing a single workflow also adds `connections`: the workflow's inputs and outputs and every step's slots, each marked `connected`, `default` or `unconnected`.
 :::tip[Example]
     Simple Usage:
     ```bash

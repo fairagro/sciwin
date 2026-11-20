@@ -1,15 +1,36 @@
+use crate::interactive::{Prompt, prompt_mode};
 use dialoguer::{Select, theme::ColorfulTheme};
-use sciwin::authoring::paths::WORKFLOWS_FOLDER;
+use sciwin::authoring::paths::{WORKFLOWS_FOLDER, get_qualified_filename_by_name};
 use sciwin::repository::Repository;
 use sciwin::repository::submodule::get_submodule_paths;
-use std::{error::Error, path::PathBuf};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+};
 use syntect::{
     easy::HighlightLines,
     highlighting::ThemeSet,
     parsing::SyntaxSet,
     util::{LinesWithEndings, as_24_bit_terminal_escaped},
 };
-use tracing::debug;
+use tracing::{debug, warn};
+
+pub fn has_cwl_extension(name: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("cwl"))
+}
+
+/// The workflow file `name` refers to: itself if it ends in `.cwl`, else
+/// `workflows/<name>/<name>.cwl`.
+pub fn workflow_filename(name: &str) -> String {
+    if has_cwl_extension(name) {
+        return name.to_string();
+    }
+    get_qualified_filename_by_name(name, Path::new(WORKFLOWS_FOLDER).join(name))
+        .to_string_lossy()
+        .into_owned()
+}
 
 /// Locates CWL File by name
 pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
@@ -46,13 +67,30 @@ pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
                 .iter()
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect();
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Multiple candidates are found. Select the CWL File to use")
-                .items(&items)
-                .default(0)
-                .report(true)
-                .interact()?;
-            Ok(items[selection].clone())
+            match prompt_mode() {
+                Prompt::Ask => {
+                    let selection = Select::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Multiple candidates are found. Select the CWL File to use")
+                        .items(&items)
+                        .default(0)
+                        .report(true)
+                        .interact()?;
+                    Ok(items[selection].clone())
+                }
+                Prompt::AssumeYes => {
+                    warn!(
+                        "'{cwl_filename}' is ambiguous, using {} (other candidates: {})",
+                        items[0],
+                        items[1..].join(", ")
+                    );
+                    Ok(items[0].clone())
+                }
+                Prompt::Unavailable => Err(format!(
+                    "'{cwl_filename}' is ambiguous: {}. Pass --yes to use the first one",
+                    items.join(", ")
+                )
+                .into()),
+            }
         }
     }
 }

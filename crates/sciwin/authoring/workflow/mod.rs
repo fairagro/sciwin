@@ -2,7 +2,7 @@ use crate::authoring::{AuthoringError, AuthoringResult, paths};
 use anyhow::Context;
 use commonwl::{
     OneOrMany,
-    documents::{CWLDocument, Workflow},
+    documents::{CWLDocument, StringOrDocument, Workflow},
     format::format_cwl,
     inputs::{InputArraySchema, InputSchema, InputType, WorkflowStepInput},
     load_cwl_file,
@@ -21,11 +21,13 @@ use std::{
 mod link_merge;
 mod pick_value;
 mod scatter;
+mod status;
 mod when;
 
 pub use link_merge::*;
 pub use pick_value::*;
 pub use scatter::*;
+pub use status::*;
 pub use when::*;
 
 /// Creates a blank workflow document named `name`.
@@ -115,6 +117,50 @@ pub fn add_workflow_step(
     workflow.add_workflow_step_outputs_by_doc_mut(name, doc)?;
 
     Ok(())
+}
+
+/// Id of the step whose `run` points at the file `tool`. `None` if no step does or either
+/// file is missing.
+pub fn find_step_by_run(
+    workflow: &Workflow,
+    workflow_path: impl AsRef<Path>,
+    tool: impl AsRef<Path>,
+) -> Option<String> {
+    let base = workflow_path.as_ref().parent()?;
+    let tool = fs::canonicalize(tool).ok()?;
+    workflow.steps.iter().find_map(|step| match &step.run {
+        StringOrDocument::String(run)
+            if fs::canonicalize(base.join(run)).is_ok_and(|p| p == tool) =>
+        {
+            step.id.clone()
+        }
+        _ => None,
+    })
+}
+
+/// Step id for the tool at `tool`: the step already running it, else the file stem.
+/// # Errors
+/// If a step named like the file stem already runs a different document.
+pub fn step_id_for_tool(
+    workflow: &Workflow,
+    workflow_path: impl AsRef<Path>,
+    tool: impl AsRef<Path>,
+) -> AuthoringResult<String> {
+    let tool = tool.as_ref();
+    if let Some(id) = find_step_by_run(workflow, workflow_path, tool) {
+        return Ok(id);
+    }
+    let id = tool
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if workflow.has_step(&id) {
+        return Err(AuthoringError::StepIdTaken {
+            id,
+            path: tool.display().to_string(),
+        });
+    }
+    Ok(id)
 }
 
 /// Adds a connection between an input and a `CommandLineTool`. The tool will be registered as step if it is not already and an Workflow input will be added.
@@ -1341,5 +1387,55 @@ mod tests {
         );
         ensure_multiple_input_feature_requirement_mut(&mut wf);
         assert!(wf.has_requirement::<MultipleInputFeatureRequirement>());
+    }
+
+    #[test]
+    fn step_id_for_tool_reuses_the_step_running_it() {
+        let dir = tempdir().unwrap();
+        let tool = dir.path().join("tools").join("calculation.cwl");
+        let wf_path = dir.path().join("wf.cwl");
+        fs::create_dir_all(tool.parent().unwrap()).unwrap();
+        write_tool(&tool, "population", "results");
+
+        let mut wf = Workflow::default();
+        // step named differently than the file, as `connect` by name would do
+        add_workflow_input_connection(
+            &mut wf,
+            &wf_path,
+            "population",
+            WorkflowSlot::new(&tool, "calc", "population"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            find_step_by_run(&wf, &wf_path, &tool).as_deref(),
+            Some("calc")
+        );
+        assert_eq!(step_id_for_tool(&wf, &wf_path, &tool).unwrap(), "calc");
+    }
+
+    #[test]
+    fn step_id_for_tool_uses_file_stem_and_rejects_clashes() {
+        let dir = tempdir().unwrap();
+        let first = dir.path().join("a").join("calc.cwl");
+        let second = dir.path().join("b").join("calc.cwl");
+        let wf_path = dir.path().join("wf.cwl");
+        for tool in [&first, &second] {
+            fs::create_dir_all(tool.parent().unwrap()).unwrap();
+            write_tool(tool, "population", "results");
+        }
+
+        let mut wf = Workflow::default();
+        assert_eq!(step_id_for_tool(&wf, &wf_path, &first).unwrap(), "calc");
+        add_workflow_input_connection(
+            &mut wf,
+            &wf_path,
+            "population",
+            WorkflowSlot::new(&first, "calc", "population"),
+        )
+        .unwrap();
+
+        let err = step_id_for_tool(&wf, &wf_path, &second).unwrap_err();
+        assert!(matches!(err, AuthoringError::StepIdTaken { ref id, .. } if id == "calc"));
     }
 }

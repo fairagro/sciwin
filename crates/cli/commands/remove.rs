@@ -1,4 +1,5 @@
 use crate::cwl::resolve_filename;
+use crate::interactive::{Prompt, prompt_mode};
 use clap::Args;
 use dialoguer::Confirm;
 use ignore::WalkBuilder;
@@ -46,11 +47,21 @@ fn remove_cwl_file(filename: impl AsRef<Path>) -> miette::Result<()> {
             for wf in &workflows {
                 warn!("{wf}");
             }
-            let remove_anyway = Confirm::new()
-                .with_prompt(format!("Do you still want to remove '{tool_name}'?"))
-                .default(false)
-                .interact()
-                .into_diagnostic()?;
+            let remove_anyway = match prompt_mode() {
+                Prompt::AssumeYes => true,
+                Prompt::Ask => Confirm::new()
+                    .with_prompt(format!("Do you still want to remove '{tool_name}'?"))
+                    .default(false)
+                    .interact()
+                    .into_diagnostic()?,
+                Prompt::Unavailable => {
+                    miette::bail!(
+                        help = "pass --yes to remove it anyway",
+                        "'{tool_name}' is still used in: {}",
+                        workflows.join(", ")
+                    );
+                }
+            };
             if !remove_anyway {
                 info!("Aborting removal of '{}'", filename.display());
                 return Ok(());
@@ -115,4 +126,31 @@ pub fn check_tool_usage_in_workflows(
         }
     }
     Ok(workflows)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interactive::set_assume_yes;
+    use fstest::fstest;
+
+    #[fstest(repo = true)]
+    fn yes_removes_a_tool_still_used_in_a_workflow() {
+        let testdata = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata");
+        fs::create_dir_all("workflows/echo").unwrap();
+        fs::create_dir_all("workflows/wf").unwrap();
+        fs::copy(testdata.join("echo.cwl"), "workflows/echo/echo.cwl").unwrap();
+        fs::write(
+            "workflows/wf/wf.cwl",
+            "cwlVersion: v1.2\nclass: Workflow\ninputs: []\noutputs: []\nsteps:\n- id: echo\n  in: []\n  run: ../echo/echo.cwl\n  out: []\n",
+        )
+        .unwrap();
+
+        set_assume_yes(true);
+        let result = remove_cwl_file("workflows/echo/echo.cwl");
+        set_assume_yes(false);
+
+        result.unwrap();
+        assert!(!Path::new("workflows/echo/echo.cwl").exists());
+    }
 }
