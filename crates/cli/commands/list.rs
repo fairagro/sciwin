@@ -1,14 +1,18 @@
+use crate::print_json;
 use clap::Args;
 use colored::Colorize;
 use ignore::WalkBuilder;
 use miette::IntoDiagnostic;
 use prettytable::{Cell, Row, Table, row};
+use sciwin::authoring::workflow::{ConnectionStatus, SlotState, SlotStatus, connection_status};
 use sciwin::cwl::{
     Identifiable, docstring,
-    documents::{CWLDocument, CommandLineTool, ExpressionTool, StringOrDocument, Workflow},
+    documents::{CWLDocument, CommandLineTool, ExpressionTool, Workflow},
     load_cwl_file,
     requirements::DockerRequirement,
 };
+use serde::Serialize;
+use serde_json::Value;
 use std::{
     env,
     fs::FileType,
@@ -25,21 +29,157 @@ pub struct ListCWLArgs {
         help = "Outputs the tools with inputs and outputs"
     )]
     pub list_all: bool,
+    #[arg(
+        long = "json",
+        help = "Print JSON to stdout, always including inputs and outputs (and connection status for a single workflow)"
+    )]
+    pub json: bool,
 }
 
 pub fn handle_list_command(args: &ListCWLArgs) -> miette::Result<()> {
-    if let Some(file) = &args.file {
-        debug!("explicit target given: {file:?} (is_file={}, is_dir={})", file.is_file(), file.is_dir());
-        if file.exists() && file.is_file() {
-            list_single_cwl(file)?;
-        } else if file.is_dir() {
-            list_multiple(file, args.list_all)?;
+    let target = match &args.file {
+        Some(file) => {
+            debug!(
+                "explicit target given: {file:?} (is_file={}, is_dir={})",
+                file.is_file(),
+                file.is_dir()
+            );
+            file.clone()
         }
-    } else {
-        debug!("no target given, walking current directory instead");
-        list_multiple(env::current_dir().into_diagnostic()?, args.list_all)?;
+        None => {
+            debug!("no target given, walking current directory instead");
+            env::current_dir().into_diagnostic()?
+        }
+    };
+    match (target.is_file(), target.is_dir(), args.json) {
+        (true, _, true) => print_json(&summarize_file(&target)?),
+        (true, _, false) => list_single_cwl(&target),
+        (_, true, true) => print_json(&summarize_dir(&target)?),
+        (_, true, false) => list_multiple(&target, args.list_all),
+        _ => {
+            miette::bail!("No such file or directory: {}", target.display());
+        }
     }
-    Ok(())
+}
+
+/// A CWL document as `list --json` reports it.
+#[derive(Debug, Serialize)]
+pub struct DocumentSummary {
+    /// File stem, the name `connect` and `remove` resolve.
+    pub name: String,
+    pub path: PathBuf,
+    pub class: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
+    pub inputs: Vec<Port>,
+    pub outputs: Vec<Port>,
+    /// Only set when listing a single workflow.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connections: Option<ConnectionStatus>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Port {
+    pub id: String,
+    /// The CWL type, as it would be written in the document.
+    pub r#type: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<Value>,
+}
+
+pub fn summarize_file(path: &Path) -> miette::Result<DocumentSummary> {
+    let doc = load_cwl_file(path, true)
+        .map_err(|e| miette::miette!("Could not load CWL File {}: {e}", path.display()))?;
+    let mut summary = summarize(path, &doc)?;
+    if let CWLDocument::Workflow(wf) = &doc {
+        summary.connections = Some(connection_status(wf, path)?);
+    }
+    Ok(summary)
+}
+
+/// Every parseable CWL file below `dir`, honoring `.gitignore`.
+pub fn summarize_dir(dir: &Path) -> miette::Result<Vec<DocumentSummary>> {
+    let mut summaries = vec![];
+    for entry in cwl_files(dir) {
+        match load_cwl_file(entry.path(), true) {
+            Ok(doc) => summaries.push(summarize(entry.path(), &doc)?),
+            Err(e) => debug!("skipping {}: {e}", entry.path().display()),
+        }
+    }
+    Ok(summaries)
+}
+
+fn summarize(path: &Path, doc: &CWLDocument) -> miette::Result<DocumentSummary> {
+    let inputs = doc
+        .get_inputs()
+        .into_iter()
+        .filter_map(|i| Some((i.id?, i.r#type, i.default)))
+        .map(|(id, ty, default)| {
+            Ok(Port {
+                id,
+                r#type: to_json(&ty)?,
+                default: default.as_ref().map(to_json).transpose()?,
+            })
+        })
+        .collect::<miette::Result<_>>()?;
+    // output parameter types differ per class, so there is no generic accessor
+    let outputs = match doc {
+        CWLDocument::CommandLineTool(t) => {
+            output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type)))
+        }
+        CWLDocument::ExpressionTool(t) => {
+            output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type)))
+        }
+        CWLDocument::Operation(t) => output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type))),
+        CWLDocument::Workflow(t) => output_ports(t.outputs.iter().map(|o| (&o.id, &o.r#type))),
+    }?;
+    let cwd = env::current_dir().into_diagnostic()?;
+    Ok(DocumentSummary {
+        name: path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        path: path.strip_prefix(&cwd).unwrap_or(path).to_path_buf(),
+        class: doc.get_class().to_string(),
+        label: doc.get_label().cloned(),
+        doc: doc.get_doc().map(|d| docstring(d.clone())),
+        inputs,
+        outputs,
+        connections: None,
+    })
+}
+
+fn output_ports<'a, T: Serialize + 'a>(
+    outputs: impl Iterator<Item = (&'a Option<String>, &'a T)>,
+) -> miette::Result<Vec<Port>> {
+    outputs
+        .filter_map(|(id, ty)| Some((id.clone()?, ty)))
+        .map(|(id, ty)| {
+            Ok(Port {
+                id,
+                r#type: to_json(ty)?,
+                default: None,
+            })
+        })
+        .collect()
+}
+
+fn to_json(value: &impl Serialize) -> miette::Result<Value> {
+    serde_json::to_value(value).into_diagnostic()
+}
+
+fn cwl_files(dir: &Path) -> impl Iterator<Item = ignore::DirEntry> {
+    WalkBuilder::new(dir)
+        .hidden(true)
+        .git_ignore(true)
+        .git_exclude(true)
+        .git_global(true)
+        .build()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_some_and(|ft| ft.is_file()))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "cwl"))
 }
 
 fn list_single_cwl(filename: impl AsRef<Path>) -> miette::Result<()> {
@@ -339,143 +479,17 @@ fn list_base(base: &CWLDocument, is_workflow: bool) {
 
 fn workflow_status(wf: &Workflow, filename: &Path) -> miette::Result<()> {
     info!("Connection status:");
-    let path = Path::new(&filename).parent().unwrap_or(Path::new("."));
+    let status = connection_status(wf, filename)?;
     let mut table = Table::new();
     table.set_titles(row![bFg => "Tool", "Inputs", "Outputs"]);
 
-    //check if workflow inputs are all connected
-    let input_status = wf
-        .inputs
-        .iter()
-        .map(|input| {
-            if wf
-                .steps
-                .iter()
-                .any(|step| step.r#in.iter().any(|i| i.id == input.id))
-            {
-                format!("✅    {}", input.id.as_ref().unwrap())
-            } else if input.default.is_some() {
-                format!("🔘    {}", input.id.as_ref().unwrap())
-            } else {
-                format!("❌    {}", input.id.as_ref().unwrap())
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    //check if workflow outputs are all connected
-    let output_status = wf
-        .outputs
-        .iter()
-        .map(|output| {
-            let is_used = output
-                .output_source
-                .as_ref()
-                .into_iter()
-                .flat_map(|sources| sources.as_many())
-                .any(|src| {
-                    wf.steps.iter().any(|step| {
-                        let Some(step_id) = &step.id else {
-                            return false;
-                        };
-
-                        step.out.iter().any(|o| {
-                            let full = format!("{}/{}", step_id, o.id());
-                            full == src
-                        })
-                    })
-                });
-
-            if is_used {
-                format!("✅    {}", output.id.as_deref().unwrap_or("<no id>"))
-            } else {
-                format!("❌    {}", output.id.as_deref().unwrap_or("<no id>"))
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    table.add_row(row![b -> "<Workflow>", input_status, output_status]);
+    let (inputs, outputs) = (slot_lines(&status.inputs), slot_lines(&status.outputs));
+    table.add_row(row![b -> "<Workflow>", inputs, outputs]);
     table.add_row(row![b -> "Steps:"]);
-
-    for step in &wf.steps {
-        let tool = match &step.run {
-            StringOrDocument::String(run) => {
-                debug!("loading step tool: {}", path.join(run).display());
-                let CWLDocument::CommandLineTool(tool) = load_cwl_file(path.join(run), true)
-                    .map_err(|e| {
-                        miette::miette!("Could not load tool {:?}: {e}", path.join(run))
-                    })?
-                else {
-                    miette::bail!(
-                        "Expected CommandLineTool, but got something else for step {}",
-                        step.id.as_deref().unwrap_or("<no id>")
-                    );
-                };
-                tool
-            }
-            StringOrDocument::Document(boxed_doc) => match &**boxed_doc {
-                CWLDocument::CommandLineTool(doc) => doc.clone(),
-                _ => unreachable!(), //see #95
-            },
-        };
-        let input_status = tool
-            .inputs
-            .iter()
-            .map(|input| {
-                if step.r#in.iter().any(|i| i.id == input.id) {
-                    format!("✅    {}", input.id.as_ref().unwrap())
-                } else if input.default.is_some() {
-                    format!("🔘    {}", input.id.as_ref().unwrap())
-                } else {
-                    format!("❌    {}", input.id.as_ref().unwrap())
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let output_status = tool
-            .outputs
-            .iter()
-            .map(|output| {
-                let target = format!(
-                    "{}/{}",
-                    step.id.as_ref().unwrap(),
-                    output.id.as_ref().unwrap()
-                );
-
-                let used_in_steps = wf.steps.iter().any(|s| {
-                    s.r#in.iter().any(|v| {
-                        v.source
-                            .as_ref()
-                            .into_iter()
-                            .flat_map(|s| s.as_many())
-                            .any(|src| src == target)
-                    })
-                });
-
-                let used_in_outputs = wf.outputs.iter().any(|o| {
-                    o.output_source
-                        .as_ref()
-                        .into_iter()
-                        .flat_map(|s| s.as_many())
-                        .any(|src| src == target)
-                });
-
-                if used_in_steps || used_in_outputs {
-                    format!("✅    {}", output.id.as_ref().unwrap())
-                } else {
-                    format!("❌    {}", output.id.as_ref().unwrap())
-                }
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let run = if let StringOrDocument::String(run) = &step.run {
-            run
-        } else {
-            &String::from("Inline Document")
-        };
-        table.add_row(row![b -> run, &input_status, &output_status]);
+    for step in &status.steps {
+        let run = step.run.as_deref().unwrap_or("Inline Document");
+        let (inputs, outputs) = (slot_lines(&step.inputs), slot_lines(&step.outputs));
+        table.add_row(row![b -> run, inputs, outputs]);
     }
 
     table.printstd();
@@ -484,9 +498,86 @@ fn workflow_status(wf: &Workflow, filename: &Path) -> miette::Result<()> {
     Ok(())
 }
 
+fn slot_lines(slots: &[SlotState]) -> String {
+    slots
+        .iter()
+        .map(|slot| {
+            let icon = match slot.status {
+                SlotStatus::Connected => "✅",
+                SlotStatus::Default => "🔘",
+                SlotStatus::Unconnected => "❌",
+            };
+            format!("{icon}    {}", slot.id)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn print_line() {
     info!(
         "{}",
         "_________________________________________________________________".bold()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn testdata(path: &str) -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../testdata")
+            .join(path)
+    }
+
+    #[test]
+    fn summarizes_tool_ports_with_types() {
+        let path = testdata("hello_world/workflows/calculation/calculation.cwl");
+        let json = serde_json::to_value(summarize_file(&path).unwrap()).unwrap();
+
+        assert_eq!(json["name"], "calculation");
+        assert_eq!(json["class"], "CommandLineTool");
+        assert_eq!(json["inputs"][0]["id"], "population");
+        assert_eq!(json["inputs"][0]["type"], "File");
+        assert!(json["inputs"][0]["default"].is_object());
+        assert_eq!(json["outputs"][0], json!({"id": "results", "type": "File"}));
+        assert!(json.get("connections").is_none());
+    }
+
+    #[test]
+    fn summarizes_workflow_with_connections() {
+        let path = testdata("hello_world/workflows/main/main.cwl");
+        let json = serde_json::to_value(summarize_file(&path).unwrap()).unwrap();
+
+        assert_eq!(json["class"], "Workflow");
+        let connections = &json["connections"];
+        assert_eq!(
+            connections["inputs"][0],
+            json!({"id": "population", "status": "connected"})
+        );
+        assert_eq!(
+            connections["outputs"][0],
+            json!({"id": "out", "status": "connected"})
+        );
+        assert_eq!(connections["steps"][0]["id"], "plot");
+        assert_eq!(connections["steps"][0]["run"], "../plot/plot.cwl");
+    }
+
+    #[test]
+    fn summarize_dir_finds_every_cwl_file() {
+        let summaries = summarize_dir(&testdata("hello_world")).unwrap();
+        let mut names: Vec<_> = summaries.iter().map(|s| s.name.as_str()).collect();
+        names.sort_unstable();
+        assert_eq!(names, ["calculation", "main", "plot"]);
+    }
+
+    #[test]
+    fn missing_target_is_an_error() {
+        let args = ListCWLArgs {
+            file: Some(testdata("does/not/exist.cwl")),
+            ..Default::default()
+        };
+        assert!(handle_list_command(&args).is_err());
+    }
 }

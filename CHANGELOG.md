@@ -2,6 +2,16 @@
 ## 🚀 Features
 - `s4n visualize` can render mermaid diagrams directly now.
 - TES backend can use http basic auth using username & password.
+- Global `-y`/`--yes` flag confirms questions and picks default choices. Without a terminal (scripts, CI, AI agents) s4n no longer waits for input, it fails with a hint instead.
+- `--json` output for `list`, `connect`, `disconnect` and `execute reana status`. `list --json` includes port types and, for a single workflow, its connection status.
+- `sciwin::authoring::workflow::connection_status` exposes a workflow's wiring to library users.
+- `connect` and `disconnect` accept paths to `.cwl` files for the workflow and the tools. In `--from workflows/calc/calc.cwl#results` (or `.../calc.cwl/results`) the tool is `workflows/calc/calc.cwl` and `results` is its output. `#` separates the two if present, else the last `/`. Names keep working as before.
+
+## 🐛 Bugfixes
+- `list` showed a workflow input as unconnected when it fed a step input of a different name.
+- `list` failed on workflows whose steps are not CommandLineTools.
+- `list` on a missing path printed nothing and exited successfully, it now fails.
+- `execute reana status NAME` now shows why a failed run failed.
 
 # v2.0.1
 ## 🐛 Bugfixes

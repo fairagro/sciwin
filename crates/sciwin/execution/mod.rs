@@ -19,6 +19,7 @@ use futures::Stream;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
 use reana::{api::response::WorkflowStatus, logs::ReanaLogMessage};
+use serde::Serialize;
 use std::io;
 use std::{
     collections::{HashMap, HashSet},
@@ -114,7 +115,8 @@ impl From<commonwl::engine::RunnerError> for RunnerError {
 
 pub type RunId = String;
 
-#[derive(Debug, Default, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum RunStatus {
     Created,
     Running,

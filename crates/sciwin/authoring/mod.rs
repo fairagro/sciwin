@@ -87,6 +87,13 @@ pub enum AuthoringError {
     #[diagnostic(code = "authoring::InvalidWorkflowStep")]
     InvalidWorkflowStep { id: String },
 
+    #[error("step {id} already exists and runs a different document than {path}")]
+    #[diagnostic(
+        code = "authoring::StepIdTaken",
+        help = "remove the existing step first, or rename one of the two files"
+    )]
+    StepIdTaken { id: String, path: String },
+
     #[error("{message}")]
     #[diagnostic(
         code = "authoring::IncompatibleType",

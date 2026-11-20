@@ -136,8 +136,11 @@ Arguments:
   [WORKFLOW_NAME]  Workflow name to check (if omitted, checks all)
 
 Options:
+      --json  Print the status as JSON to stdout
   -h, --help  Print help
 ```
+
+With `--json`, a single run prints `{"name", "status", "failure"}` (`failure` only for failed runs), and without a name every run prints as `{"id", "name", "created", "status"}`.
 
 ### `execute reana download`
 ```txt frame="terminal" title="Usage"

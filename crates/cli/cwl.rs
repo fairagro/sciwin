@@ -1,3 +1,4 @@
+use crate::interactive::{Prompt, prompt_mode};
 use dialoguer::{Select, theme::ColorfulTheme};
 use sciwin::authoring::paths::WORKFLOWS_FOLDER;
 use sciwin::repository::Repository;
@@ -9,7 +10,7 @@ use syntect::{
     parsing::SyntaxSet,
     util::{LinesWithEndings, as_24_bit_terminal_escaped},
 };
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// Locates CWL File by name
 pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
@@ -46,13 +47,30 @@ pub fn resolve_filename(cwl_filename: &str) -> Result<String, Box<dyn Error>> {
                 .iter()
                 .map(|p| p.to_string_lossy().into_owned())
                 .collect();
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt("Multiple candidates are found. Select the CWL File to use")
-                .items(&items)
-                .default(0)
-                .report(true)
-                .interact()?;
-            Ok(items[selection].clone())
+            match prompt_mode() {
+                Prompt::Ask => {
+                    let selection = Select::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Multiple candidates are found. Select the CWL File to use")
+                        .items(&items)
+                        .default(0)
+                        .report(true)
+                        .interact()?;
+                    Ok(items[selection].clone())
+                }
+                Prompt::AssumeYes => {
+                    warn!(
+                        "'{cwl_filename}' is ambiguous, using {} (other candidates: {})",
+                        items[0],
+                        items[1..].join(", ")
+                    );
+                    Ok(items[0].clone())
+                }
+                Prompt::Unavailable => Err(format!(
+                    "'{cwl_filename}' is ambiguous: {}. Pass --yes to use the first one",
+                    items.join(", ")
+                )
+                .into()),
+            }
         }
     }
 }

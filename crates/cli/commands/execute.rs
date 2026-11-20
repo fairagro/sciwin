@@ -1,3 +1,4 @@
+use crate::print_json;
 use chrono::Utc;
 use clap::{Args, Subcommand};
 use miette::IntoDiagnostic;
@@ -19,6 +20,7 @@ use sciwin::{
     reana::{api::client::ReanaClient, auth::ReanaAccessToken, client as reana_client},
     rocrate::validate::Validation,
 };
+use serde::Serialize;
 use serde_json::{Number, Value};
 use std::{
     collections::HashMap,
@@ -33,9 +35,10 @@ pub async fn handle_execute_commands(subcommand: &ExecuteCommands) -> miette::Re
     match subcommand {
         ExecuteCommands::Run(args) => execute_run(args).await,
         ExecuteCommands::Reana(reana_args) => match &reana_args.command {
-            ReanaSubcommands::Status { workflow_name } => {
-                execute_reana_status(workflow_name.as_deref()).await
-            }
+            ReanaSubcommands::Status {
+                workflow_name,
+                json,
+            } => execute_reana_status(workflow_name.as_deref(), *json).await,
             ReanaSubcommands::Download {
                 workflow_name,
                 all,
@@ -181,6 +184,8 @@ pub enum ReanaSubcommands {
     Status {
         #[arg(help = "Workflow name to check (if omitted, checks all)")]
         workflow_name: Option<String>,
+        #[arg(long = "json", help = "Print the status as JSON to stdout")]
+        json: bool,
     },
     #[command(about = "Downloads workflow outputs from REANA")]
     Download {
@@ -416,21 +421,66 @@ fn reana_runner() -> miette::Result<ReanaRunner> {
     Ok(ReanaRunner::new(client))
 }
 
-async fn execute_reana_status(workflow_name: Option<&str>) -> miette::Result<()> {
+/// What `execute reana status NAME --json` prints.
+#[derive(Serialize)]
+struct RunState<'a> {
+    name: &'a str,
+    status: RunStatus,
+    /// failing steps and their log tails, only for failed runs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    failure: Option<String>,
+}
+
+/// One entry of what `execute reana status --json` prints.
+#[derive(Serialize)]
+struct RunListEntry {
+    id: String,
+    name: String,
+    created: chrono::NaiveDateTime,
+    status: RunStatus,
+}
+
+async fn execute_reana_status(workflow_name: Option<&str>, json: bool) -> miette::Result<()> {
     let runner = reana_runner()?;
 
     if let Some(name) = workflow_name {
         debug!("querying status for workflow '{name}'");
-        let status = runner.status(&name.to_string()).await?;
+        let id = name.to_string();
+        let status = runner.status(&id).await?;
+        let failure = if matches!(status, RunStatus::Failed) {
+            runner.failure_detail(&id).await?
+        } else {
+            None
+        };
+        if json {
+            return print_json(&RunState {
+                name,
+                status,
+                failure,
+            });
+        }
         info!("{name}: {status:?}");
-        if matches!(status, RunStatus::Failed) {
-            runner.find_failures(&name.to_string()).await?;
+        if let Some(failure) = failure {
+            warn!("{failure}");
         }
         return Ok(());
     }
 
     debug!("listing all workflows known to this REANA instance");
     let list = reana_client::list(runner.get_client()).await?;
+    if json {
+        let runs: Vec<_> = list
+            .items
+            .into_iter()
+            .map(|w| RunListEntry {
+                id: w.id,
+                name: w.name,
+                created: w.created,
+                status: w.status.unwrap_or_default().into(),
+            })
+            .collect();
+        return print_json(&runs);
+    }
     if list.items.is_empty() {
         info!("no workflows found for this REANA instance");
     }

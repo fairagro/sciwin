@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod commands;
 pub mod cwl;
+pub mod interactive;
 pub mod logger;
 
 use colored::Colorize;
@@ -18,6 +19,14 @@ impl std::fmt::Display for ExitCode {
 }
 
 impl std::error::Error for ExitCode {}
+
+/// Pretty-prints `value` as JSON to stdout, the only output of a `--json` command.
+#[allow(clippy::disallowed_macros)]
+pub fn print_json(value: &impl serde::Serialize) -> miette::Result<()> {
+    use miette::IntoDiagnostic;
+    println!("{}", serde_json::to_string_pretty(value).into_diagnostic()?);
+    Ok(())
+}
 
 pub fn print_list(list: &Vec<String>) {
     for item in list {

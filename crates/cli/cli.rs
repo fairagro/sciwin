@@ -34,6 +34,14 @@ pub struct Cli {
         help = "Explain in high detail what the CLI is doing internally"
     )]
     pub debug: bool,
+
+    #[arg(
+        short = 'y',
+        long,
+        global = true,
+        help = "Never prompt: confirm all questions and pick default choices"
+    )]
+    pub yes: bool,
 }
 
 #[derive(Debug, Subcommand)]

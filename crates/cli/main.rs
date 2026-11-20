@@ -7,6 +7,7 @@ use s4n::{
         handle_execute_commands, handle_init_command, handle_list_command, handle_remove_command,
         install_package, remove_package, stage_and_commit_workflow, visualize,
     },
+    interactive::set_assume_yes,
     logger::init_logger,
 };
 use std::process::exit;
@@ -26,13 +27,14 @@ async fn main() {
     exit(0);
 }
 
+/// `Cli`'s own global boolean flags, skipped over so e.g. `s4n --debug execute FILE` is
+/// recognized too, not just `s4n execute FILE`.
+const GLOBAL_FLAGS: &[&str] = &["-q", "--quiet", "--debug", "-y", "--yes"];
+
 /// `s4n execute FILE` is shorthand for `s4n execute run FILE`. clap can't express "fall back to
 /// this subcommand's own positional args when no subcommand name matches" directly
 fn default_to_execute_run(args: impl Iterator<Item = String>) -> Vec<String> {
     const EXECUTE_SUBCOMMANDS: &[&str] = &["run", "r", "reana", "make-template", "help"];
-    // `Cli`'s own global boolean flags -- skipped over so e.g. `s4n --debug execute FILE` is
-    // recognized too, not just `s4n execute FILE`.
-    const GLOBAL_FLAGS: &[&str] = &["-q", "--quiet", "--debug"];
     let mut args: Vec<String> = args.collect();
 
     // args[0] is the binary name; the top-level subcommand is the first arg after that which
@@ -69,7 +71,6 @@ fn default_to_execute_run(args: impl Iterator<Item = String>) -> Vec<String> {
 /// can special-case it; anything else (including `s4n execute reana --help`) returns `None` and
 /// falls through to clap's normal help handling.
 fn execute_help_requested(args: &[String]) -> Option<bool> {
-    const GLOBAL_FLAGS: &[&str] = &["-q", "--quiet", "--debug"];
     let execute_pos = args
         .iter()
         .enumerate()
@@ -141,6 +142,7 @@ async fn run() -> miette::Result<()> {
         init_logger(LevelFilter::INFO);
     }
 
+    set_assume_yes(args.yes);
     check_git_config()?;
     match &args.command {
         Commands::Init(args) => handle_init_command(args),
@@ -213,6 +215,13 @@ mod tests {
             out,
             to_strings(&["s4n", "--debug", "execute", "run", "wf.cwl"])
         );
+    }
+
+    #[test]
+    fn injects_run_after_a_leading_yes_flag() {
+        let out =
+            default_to_execute_run(to_strings(&["s4n", "-y", "execute", "wf.cwl"]).into_iter());
+        assert_eq!(out, to_strings(&["s4n", "-y", "execute", "run", "wf.cwl"]));
     }
 
     #[test]
